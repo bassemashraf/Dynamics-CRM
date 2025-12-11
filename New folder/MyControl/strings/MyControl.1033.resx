@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  
+  <data name="WelcomeBack" xml:space="preserve"><value>Welcome Back</value></data>
+  <data name="FindFacility" xml:space="preserve"><value>Find a Facility</value></data>
+  <data name="RemainingInspections" xml:space="preserve"><value>Remaining inspections today</value></data>
+  <data name="CompletedInspections" xml:space="preserve"><value>Completed inspections for today</value></data>
+  <data name="ScheduledInspections" xml:space="preserve"><value>Scheduled Inspections</value></data>
+  <data name="StartInspection" xml:space="preserve"><value>Start Inspection</value></data>
+  <data name="SearchPlaceholder" xml:space="preserve"><value>Find a Facility</value></data>
+  <data name="NoResults" xml:space="preserve"><value>No results found</value></data>
+  <data name="Loading" xml:space="preserve"><value>Loading...</value></data>
+  <data name="SearchPrompt" xml:space="preserve"><value>Please enter a search value</value></data>
+  <data name="OfflineNavigationBlocked" xml:space="preserve"><value>Cannot navigate: Offline mode</value></data>
+  <data name="OfflineQuickCreateBlocked" xml:space="preserve"><value>Cannot start inspection in offline mode</value></data>
+  <data name="SearchResults" xml:space="preserve">
+  <value>Search Results ({0})</value>
+  <comment>Search results title with count placeholder</comment>
+</data>
+<data name="AccountName" xml:space="preserve">
+  <value>Account Name</value>
+  <comment>Header for account name column</comment>
+</data>
+<data name="Email" xml:space="preserve">
+  <value>Email</value>
+  <comment>Header for email column</comment>
+</data>
+<data name="Phone" xml:space="preserve">
+  <value>Phone</value>
+  <comment>Header for phone column</comment>
+</data>
+<data name="Close" xml:space="preserve">
+  <value>Close</value>
+  <comment>Close button aria label</comment>
+</data>
+<data name="AdvancedSearch" xml:space="preserve">
+  <value>Advanced Search</value>
+</data>
+<data name="FacilityName" xml:space="preserve">
+  <value>Facility Name:</value>
+</data>
+<data name="LicenseNumber" xml:space="preserve">
+  <value>License Number:</value>
+</data>
+<data name="AreaNumber" xml:space="preserve">
+  <value>Area Number:</value>
+</data>
+<data name="AreaName" xml:space="preserve">
+  <value>Area Name:</value>
+</data>
+<data name="StreetNumber" xml:space="preserve">
+  <value>Street Number:</value>
+</data>
+<data name="StreetName" xml:space="preserve">
+  <value>Street Name:</value>
+</data>
+<data name="BuildingNumber" xml:space="preserve">
+  <value>Building Number:</value>
+</data>
+<data name="PINNumber" xml:space="preserve">
+  <value>PIN Number:</value>
+</data>
+<data name="PleaseEnterSearchText" xml:space="preserve">
+  <value>Please enter relevant search text</value>
+</data>
+<data name="SearchError" xml:space="preserve">
+  <value>An error occurred during search</value>
+</data>
+<data name="Search" xml:space="preserve">
+  <value>Search</value>
+  <comment>Search button text</comment>
+</data>
+</root>
