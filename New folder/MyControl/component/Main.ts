@@ -16,6 +16,7 @@ interface State {
     searchText: string;
     pendingTodayBookings: number | null;
     completedTodayWorkorders: number | null;
+    TodayCampaigns: number | null;
     userName: string;
     message?: string;
     isLoading: boolean;
@@ -36,6 +37,7 @@ interface LocalizedStrings {
     RemainingInspections: string;
     CompletedInspections: string;
     ScheduledInspections: string;
+    TodaysPatrols: string;
     StartInspection: string;
     SearchPlaceholder: string;
     NoResults: string;
@@ -125,6 +127,7 @@ export const Main = (props: IProps) => {
             SearchPlaceholder: ctx.resources.getString("SearchPlaceholder"),
             NoResults: ctx.resources.getString("NoResults"),
             Loading: ctx.resources.getString("Loading"),
+            TodaysPatrols: ctx.resources.getString("TodaysPatrols"),
             SearchPrompt: ctx.resources.getString("SearchPrompt"),
             OfflineNavigationBlocked: ctx.resources.getString("OfflineNavigationBlocked"),
             OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked")
@@ -141,6 +144,7 @@ export const Main = (props: IProps) => {
         searchText: "",
         pendingTodayBookings: null,
         completedTodayWorkorders: null,
+        TodayCampaigns: null,
         userName: strings.Loading,
         message: undefined,
         isLoading: false,
@@ -169,12 +173,13 @@ export const Main = (props: IProps) => {
         }));
     };
 
-    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number }> => {
+    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
         const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
 
         try {
             let completedToday = 0;
             let remainingToday = 0;
+            let campaignsToday = 0;
 
             try {
                 debugger;
@@ -194,14 +199,14 @@ export const Main = (props: IProps) => {
                         console.log("Resource ID fetched and cached:", resourceId);
                     } else {
                         console.warn(`User ${userId} is not linked to a Bookable Resource.`);
-                        return { completedToday, remainingToday };
+                        return { completedToday, remainingToday, campaignsToday };
                     }
                 } else {
                     console.log("Resource ID retrieved from cache:", resourceId);
                 }
 
                 if (!resourceId) {
-                    return { completedToday, remainingToday };
+                    return { completedToday, remainingToday, campaignsToday };
                 }
 
                 const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
@@ -215,16 +220,16 @@ export const Main = (props: IProps) => {
                 remainingToday = remainingResults.entities.length;
                 console.log("Remaining Bookings Count:", remainingToday);
 
-                return { completedToday, remainingToday };
+                return { completedToday, remainingToday, campaignsToday };
 
             } catch (error) {
                 console.error("Error retrieving counts:", error);
-                return { completedToday: 0, remainingToday: 0 };
+                return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
             }
 
         } catch (e) {
             console.log("Failed to load today's counts:", e);
-            return { completedToday: 0, remainingToday: 0 };
+            return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
         }
     };
 
@@ -252,12 +257,13 @@ export const Main = (props: IProps) => {
 
             if (res) {
                 const username = res.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
-                const { completedToday, remainingToday } = await loadTodaysCounts(ctx, userId);
+                const { completedToday, remainingToday, campaignsToday } = await loadTodaysCounts(ctx, userId);
 
                 setState(prev => ({
                     ...prev,
                     pendingTodayBookings: remainingToday,
                     completedTodayWorkorders: completedToday,
+                    TodayCampaigns: campaignsToday,
                     userName: username,
                 }));
 
@@ -289,6 +295,7 @@ export const Main = (props: IProps) => {
                     ...prev,
                     remainingToday: obj.remainingToday,
                     completedTodayWorkorders: obj.completedTodayWorkorders,
+                    TodayCampaigns: obj.TodayCampaigns,
                     userName: obj.userName ?? "Inspector"
                 }));
             } catch {
@@ -350,7 +357,7 @@ export const Main = (props: IProps) => {
                     entityId: entities[0].accountid
                 });
             } else {
-                setState(prev => (  {
+                setState(prev => ({
                     ...prev,
                     showResults: true,
                     searchResults: entities,
@@ -402,6 +409,18 @@ export const Main = (props: IProps) => {
             viewId: "4073baca-cc5f-e611-8109-000d3a146973"
         });
     };
+    const openScheduledCampaigns = (): void => {
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "new_inspectioncampaign",
+            viewId: "0628a5aa-88d7-f011-8406-7c1e524df347"
+        });
+    };
 
     const closedWorkorders = (): void => {
         const ctx: any = props.context;
@@ -425,7 +444,7 @@ export const Main = (props: IProps) => {
         void ctx.navigation.openForm({ entityName: "msdyn_workorder", useQuickCreateForm: true }, {});
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, userName, message, isLoading, showResults, searchResults } = state;
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults } = state;
     const isActionDisabled = isLoading;
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
@@ -482,7 +501,7 @@ export const Main = (props: IProps) => {
             // Main Content
             React.createElement(
                 "div",
-                { style: { ...STYLES.flexGrow1, ...STYLES.p3, ...STYLES.width , marginleft : '0.5%' }  },
+                { style: { ...STYLES.flexGrow1, ...STYLES.p3, ...STYLES.width, marginleft: '0.5%' } },
                 // Search Bar
                 React.createElement(
                     "div",
@@ -501,7 +520,7 @@ export const Main = (props: IProps) => {
                                 onChange: (e) => setState(prev => ({ ...prev, searchText: e.target.value })),
                                 onKeyUp: onKeyUp,
                                 disabled: isLoading,
-                                style: { border: 'none', width: '90%', outline: 'none', direction: isRTL ? 'rtl' : 'ltr' ,background : 'none' }
+                                style: { border: 'none', width: '90%', outline: 'none', direction: isRTL ? 'rtl' : 'ltr', background: 'none' }
                             })
                         )
                     ),
@@ -522,7 +541,7 @@ export const Main = (props: IProps) => {
                     )
                 ),
                 // Messages
-                message && React.createElement("div", { style: { color: "red", marginTop: 10, marginBottom: 10,background:'none', padding: 8, borderRadius: 4 } }, message),
+                message && React.createElement("div", { style: { color: "red", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, message),
                 isLoading && React.createElement("div", { style: { color: "blue", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, strings.Loading),
                 // Inspection Cards
                 React.createElement(
@@ -558,6 +577,37 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
                     ),
+
+                    //patrols card
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: openScheduledCampaigns,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: isActionDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isActionDisabled ? 0.5 : 1,
+                                pointerEvents: isActionDisabled ? 'none' : 'auto'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
+                                React.createElement("img", { src: clockDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.TodaysPatrols)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, TodayCampaigns ?? "...")
+                    ),
                     // Completed Card
                     React.createElement(
                         "div",
@@ -586,6 +636,7 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
                     )
+
                 )
             ),
             // Action Buttons

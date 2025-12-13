@@ -27,6 +27,8 @@
     <value>نتائج البحث ({0})</value>
     <comment>Search results title with count placeholder</comment>
   </data>
+      <data name="TodaysPatrols" xml:space="preserve"><value>حملات التفتيش</value></data>
+
   <data name="AccountName" xml:space="preserve">
     <value>اسم الحساب</value>
     <comment>Header for account name column</comment>

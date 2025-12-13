@@ -515,7 +515,7 @@ export const Main = (props: IProps) => {
                     },
                     React.createElement(
                         "div",
-                        { style: { ...STYLES.border, ...STYLES.rounded3, ...STYLES.p3, } },
+                        { style: { ...STYLES.border, ...STYLES.rounded3, ...STYLES.p3, marginLeft: "-15%" } },
                         React.createElement("img", { src: arrowSvg, alt: "Back" })
                     ),
                 ),

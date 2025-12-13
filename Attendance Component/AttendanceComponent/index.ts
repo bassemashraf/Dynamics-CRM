@@ -1,17 +1,16 @@
+/* eslint-disable */
+
 import * as React from "react";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import * as ReactDOM from "react-dom";
 import { Main } from "./Component/Main";
 
 export class AttendanceComponent implements ComponentFramework.StandardControl<IInputs, IOutputs> {
-    /**
-     * Empty constructor.
-*/  private container: HTMLDivElement;
+
+    private container: HTMLDivElement;
     private _context: ComponentFramework.Context<IInputs>;
     private currentProps: IInputs;
-    constructor() {
-        // Empty
-    }
+
 
     public init(
         context: ComponentFramework.Context<IInputs>,
@@ -19,6 +18,7 @@ export class AttendanceComponent implements ComponentFramework.StandardControl<I
         state: ComponentFramework.Dictionary,
         container: HTMLDivElement
     ) {
+        debugger
         const sectionElement = document.querySelector('[aria-label="General"]') as HTMLElement;
 
         if (sectionElement) {
@@ -41,6 +41,7 @@ export class AttendanceComponent implements ComponentFramework.StandardControl<I
         const element = React.createElement(Main, {
             context: this._context,
         });
+        debugger
         const sectionElement = document.querySelector('[aria-label="General"]') as HTMLElement;
 
         if (sectionElement) {
