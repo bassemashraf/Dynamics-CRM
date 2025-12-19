@@ -142,7 +142,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
     } catch (e) {
         alert("Error in booking logic. See console for details. " + e.message);
         console.error("Error in JS booking logic:", e);
-    } 
+    }
     finally {
         // Always close the loading indicator
         if (progressIndicator) {
@@ -158,5 +158,84 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
             //     }
             // );
         }
+    }
+}
+
+function onSubaccountChange(executionContext) {
+    debugger
+    var formContext = executionContext.getFormContext();
+    
+    // Get the selected subaccount
+    var subaccountLookup = formContext.getAttribute("duc_subaccount").getValue();
+    
+    if (subaccountLookup && subaccountLookup.length > 0) {
+        var subaccountId = subaccountLookup[0].id.replace(/[{}]/g, "");
+        
+        // Retrieve the selected account to check parent account and address lookup
+        Xrm.WebApi.retrieveRecord("account", subaccountId, "?$select=parentaccountid,_duc_address_value").then(
+            function success(result) {
+                var serviceAccountValue;
+                
+                // Check if parentaccountid has a value
+                if (result.parentaccountid) {
+                    // Set parent account on msdyn_serviceaccount
+                    serviceAccountValue = [{
+                        id: result.parentaccountid,
+                        name: result["_parentaccountid_value@OData.Community.Display.V1.FormattedValue"],
+                        entityType: "account"
+                    }];
+                } else {
+                    // Set the subaccount itself on msdyn_serviceaccount
+                    serviceAccountValue = subaccountLookup;
+                }
+                
+                formContext.getAttribute("msdyn_serviceaccount").setValue(serviceAccountValue);
+                
+                // Handle address lookup if duc_address has a value
+                if (result._duc_address_value) {
+                    var addressId = result._duc_address_value;
+                    var addressName = result["_duc_address_value@OData.Community.Display.V1.FormattedValue"];
+                    
+                    // Set the address lookup on the current form
+                    formContext.getAttribute("duc_address").setValue([{
+                        id: addressId,
+                        name: addressName,
+                        entityType: "duc_addressinformation"
+                    }]);
+                    
+                    // Now retrieve the address information to get longitude and latitude
+                    Xrm.WebApi.retrieveRecord("duc_addressinformation", addressId, "?$select=duc_longitude,duc_latitude").then(
+                        function successAddress(addressResult) {
+                            // Set longitude if available
+                            if (addressResult.duc_longitude != null) {
+                                formContext.getAttribute("msdyn_longitude").setValue(addressResult.duc_longitude);
+                            }
+                            
+                            // Set latitude if available
+                            if (addressResult.duc_latitude != null) {
+                                formContext.getAttribute("msdyn_latitude").setValue(addressResult.duc_latitude);
+                            }
+                        },
+                        function errorAddress(error) {
+                            console.log("Error retrieving address information: " + error.message);
+                        }
+                    );
+                } else {
+                    // Clear address fields if no address found
+                    formContext.getAttribute("duc_address").setValue(null);
+                    formContext.getAttribute("msdyn_longitude").setValue(null);
+                    formContext.getAttribute("msdyn_latitude").setValue(null);
+                }
+            },
+            function error(error) {
+                console.log("Error retrieving account: " + error.message);
+            }
+        );
+    } else {
+        // Clear all fields if duc_subaccount is cleared
+        formContext.getAttribute("msdyn_serviceaccount").setValue(null);
+        formContext.getAttribute("duc_address").setValue(null);
+        formContext.getAttribute("msdyn_longitude").setValue(null);
+        formContext.getAttribute("msdyn_latitude").setValue(null);
     }
 }

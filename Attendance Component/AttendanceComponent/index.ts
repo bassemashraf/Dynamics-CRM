@@ -18,15 +18,18 @@ export class AttendanceComponent implements ComponentFramework.StandardControl<I
         state: ComponentFramework.Dictionary,
         container: HTMLDivElement
     ) {
-        debugger
-        const sectionElement = document.querySelector('[aria-label="General"]') as HTMLElement;
-
-        if (sectionElement) {
-            sectionElement.style.boxShadow = 'none';
-            sectionElement.style.background = 'none';
-        }
         this.container = container;
 
+        // Style the container itself
+        this.container.style.boxShadow = 'none';
+        this.container.style.background = 'transparent';
+
+        // Also try to style parent section
+        const parent = container.closest('section');
+        if (parent instanceof HTMLElement) {
+            parent.style.boxShadow = 'none';
+            parent.style.background = 'none';
+        }
     }
 
 
@@ -41,12 +44,14 @@ export class AttendanceComponent implements ComponentFramework.StandardControl<I
         const element = React.createElement(Main, {
             context: this._context,
         });
-        debugger
-        const sectionElement = document.querySelector('[aria-label="General"]') as HTMLElement;
+        this.container.style.boxShadow = 'none';
+        this.container.style.background = 'transparent';
 
-        if (sectionElement) {
-            sectionElement.style.boxShadow = 'none';
-            sectionElement.style.background = 'none';
+        // Also try to style parent section
+        const parent = this.container.closest('section');
+        if (parent instanceof HTMLElement) {
+            parent.style.boxShadow = 'none';
+            parent.style.background = 'none';
         }
         ReactDOM.render(element, this.container);
     }

@@ -18,7 +18,20 @@
   <data name="SearchPrompt" xml:space="preserve"><value>الرجاء إدخال قيمة البحث</value></data>
   <data name="OfflineNavigationBlocked" xml:space="preserve"><value>لا يمكن التنقل: وضع عدم الاتصال</value></data>
   <data name="OfflineQuickCreateBlocked" xml:space="preserve"><value>لا يمكن بدء التفتيش في وضع عدم الاتصال</value></data>
-  
+
+
+  <data name="LogoutConfirmTitle" xml:space="preserve">
+    <value>تأكيد تسجيل الخروج</value>
+</data>
+<data name="LogoutConfirmMessage" xml:space="preserve">
+  <value>هل أنت متأكد من تسجيل الخروج؟ سيؤدي هذا إلى إغلاق جميع الحجوزات المجدولة لهذا اليوم.</value>
+</data>
+<data name="Yes" xml:space="preserve">
+  <value>نعم</value>
+</data>
+<data name="No" xml:space="preserve">
+  <value>لا</value>
+</data>
   <data name="Search" xml:space="preserve">
     <value>بحث</value>
     <comment>Search button text</comment>

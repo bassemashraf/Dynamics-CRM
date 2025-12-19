@@ -22,6 +22,9 @@ interface State {
     showResults: boolean;
     searchResults: any[];
     showAdvancedSearch: boolean;
+    signOnTime: string | null;
+    signOutTime: string | null;
+    hasSignedOut: boolean;
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -44,6 +47,10 @@ interface LocalizedStrings {
     SearchPrompt: string;
     OfflineNavigationBlocked: string;
     OfflineQuickCreateBlocked: string;
+    LogoutConfirmTitle: string;
+    LogoutConfirmMessage: string;
+    Yes: string;
+    No: string;
 }
 
 // --- Custom Styles Derived from main.css & Bootstrap ---
@@ -207,7 +214,11 @@ export const Main = (props: IProps) => {
             Loading: ctx.resources.getString("Loading"),
             SearchPrompt: ctx.resources.getString("SearchPrompt"),
             OfflineNavigationBlocked: ctx.resources.getString("OfflineNavigationBlocked"),
-            OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked")
+            OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked"),
+            LogoutConfirmTitle: ctx.resources.getString("LogoutConfirmTitle") || "Confirm Logout",
+            LogoutConfirmMessage: ctx.resources.getString("LogoutConfirmMessage") || "Are you sure you want to logout? This will close all scheduled bookings for today.",
+            Yes: ctx.resources.getString("Yes") || "Yes",
+            No: ctx.resources.getString("No") || "No"
         };
     }, [props.context]);
 
@@ -227,6 +238,9 @@ export const Main = (props: IProps) => {
         searchResults: [],
         showResults: false,
         showAdvancedSearch: false,
+        signOnTime: null,
+        signOutTime: null,
+        hasSignedOut: false,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -271,10 +285,26 @@ export const Main = (props: IProps) => {
     }, []);
 
     const handleBack = (): void => {
-        // Implement back navigation
-        console.log("Back clicked");
-    };
+        // Navigate to home page
+        const homePageId = "e3bef7ef-5bbe-f011-bbd3-000d3a46c848";
+        const entityName = "duc_home1";
 
+        // Use Xrm.Navigation.openForm to open the home entity record
+        Xrm.Navigation.openForm({
+            entityName: entityName,
+            entityId: homePageId,
+            openInNewWindow: false
+        }).then(
+            function success() {
+                console.log("Successfully navigated to home page");
+            },
+            function error(error: any) {
+                console.error("Navigation error:", error);
+                // Fallback to direct navigation
+                window.location.href = `/main.aspx?etn=${entityName}&pagetype=entityrecord&id=${homePageId}`;
+            }
+        );
+    };
 
 
     const loadUserData = React.useCallback(async (): Promise<void> => {
@@ -337,16 +367,145 @@ export const Main = (props: IProps) => {
         }
     };
 
+    // Function to get first daily inspection
+    async function getFirstDailyInspectionToday(
+        webAPI: ComponentFramework.WebApi,
+        userId: string
+    ): Promise<any | null> {
+        try {
+            const cleanUserId = userId.replace(/[{}]/g, "");
+
+            // Get bookable resource for current user
+            const resourceRes = await webAPI.retrieveMultipleRecords(
+                "bookableresource",
+                `?$select=bookableresourceid&$filter=_userid_value eq ${cleanUserId} and resourcetype eq 3`
+            );
+
+            if (!resourceRes.entities || resourceRes.entities.length === 0) {
+                console.error("No bookable resource found for the current user.");
+                return null;
+            }
+
+            const resourceId = resourceRes.entities[0].bookableresourceid;
+
+            // Get today's date range (start and end of day)
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
+            const todayEnd = new Date();
+            todayEnd.setHours(23, 59, 59, 999);
+
+            // Retrieve the first daily inspection created today (no workorder filter)
+            const inspectionRes = await webAPI.retrieveMultipleRecords(
+                "duc_dailyinspectorinspections",
+                `?$select=duc_dailyinspectorinspectionsid,duc_startinspectiontime,createdon` +
+                `&$filter=_duc_bookableresource_value eq ${resourceId} ` +
+                `and createdon ge ${todayStart.toISOString()} ` +
+                `and createdon le ${todayEnd.toISOString()}` +
+                `&$orderby=createdon asc` +
+                `&$top=1`
+            );
+
+            if (inspectionRes.entities && inspectionRes.entities.length > 0) {
+                const firstInspection = inspectionRes.entities[0];
+                console.log("First daily inspection found:", firstInspection);
+                return firstInspection;
+            } else {
+                console.log("No daily inspection found for today.");
+                return null;
+            }
+
+        } catch (error) {
+            console.error("Error retrieving daily inspection:", error);
+            return null;
+        }
+    }
+
+    // Load sign-on time
+    const loadSignOnTime = React.useCallback(async (): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            const userId = ctx.userSettings.userId.replace(/[{}]/g, "");
+
+            // Get the first daily inspection for today
+            const inspection = await getFirstDailyInspectionToday(
+                ctx.webAPI,
+                userId
+            );
+
+            if (inspection && inspection.duc_startinspectiontime) {
+                const startTime = new Date(inspection.duc_startinspectiontime);
+
+                // Format time based on locale
+                const formattedTime = startTime.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true // Change to false for 24-hour format
+                });
+
+                setState(prev => ({
+                    ...prev,
+                    signOnTime: formattedTime
+                }));
+            }
+        } catch (error) {
+            console.error("Error loading sign-on time:", error);
+        }
+    }, [props.context]);
+
+    // ADDED: Check if user has already signed out today
+    const checkSignOutStatus = React.useCallback(async (): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            const userId = ctx.userSettings.userId.replace(/[{}]/g, "");
+
+            // Get today's date range
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
+            // Query attendance record for today
+            const attendanceRes = await ctx.webAPI.retrieveMultipleRecords(
+                "duc_attendance",
+                `?$select=duc_attendanceid,duc_manualsignouttime&$filter=_duc_user_value eq ${userId} and Microsoft.Dynamics.CRM.On(PropertyName='createdon',PropertyValue='${todayStart.toISOString()}')`
+            );
+
+            if (attendanceRes.entities && attendanceRes.entities.length > 0) {
+                const attendance = attendanceRes.entities[0];
+                
+                // Check if manual sign-out time exists
+                if (attendance.duc_manualsignouttime) {
+                    const signOutDateTime = new Date(attendance.duc_manualsignouttime);
+                    const formattedSignOutTime = signOutDateTime.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+
+                    // Update state to show sign-out time and hide logout button
+                    setState(prev => ({
+                        ...prev,
+                        signOutTime: formattedSignOutTime,
+                        hasSignedOut: true
+                    }));
+
+                    console.log("User has already signed out today at:", formattedSignOutTime);
+                }
+            }
+        } catch (error) {
+            console.error("Error checking sign-out status:", error);
+        }
+    }, [props.context]);
+
     React.useEffect(() => {
         void loadUserData();
-    }, [loadUserData]);
+        void loadSignOnTime();
+        void checkSignOutStatus(); // ADDED: Check sign-out status on component mount
+    }, [loadUserData, loadSignOnTime, checkSignOutStatus]);
 
 
 
 
     const earlyLogout = async (): Promise<void> => {
-        debugger;
-
         const ctx: any = props.context;
 
         if (isOffline()) {
@@ -354,7 +513,36 @@ export const Main = (props: IProps) => {
             return;
         }
 
-        // Use PCF context utils instead of Xrm.Utility
+        // Show confirmation dialog
+        const confirmOptions = {
+            title: strings.LogoutConfirmTitle,
+            subtitle: strings.LogoutConfirmMessage,
+            text: "",
+            confirmButtonLabel: strings.Yes,
+            cancelButtonLabel: strings.No
+        };
+
+        try {
+            const confirmed = await Xrm.Navigation.openConfirmDialog(confirmOptions);
+
+            if (!confirmed.confirmed) {
+                console.log("Logout cancelled by user");
+                return;
+            }
+        } catch (error) {
+            console.error("Error showing confirmation dialog:", error);
+            return;
+        }
+
+        // Capture sign-out time
+        const signOutDateTime = new Date();
+        const formattedSignOutTime = signOutDateTime.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        // Show progress indicator
         Xrm.Utility.showProgressIndicator(strings.loggingout);
         await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -377,17 +565,17 @@ export const Main = (props: IProps) => {
                     message: "No bookable resource found for current user.",
                     isLoading: false
                 }));
-                ctx.utils.closeProgressIndicator();
+                Xrm.Utility.closeProgressIndicator();
                 return;
             }
 
             const resourceId = resourceResult.entities[0].bookableresourceid;
 
-            // Step 3: Get "Scheduled" booking status ID
+            // Step 3: Get "Scheduled" and "Closed" booking status IDs
             const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
             const closedStatusGuid = '0adbf4e6-86cc-4db0-9dbb-51b7d1ed4020';
 
-            // Fixed query - use Today() function correctly
+            // Get today's scheduled bookings
             const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq ${resourceId} and _bookingstatus_value eq ${bookingStatusGuid} and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
 
             const scheduledBookings = await ctx.webAPI.retrieveMultipleRecords(
@@ -395,38 +583,68 @@ export const Main = (props: IProps) => {
                 remainingQuery
             );
 
-            if (!scheduledBookings.entities || scheduledBookings.entities.length === 0) {
-                setState(prev => ({
-                    ...prev,
-                    message: "No scheduled bookings found for today.",
-                    isLoading: false
-                }));
-                // ctx.utils.closeProgressIndicator();
-                return;
+            // Step 4: Update all today's scheduled bookings to canceled status
+            if (scheduledBookings.entities && scheduledBookings.entities.length > 0) {
+                const updatePromises = scheduledBookings.entities.map((booking: any) =>
+                    ctx.webAPI.updateRecord(
+                        "bookableresourcebooking",
+                        booking.bookableresourcebookingid,
+                        {
+                            "BookingStatus@odata.bind": `/bookingstatuses(${closedStatusGuid})`
+                        }
+                    )
+                );
+
+                await Promise.all(updatePromises);
+                console.log(`Successfully closed ${scheduledBookings.entities.length} scheduled booking(s) for today.`);
             }
 
-            // Step 4: Update all today's scheduled bookings to canceled status
-            const updatePromises = scheduledBookings.entities.map((booking: any) =>
-                ctx.webAPI.updateRecord(
-                    "bookableresourcebooking",
-                    booking.bookableresourcebookingid,
-                    {
-                        "BookingStatus@odata.bind": `/bookingstatuses(${closedStatusGuid})`
-                    }
-                )
+            // Step 5: Update attendance record with manual sign-out time
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
+            const attendanceRes = await ctx.webAPI.retrieveMultipleRecords(
+                "duc_attendance",
+                `?$select=duc_attendanceid&$filter=_duc_user_value eq ${userId} and Microsoft.Dynamics.CRM.On(PropertyName='createdon',PropertyValue='${todayStart.toISOString()}')`
             );
 
-            await Promise.all(updatePromises);
+            if (attendanceRes.entities && attendanceRes.entities.length > 0) {
+                const attendanceId = attendanceRes.entities[0].duc_attendanceid;
 
-            // Step 5: Show success message
+                // Update attendance with manual sign-out time
+                await ctx.webAPI.updateRecord(
+                    "duc_attendance",
+                    attendanceId,
+                    {
+                        duc_manualsignouttime: signOutDateTime.toISOString()
+                    }
+                );
+
+                console.log("Updated attendance record with sign-out time: " + attendanceId);
+            } else {
+                console.warn("No attendance record found for today. Creating new one with sign-out time.");
+
+                // Create new attendance record with sign-out time
+                const attendanceData = {
+                    "duc_User@odata.bind": `/systemusers(${userId})`,
+                    duc_manualsignouttime: signOutDateTime.toISOString()
+                };
+
+                const attendanceResult = await ctx.webAPI.createRecord("duc_attendance", attendanceData);
+                console.log("Created new attendance record with sign-out time: " + attendanceResult.id);
+            }
+
+            // Step 6: Update UI with sign-out time and hide logout button
             setState(prev => ({
                 ...prev,
-                message: `Successfully closed ${scheduledBookings.entities.length} scheduled booking(s) for today.`,
-                isLoading: false
+                signOutTime: formattedSignOutTime,
+                hasSignedOut: true,
+                isLoading: false,
+                message: `Successfully logged out at ${formattedSignOutTime}`
             }));
 
         } catch (error: any) {
-            console.error("Error closing today's scheduled bookings:", error);
+            console.error("Error during logout process:", error);
             setState(prev => ({
                 ...prev,
                 message: `Error: ${error.message || error}`,
@@ -438,10 +656,7 @@ export const Main = (props: IProps) => {
         }
     };
 
-
-
-
-    const { userName, isLoading } = state;
+    const { userName, isLoading, signOnTime, signOutTime, hasSignedOut } = state;
     const isActionDisabled = isLoading;
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
@@ -467,7 +682,6 @@ export const Main = (props: IProps) => {
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 1000,
-        // margin: '2px',
         paddingtop: '0.5%',
         margin: 'auto',
     };
@@ -557,7 +771,42 @@ export const Main = (props: IProps) => {
             React.createElement(
                 "div",
                 { style: STYLES.actions },
-                React.createElement(
+                // Sign-on time display
+                signOnTime && React.createElement(
+                    "div",
+                    {
+                        style: {
+                            ...STYLES.textCenter,
+                            padding: 12,
+                            fontSize: 18,
+                            color: "#113f61",
+                            fontWeight: "bold" as const,
+                            backgroundColor: "#E8F4F8",
+                            borderRadius: 8,
+                            marginBottom: 8
+                        }
+                    },
+                    `Sign-On Time: ${signOnTime}`
+                ),
+                // Sign-out time display (shown after logout or if already signed out)
+                signOutTime && hasSignedOut && React.createElement(
+                    "div",
+                    {
+                        style: {
+                            ...STYLES.textCenter,
+                            padding: 12,
+                            fontSize: 18,
+                            color: "#8A1538",
+                            fontWeight: "bold" as const,
+                            backgroundColor: "#FFE8EE",
+                            borderRadius: 8,
+                            marginBottom: 8
+                        }
+                    },
+                    `Sign-Out Time: ${signOutTime}`
+                ),
+                // Logout button (hidden after sign-out)
+                !hasSignedOut && React.createElement(
                     "button",
                     {
                         onClick: earlyLogout,

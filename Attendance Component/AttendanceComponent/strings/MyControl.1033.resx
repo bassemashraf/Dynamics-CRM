@@ -75,4 +75,16 @@
   <value>Search</value>
   <comment>Search button text</comment>
 </data>
+<data name="LogoutConfirmTitle" xml:space="preserve">
+  <value>Confirm Logout</value>
+</data>
+<data name="LogoutConfirmMessage" xml:space="preserve">
+  <value>Are you sure you want to logout? This will close all scheduled bookings for today.</value>
+</data>
+<data name="Yes" xml:space="preserve">
+  <value>Yes</value>
+</data>
+<data name="No" xml:space="preserve">
+  <value>No</value>
+</data>
 </root>

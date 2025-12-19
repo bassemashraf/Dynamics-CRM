@@ -22,7 +22,8 @@
     <value>بحث</value>
     <comment>Search button text</comment>
   </data>
-  
+      <data name="StartPatrol" xml:space="preserve"><value>بدء الحملة</value></data>
+      <data name="EndPatrol" xml:space="preserve"><value>إنهاء الحملة</value></data>
   <data name="SearchResults" xml:space="preserve">
     <value>نتائج البحث ({0})</value>
     <comment>Search results title with count placeholder</comment>

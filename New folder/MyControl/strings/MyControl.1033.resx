@@ -9,7 +9,8 @@
   <data name="FindFacility" xml:space="preserve"><value>Find a Facility</value></data>
   <data name="RemainingInspections" xml:space="preserve"><value>Remaining inspections today</value></data>
     <data name="TodaysPatrols" xml:space="preserve"><value>Remaining Patrols today</value></data>
-
+    <data name="StartPatrol" xml:space="preserve"><value>Start Shift</value></data>
+    <data name="EndPatrol" xml:space="preserve"><value>End Shift</value></data>
   <data name="CompletedInspections" xml:space="preserve"><value>Completed inspections for today</value></data>
   <data name="ScheduledInspections" xml:space="preserve"><value>Scheduled Inspections</value></data>
   <data name="StartInspection" xml:space="preserve"><value>Start Inspection</value></data>

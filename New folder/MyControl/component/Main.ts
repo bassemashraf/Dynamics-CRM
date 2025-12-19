@@ -10,6 +10,7 @@ import { clock } from "../images/clock";
 import { check } from "../images/check";
 import { filters } from "../images/filters";
 import { AdvancedSearch } from './AdvancedSearch';
+import {close} from '../images/close';
 
 // Define the interface for the component's internal state.
 interface State {
@@ -23,6 +24,8 @@ interface State {
     showResults: boolean;
     searchResults: any[];
     showAdvancedSearch: boolean;
+    patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
+    activePatrolId?: string; // Store active patrol campaign ID
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -45,6 +48,8 @@ interface LocalizedStrings {
     SearchPrompt: string;
     OfflineNavigationBlocked: string;
     OfflineQuickCreateBlocked: string;
+    StartPatrol: string;
+    EndPatrol: string;
 }
 
 // --- Custom Styles Derived from main.css & Bootstrap ---
@@ -94,6 +99,10 @@ const STYLES = {
         backgroundColor: "#8A1538",
         border: "none",
     },
+    btnGreenDark: {
+        backgroundColor: "#8A1538",
+        border: "none",
+    },
     flexGrow1: { flexGrow: 1 },
     dFlex: { display: "flex" },
     alignItemsCenter: { alignItems: "center" },
@@ -130,7 +139,9 @@ export const Main = (props: IProps) => {
             TodaysPatrols: ctx.resources.getString("TodaysPatrols"),
             SearchPrompt: ctx.resources.getString("SearchPrompt"),
             OfflineNavigationBlocked: ctx.resources.getString("OfflineNavigationBlocked"),
-            OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked")
+            OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked"),
+            StartPatrol: ctx.resources.getString("StartPatrol"),
+            EndPatrol: ctx.resources.getString("EndPatrol")
         };
     }, [props.context]);
 
@@ -151,6 +162,8 @@ export const Main = (props: IProps) => {
         searchResults: [],
         showResults: false,
         showAdvancedSearch: false,
+        patrolStatus: 'none',
+        activePatrolId: undefined,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -159,6 +172,7 @@ export const Main = (props: IProps) => {
     const checkDataUri = "data:image/svg+xml;base64," + btoa(check);
     const clockDataUri = "data:image/svg+xml;base64," + btoa(clock);
     const filtersDataUri = "data:image/svg+xml;base64," + btoa(filters);
+    const closeDataUri = "data:image/svg+xml;base64," + btoa(close);
 
     const isOffline = (): boolean => {
         const ctx: any = props.context;
@@ -172,6 +186,68 @@ export const Main = (props: IProps) => {
             showResults: true
         }));
     };
+
+    // Check patrol status on load
+    const checkPatrolStatus = React.useCallback(async (): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+            
+            // Get today's date in ISO format
+            const today = new Date().toISOString().split('T')[0];
+
+            // Check for active patrol (status = 2)
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            
+            const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                activePatrolQuery
+            );
+
+            if (activePatrolResults.entities.length > 0) {
+                // Found active patrol, show End Patrol button
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'end',
+                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid
+                }));
+                return;
+            }
+
+            // Check for available patrol to start (status = 1 or 100000004)
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            
+            const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                availablePatrolQuery
+            );
+
+            if (availablePatrolResults.entities.length > 0) {
+                // Found available patrol, show Start Patrol button
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'start',
+                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid
+                }));
+            } else {
+                // No patrol available
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'none',
+                    activePatrolId: undefined
+                }));
+            }
+
+        } catch (error) {
+            console.error("Error checking patrol status:", error);
+            setState(prev => ({
+                ...prev,
+                patrolStatus: 'none',
+                activePatrolId: undefined
+            }));
+        }
+    }, [props.context]);
 
     const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
         const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
@@ -306,8 +382,9 @@ export const Main = (props: IProps) => {
 
     React.useEffect(() => {
         void loadUserData();
+        void checkPatrolStatus();
         restoreCache();
-    }, [loadUserData]);
+    }, [loadUserData, checkPatrolStatus]);
 
     const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>): void => {
         if (e.key === "Enter") void onSearchClick();
@@ -409,6 +486,7 @@ export const Main = (props: IProps) => {
             viewId: "4073baca-cc5f-e611-8109-000d3a146973"
         });
     };
+
     const openScheduledCampaigns = (): void => {
         const ctx: any = props.context;
         if (isOffline()) {
@@ -444,7 +522,126 @@ export const Main = (props: IProps) => {
         void ctx.navigation.openForm({ entityName: "msdyn_workorder", useQuickCreateForm: true }, {});
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults } = state;
+    const startPatrol = async (): Promise<void> => {
+        const ctx: any = props.context;
+        
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+
+        if (!state.activePatrolId) {
+            setState(prev => ({ ...prev, message: "No patrol campaign found" }));
+            return;
+        }
+
+        try {
+            setState(prev => ({ ...prev, isLoading: true }));
+
+            // Update campaign status to 2 (In Progress)
+            const updateData = {
+                duc_campaignstatus: 2
+            };
+
+            await ctx.webAPI.updateRecord(
+                "new_inspectioncampaign",
+                state.activePatrolId,
+                updateData
+            );
+
+            // Update state to show End Patrol button
+            setState(prev => ({
+                ...prev,
+                patrolStatus: 'end',
+                isLoading: false,
+                message: "Patrol started successfully"
+            }));
+
+            // Clear message after 3 seconds
+            setTimeout(() => {
+                setState(prev => ({ ...prev, message: undefined }));
+            }, 3000);
+
+        } catch (error) {
+            console.error("Error starting patrol:", error);
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Failed to start patrol"
+            }));
+        }
+    };
+
+    const endPatrol = async (): Promise<void> => {
+        const ctx: any = props.context;
+        
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+
+        try {
+            setState(prev => ({ ...prev, isLoading: true }));
+
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+            const today = new Date().toISOString().split('T')[0];
+
+            // Query for active patrol
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            
+            const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                activePatrolQuery
+            );
+
+            if (activePatrolResults.entities.length === 0) {
+                setState(prev => ({
+                    ...prev,
+                    isLoading: false,
+                    message: "No active patrol found"
+                }));
+                return;
+            }
+
+            const patrolId = activePatrolResults.entities[0].new_inspectioncampaignid;
+
+            // Update campaign status to 100000004 (Completed)
+            const updateData = {
+                duc_campaignstatus: 100000004
+            };
+
+            await ctx.webAPI.updateRecord(
+                "new_inspectioncampaign",
+                patrolId,
+                updateData
+            );
+
+            // Check if there's another patrol available
+            await checkPatrolStatus();
+
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Patrol ended successfully"
+            }));
+
+            // Clear message after 3 seconds
+            setTimeout(() => {
+                setState(prev => ({ ...prev, message: undefined }));
+            }, 3000);
+
+        } catch (error) {
+            console.error("Error ending patrol:", error);
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Failed to end patrol"
+            }));
+        }
+    };
+
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
     const isActionDisabled = isLoading;
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
@@ -470,7 +667,6 @@ export const Main = (props: IProps) => {
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 1000,
-        // margin: '2px',
         paddingtop: '0.5%',
         margin: 'auto',
     };
@@ -541,8 +737,8 @@ export const Main = (props: IProps) => {
                     )
                 ),
                 // Messages
-                message && React.createElement("div", { style: { color: "red", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, message),
-                isLoading && React.createElement("div", { style: { color: "blue", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, strings.Loading),
+                // message && React.createElement("div", { style: { color: "red", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, message),
+                // isLoading && React.createElement("div", { style: { color: "blue", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, strings.Loading),
                 // Inspection Cards
                 React.createElement(
                     "div",
@@ -577,37 +773,6 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
                     ),
-
-                    //patrols card
-                    React.createElement(
-                        "div",
-                        {
-                            onClick: openScheduledCampaigns,
-                            style: {
-                                ...STYLES.border,
-                                ...STYLES.rounded4,
-                                ...STYLES.dFlex,
-                                ...STYLES.alignItemsCenter,
-                                ...STYLES.justifyContentBetween,
-                                ...STYLES.p3,
-                                ...STYLES.gap3,
-                                cursor: isActionDisabled ? 'not-allowed' : 'pointer',
-                                opacity: isActionDisabled ? 0.5 : 1,
-                                pointerEvents: isActionDisabled ? 'none' : 'auto'
-                            }
-                        },
-                        React.createElement(
-                            "div",
-                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
-                            React.createElement(
-                                "div",
-                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
-                                React.createElement("img", { src: clockDataUri })
-                            ),
-                            React.createElement("h6", { style: STYLES.h6 }, strings.TodaysPatrols)
-                        ),
-                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, TodayCampaigns ?? "...")
-                    ),
                     // Completed Card
                     React.createElement(
                         "div",
@@ -636,7 +801,6 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
                     )
-
                 )
             ),
             // Action Buttons
@@ -673,6 +837,49 @@ export const Main = (props: IProps) => {
                         React.createElement("img", { src: startDataUri, key: "icon" }),
                         React.createElement("span", { key: "text" }, strings.StartInspection)
                     ]
+                ),
+                // Conditional Patrol Button
+                patrolStatus === 'start' && React.createElement(
+                    "button",
+                    {
+                        onClick: startPatrol,
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({
+                            ...STYLES.btnBlueDark,
+                            ...STYLES.textWhite,
+                            ...STYLES.rounded4,
+                            ...STYLES.p3,
+                            ...STYLES.dFlex,
+                            ...STYLES.alignItemsCenter,
+                            ...STYLES.justifyContentCenter,
+                            ...STYLES.gap3
+                        })
+                    },
+                    [
+                        React.createElement("img", { src: startDataUri, key: "icon" }),
+                        React.createElement("span", { key: "text" }, strings.StartPatrol)
+                    ]
+                ),
+                patrolStatus === 'end' && React.createElement(
+                    "button",
+                    {
+                        onClick: endPatrol,
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({
+                            ...STYLES.btnGreenDark,
+                            ...STYLES.textWhite,
+                            ...STYLES.rounded4,
+                            ...STYLES.p3,
+                            ...STYLES.dFlex,
+                            ...STYLES.alignItemsCenter,
+                            ...STYLES.justifyContentCenter,
+                            ...STYLES.gap3
+                        })
+                    },
+                    [
+                        React.createElement("img", { src: startDataUri, key: "icon" }),
+                        React.createElement("span", { key: "text" }, strings.EndPatrol)
+                    ]
                 )
             )
         ),
@@ -687,7 +894,7 @@ export const Main = (props: IProps) => {
             results: searchResults,
             onRecordClick: onRecordClick,
             onClose: onCloseResults,
-            context: props.context  // Add this line
+            context: props.context
         })
     );
 };
