@@ -172,6 +172,7 @@ function SetWorkOrderType(executionContext) {
 
 
 function onAnonymousCustomerChange(executionContext) {
+    debugger
     var formContext = executionContext.getFormContext();
 
     var anonymousAttr = formContext.getAttribute("duc_anonymouscustomer");
@@ -183,33 +184,87 @@ function onAnonymousCustomerChange(executionContext) {
 
     var anonymousValue = anonymousAttr.getValue();
 
-    if (anonymousValue !== 1) {
+    if (anonymousValue != true) {
         return;
     }
 
-    // Retrieve Account where duc_isunknown = true
-    Xrm.WebApi.retrieveMultipleRecords(
-        "account",
-        "?$select=accountid,name&$filter=duc_isunknown eq true"
+    // Get current user's ID
+    var currentUserId = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+
+    // Retrieve the current user's organizational unit ID
+    Xrm.WebApi.retrieveRecord(
+        "systemuser",
+        currentUserId,
+        "?$select=_duc_organizationalunitid_value"
     ).then(
-        function success(result) {
-            if (result.entities.length === 0) {
+        function successUser(user) {
+            if (!user._duc_organizationalunitid_value) {
+                console.log("No organizational unit found for the user.");
                 return;
             }
 
-            var account = result.entities[0];
+            var orgUnitId = user._duc_organizationalunitid_value;
 
-            var lookupValue = [{
-                id: account.accountid,
-                name: account.name,
-                entityType: "account"
-            }];
+            // Retrieve the organizational unit and get business unit ID
+            Xrm.WebApi.retrieveRecord(
+                "msdyn_organizationalunit",
+                orgUnitId,
+                "?$select=_duc_businessunit_value"
+            ).then(
+                function successOrgUnit(orgUnit) {
+                    if (!orgUnit._duc_businessunit_value) {
+                        console.log("No business unit found for the organizational unit.");
+                        return;
+                    }
 
-            subAccountAttr.setValue(lookupValue);
-            subAccountAttr.setSubmitMode("always");
+                    var businessUnitId = orgUnit._duc_businessunit_value;
+
+                    // Retrieve Account where duc_isunknown = true AND owningbusinessunit matches the business unit
+                    Xrm.WebApi.retrieveMultipleRecords(
+                        "account",
+                        "?$select=accountid,name&$filter=duc_isunknown eq true and _owningbusinessunit_value eq " + businessUnitId
+                    ).then(
+                        function successAccount(result) {
+                            if (result.entities.length === 0) {
+                                console.log("No unknown account found for the business unit.");
+                                return;
+                            }
+
+                            var account = result.entities[0];
+
+                            var lookupValue = [{
+                                id: account.accountid,
+                                name: account.name,
+                                entityType: "account"
+                            }];
+
+                            subAccountAttr.setValue(lookupValue);
+                            subAccountAttr.setSubmitMode("always");
+
+                            // Hide both fields
+                            var subAccountControl = formContext.getControl("duc_subaccount");
+                            var searchServiceAccountControl = formContext.getControl("duc_searchserviceaccount");
+
+                            if (subAccountControl != null) {
+                                subAccountControl.setVisible(false);
+                            }
+
+                            if (searchServiceAccountControl != null) {
+                                searchServiceAccountControl.setVisible(false);
+                            }
+                        },
+                        function errorAccount(error) {
+                            console.error("Error retrieving unknown account:", error.message);
+                        }
+                    );
+                },
+                function errorOrgUnit(error) {
+                    console.error("Error retrieving organizational unit:", error.message);
+                }
+            );
         },
-        function error(error) {
-            console.error("Error retrieving unknown account:", error.message);
+        function errorUser(error) {
+            console.error("Error retrieving user information:", error.message);
         }
     );
 }

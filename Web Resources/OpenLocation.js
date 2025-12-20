@@ -6,13 +6,13 @@ function WO_OpenDirectionsToDucAddress() {
     }
 
     var lang = Xrm.Utility.getGlobalContext().userSettings.languageId;
-    var MSG = (lang === 1025) ? { // Arabic
+    var MSG = (lang === 1025) ? { 
         noLookup: "لا يوجد عنوان محدد في أمر العمل (الحقل: duc_address).",
         noCoords: "سجل العنوان لا يحتوي على خطوط الطول/العرض (duc_latitude / duc_longitude).",
         cannotGetLoc: "تعذر استرداد الموقع الحالي، يرجى مراجعة إعدادات الموقع في الهاتف.",
         confirmTitle: "الاتجاهات في خرائط جوجل",
         confirmText: "هل ترغب في فتح خرائط جوجل للحصول على الاتجاهات إلى موقع التفتيش?"
-    } : { // English
+    } : { 
         noLookup: "No address is selected on the Work Order (field: duc_address).",
         noCoords: "The address record does not have latitude/longitude (duc_latitude / duc_longitude).",
         cannotGetLoc: "Can't get current location. Please check your mobile location settings.",
@@ -50,15 +50,6 @@ function WO_OpenDirectionsToDucAddress() {
                     + "&travelmode=driving";
 
                 Xrm.Navigation.openUrl(url);
-
-                // Ask for confirmation then open (safer on mobile)
-                // var confirmStrings = { title: MSG.confirmTitle, text: MSG.confirmText };
-                // Xrm.Navigation.openConfirmDialog(confirmStrings, { width: 420, height: 200 }).then(function (res) {
-                //     if (res.confirmed) {
-                //         // Opens in external browser/app outside shim on mobile
-                //         Xrm.Navigation.openUrl(url);
-                //     }
-                // });
             }, function () {
                 Xrm.Navigation.openAlertDialog({ text: MSG.cannotGetLoc });
             });

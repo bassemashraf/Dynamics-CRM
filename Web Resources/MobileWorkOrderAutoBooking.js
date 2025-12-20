@@ -72,8 +72,8 @@ async function createAutoBookingOnWorkOrderCreate(executionContext) {
 
         const booking = {
             "ownerid@odata.bind": `/systemusers(${createdBy})`,
-            "starttime": now,
-            "endtime": end,
+            "starttime": now.toISOString(),
+            "endtime": end.toISOString(),
             "duration": 1,
             "msdyn_workorder@odata.bind": `/msdyn_workorders(${workorderId})`,
             "Resource@odata.bind": `/bookableresources(${resourceId})`,

@@ -25,6 +25,103 @@ function Onload(executionContext) {
         var _accountType = GetWOType(workOrderTypeId);
     }
 
+    //----------------------------------------------19/12---------//
+    var campaignTypeAttr = formContext.getAttribute("duc_campaigntype");
+    var campaignInternalTypeAttr = formContext.getAttribute("duc_campaigninternaltype");
+    var organizationalUnitAttr = formContext.getAttribute("duc_organizationalunitid");
+
+    if (campaignTypeAttr != null && campaignInternalTypeAttr != null) {
+
+        if (campaignTypeAttr.getValue() == 100000004 && campaignInternalTypeAttr.getValue() == 100000005) //Main Patrol
+        {
+            var tab = formContext.ui.tabs.get("inspection_campaigns");
+            tab.setVisible(true);
+        }
+    }
+
+    // Check organizational unit and remove option if needed
+    if (organizationalUnitAttr != null && organizationalUnitAttr.getValue() != null) {
+        var organizationalUnitLookup = organizationalUnitAttr.getValue();
+        var organizationalUnitId = organizationalUnitLookup[0].id;
+
+        // Retrieve the organizational unit record to check duc_englishname
+        Xrm.WebApi.retrieveRecord("msdyn_organizationalunit", organizationalUnitId, "?$select=duc_englishname").then(
+            function success(result) {
+                if (result.duc_englishname != "Inspection Section – Natural Reserves") {
+                    // Remove option 100000004 from duc_campaigntype
+                    if (campaignTypeAttr != null) {
+                        var campaignTypeControl = campaignTypeAttr.controls.get(0);
+                        campaignTypeControl.removeOption(100000004);
+                    }
+                }
+            },
+            function (error) {
+                console.log("Error retrieving organizational unit: " + error.message);
+            }
+        );
+    }
+
+    // Section visibility logic for Patrol_Section
+    debugger
+    var tab = formContext.ui.tabs.get("{dfbcbc11-d392-495f-a96a-11c14d55af9e}")
+    var sections = tab.sections;
+    var patrolSection = sections.get("Patrol_Section");
+
+    if (campaignTypeAttr != null && campaignInternalTypeAttr != null) {
+        var campaignTypeValue = campaignTypeAttr.getValue();
+        var campaignInternalTypeValue = campaignInternalTypeAttr.getValue();
+
+        // Case 1: campaignInternalType == 100000005 AND campaignType == 100000004
+        if (campaignInternalTypeValue == 100000005 && campaignTypeValue == 100000004) {
+            console.log("Case 1: Showing patrol section with both subgrids");
+
+            if (patrolSection != null) {
+                patrolSection.setVisible(true);
+            }
+
+            var campaignLogGrid = formContext.getControl("Campaign_Log_Grid");
+            if (campaignLogGrid != null) {
+                campaignLogGrid.setVisible(true);
+            }
+
+            var subgridNew5 = formContext.getControl("Subgrid_new_5");
+            if (subgridNew5 != null) {
+                subgridNew5.setVisible(true);
+            }
+        }
+        // Case 2: campaignType == 100000004 AND campaignInternalType == 100000004
+        else if (campaignTypeValue == 100000004 && campaignInternalTypeValue == 100000004) {
+            console.log("Case 2: Showing patrol section, hiding Subgrid_new_5");
+
+            if (patrolSection != null) {
+                patrolSection.setVisible(true);
+            }
+
+            var campaignLogGrid = formContext.getControl("Campaign_Log_Grid");
+            if (campaignLogGrid != null) {
+                campaignLogGrid.setVisible(true);
+            }
+
+            var subgridNew5 = formContext.getControl("Subgrid_new_5");
+            if (subgridNew5 != null) {
+                subgridNew5.setVisible(false);
+            }
+        }
+        // Any other case: hide the section
+        else {
+            console.log("Other case: Hiding patrol section");
+            if (patrolSection != null) {
+                patrolSection.setVisible(false);
+            }
+        }
+    }
+    else {
+        console.log("Attributes are null: Hiding patrol section");
+        // If attributes are null, hide the section
+        if (patrolSection != null) {
+            patrolSection.setVisible(false);
+        }
+    }
 
 }
 
@@ -855,6 +952,7 @@ function openDepartmentSelector(primaryControl) {
 
 
 function handleCampaignTypeVisibility(executionContext) {
+
     var formContext = executionContext.getFormContext();
     var campaignTypeAttr = formContext.getAttribute("duc_campaigninternaltype");
 
@@ -888,7 +986,6 @@ function handleCampaignTypeVisibility(executionContext) {
         account_tab: (campaignType !== 100000000 && campaignType !== 100000005 && campaignType !== 100000004),        // Hide for Sub Periodic Campaign
         inspectors_tab: !(campaignType === 100000000), // Hide for Sub Perodic types
         Patrol_Logs_Tab: (campaignType == 100000005 || campaignType == 100000004),
-        Patrol_Section: campaignType == 100000004
     };
 
     // Apply tab visibility based on rules
@@ -1040,7 +1137,7 @@ function handleFormLock(formContext, executionContext) {
         return;
     }
 
-    if (campaignStatus === 1 || campaignStatus === 4 || campaignStatus === 7 || campaignStatus === 100000001) {
+    if (campaignStatus === 4 || campaignStatus === 7 || campaignStatus === 100000001) {
         disableEntireForm(executionContext, false);
     }
     else {

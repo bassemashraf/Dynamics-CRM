@@ -121,8 +121,8 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
 
         const booking = {
             "ownerid@odata.bind": `/systemusers(${createdBy})`,
-            "starttime": now,
-            "endtime": end,
+            "starttime": now.toISOString(),
+            "endtime": end.toISOString(),
             "duration": 1,
             "msdyn_workorder@odata.bind": `/msdyn_workorders(${workorderId})`,
             "Resource@odata.bind": `/bookableresources(${resourceId})`,
@@ -161,7 +161,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
     }
 }
 
-function onSubaccountChange(executionContext) {
+async function onSubaccountChange(executionContext) {
     debugger
     var formContext = executionContext.getFormContext();
     
@@ -172,8 +172,8 @@ function onSubaccountChange(executionContext) {
         var subaccountId = subaccountLookup[0].id.replace(/[{}]/g, "");
         
         // Retrieve the selected account to check parent account and address lookup
-        Xrm.WebApi.retrieveRecord("account", subaccountId, "?$select=parentaccountid,_duc_address_value").then(
-            function success(result) {
+        await Xrm.WebApi.retrieveRecord("account", subaccountId, "?$select=parentaccountid,_duc_address_value").then(
+            async function success(result) {
                 var serviceAccountValue;
                 
                 // Check if parentaccountid has a value
@@ -204,7 +204,7 @@ function onSubaccountChange(executionContext) {
                     }]);
                     
                     // Now retrieve the address information to get longitude and latitude
-                    Xrm.WebApi.retrieveRecord("duc_addressinformation", addressId, "?$select=duc_longitude,duc_latitude").then(
+                    await Xrm.WebApi.retrieveRecord("duc_addressinformation", addressId, "?$select=duc_longitude,duc_latitude").then(
                         function successAddress(addressResult) {
                             // Set longitude if available
                             if (addressResult.duc_longitude != null) {
