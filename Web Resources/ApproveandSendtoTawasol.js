@@ -174,11 +174,18 @@ async function openTawasolRequestQuickCreate() {
         // ---------------------------
         var entityFormOptions = {
             entityName: "duc_tawasolrequest",
-            formId: "fefa3b46-b1f3-433a-b16f-0842eb1b61f8",
             useQuickCreateForm: true
         };
 
-        await Xrm.Navigation.openForm(entityFormOptions, defaultValues);
+        var result = await Xrm.Navigation.openForm(entityFormOptions, defaultValues);
+        if (result && result.savedEntityReference && result.savedEntityReference.length > 0) {
+            // Record was created successfully
+            var createdRecordId = result.savedEntityReference[0].id;
+            console.log("Tawasol Request created with ID: " + createdRecordId);
+
+            // Now call the update function
+            await updateLastActionOnProcessExtension();
+        }
 
         return true;
     }

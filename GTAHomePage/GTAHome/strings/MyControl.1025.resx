@@ -4,7 +4,8 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
-  
+      <data name="Pendingrequests" xml:space="preserve"><value>التفتيشات المتبقية</value></data>
+
   <data name="WelcomeBack" xml:space="preserve"><value>مرحبا بعودتك</value></data>
   <data name="FindFacility" xml:space="preserve"><value>البحث عن منشأة</value></data>
   <data name="RemainingInspections" xml:space="preserve"><value>عمليات التفتيش المتبقية اليوم</value></data>
@@ -17,10 +18,7 @@
   <data name="SearchPrompt" xml:space="preserve"><value>الرجاء إدخال قيمة البحث</value></data>
   <data name="OfflineNavigationBlocked" xml:space="preserve"><value>لا يمكن التنقل: وضع عدم الاتصال</value></data>
   <data name="OfflineQuickCreateBlocked" xml:space="preserve"><value>لا يمكن بدء التفتيش في وضع عدم الاتصال</value></data>
-  <data name="StartAnonymousInspection" xml:space="preserve">
-  <value>بدء تفتيش مجهول</value>
-  <comment>Button text for starting an anonymous inspection</comment>
-</data>
+  
   <data name="Search" xml:space="preserve">
     <value>بحث</value>
     <comment>Search button text</comment>

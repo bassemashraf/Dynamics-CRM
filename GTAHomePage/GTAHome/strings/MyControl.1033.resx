@@ -6,6 +6,8 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   
   <data name="WelcomeBack" xml:space="preserve"><value>Welcome Back</value></data>
+    <data name="Pendingrequests" xml:space="preserve"><value>Pending Requests</value></data>
+
   <data name="FindFacility" xml:space="preserve"><value>Find a Facility</value></data>
   <data name="RemainingInspections" xml:space="preserve"><value>Remaining inspections today</value></data>
     <data name="TodaysPatrols" xml:space="preserve"><value>Remaining Patrols today</value></data>
@@ -77,8 +79,5 @@
   <value>Search</value>
   <comment>Search button text</comment>
 </data>
-<data name="StartAnonymousInspection" xml:space="preserve">
-  <value>Start Anonymous Inspection</value>
-  <comment>Button text for starting an anonymous inspection</comment>
-</data>
+
 </root>

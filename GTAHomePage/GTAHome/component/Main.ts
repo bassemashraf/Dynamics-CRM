@@ -10,7 +10,9 @@ import { clock } from "../images/clock";
 import { check } from "../images/check";
 import { filters } from "../images/filters";
 import { AdvancedSearch } from './AdvancedSearch';
-import {close} from '../images/close';
+import { close } from '../images/close';
+import { headerBase64 } from "../images/header";
+import { stickynote } from "../images/stickynote";
 
 // Define the interface for the component's internal state.
 interface State {
@@ -26,10 +28,6 @@ interface State {
     showAdvancedSearch: boolean;
     patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
     activePatrolId?: string; // Store active patrol campaign ID
-    isNaturalReserve: boolean; // Track if org unit is Natural Reserve
-    unknownAccountId?: string; // Store unknown account ID for anonymous inspections
-    incidentTypeId?: string; // Store incident type ID for Natural Reserve
-    orgUnitId?: string; // Store organization unit ID
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -53,8 +51,8 @@ interface LocalizedStrings {
     OfflineNavigationBlocked: string;
     OfflineQuickCreateBlocked: string;
     StartPatrol: string;
-    EndPatrol: string;  
-    StartAnonymousInspection: string;
+    EndPatrol: string;
+    Pendingrequests: string;
 }
 
 // --- Custom Styles Derived from main.css & Bootstrap ---
@@ -63,19 +61,21 @@ const STYLES = {
     textGreen: { color: "#29A283" },
     bgBrownLight: { backgroundColor: "#ECE7DA" },
     bgGreenLight: { backgroundColor: "#CCEEE9" },
+    bgpinkLight: { backgroundColor: "#FFACC6" },
+
     welcomeBanner: {
         fontSize: "18px",
-        backgroundColor: "#CFE0E5",
-        paddingTop: 8,
-        paddingBottom: 8,
+        paddingTop: 12,
+        paddingBottom: 12,
         textAlign: "center" as const,
         width: "110%",
         maxwidth: "110%",
         marginBottom: 0,
-        fontWeight: "bold" as const
+        fontWeight: "500" as const,
+        borderTop: '1px solid rgba(255, 255, 255, 0.28)'
     },
     actions: {
-        backgroundColor: "#F3F3F3",
+        // backgroundColor: "#F3F2F0",
         padding: 12,
         paddingTop: 16,
         paddingBottom: 16,
@@ -106,10 +106,6 @@ const STYLES = {
     },
     btnGreenDark: {
         backgroundColor: "#8A1538",
-        border: "none",
-    },
-    btnOrangeDark: {
-        backgroundColor: "#113f61",
         border: "none",
     },
     flexGrow1: { flexGrow: 1 },
@@ -151,7 +147,7 @@ export const Main = (props: IProps) => {
             OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked"),
             StartPatrol: ctx.resources.getString("StartPatrol"),
             EndPatrol: ctx.resources.getString("EndPatrol"),
-            StartAnonymousInspection: ctx.resources.getString("StartAnonymousInspection"),
+            Pendingrequests: ctx.resources.getString("Pendingrequests")
         };
     }, [props.context]);
 
@@ -174,10 +170,6 @@ export const Main = (props: IProps) => {
         showAdvancedSearch: false,
         patrolStatus: 'none',
         activePatrolId: undefined,
-        isNaturalReserve: false,
-        unknownAccountId: undefined,
-        incidentTypeId: undefined,
-        orgUnitId: undefined,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -185,6 +177,7 @@ export const Main = (props: IProps) => {
     const calenderDataUri = "data:image/svg+xml;base64," + btoa(calender);
     const checkDataUri = "data:image/svg+xml;base64," + btoa(check);
     const clockDataUri = "data:image/svg+xml;base64," + btoa(clock);
+    const stickynoteDataUri = "data:image/svg+xml;base64," + btoa(stickynote);
     const filtersDataUri = "data:image/svg+xml;base64," + btoa(filters);
     const closeDataUri = "data:image/svg+xml;base64," + btoa(close);
 
@@ -201,97 +194,19 @@ export const Main = (props: IProps) => {
         }));
     };
 
-    // Check organization unit and get unknown account
-    const checkOrganizationUnit = React.useCallback(async (ctx: any, userId: string): Promise<void> => {
-        try {
-            // Get user's organizational unit
-            const userResult = await ctx.webAPI.retrieveRecord(
-                "systemuser",
-                userId,
-                "?$select=_duc_organizationalunitid_value"
-            );
-
-            if (!userResult._duc_organizationalunitid_value) {
-                console.log("No organizational unit found for the user.");
-                return;
-            }
-
-            const orgUnitId = userResult._duc_organizationalunitid_value;
-
-            // Retrieve the organizational unit details
-            const orgUnitResult = await ctx.webAPI.retrieveRecord(
-                "msdyn_organizationalunit",
-                orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname"
-            );
-
-            const orgUnitName = orgUnitResult.duc_englishname || "";
-            const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
-
-            // Check if organization unit name is "Natural Reserve" (case insensitive)
-            const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
-
-            let incidentTypeId: string | undefined = undefined;
-
-            // If Natural Reserve, get the incident type for this org unit
-            if (isNaturalReserve) {
-                try {
-                    const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$top=1`;
-                    const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
-                        "msdyn_incidenttype",
-                        incidentTypeQuery
-                    );
-
-                    if (incidentTypeResults.entities.length > 0) {
-                        incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
-                        console.log("Incident Type ID found:", incidentTypeId);
-                    } else {
-                        console.warn("No incident type found for Natural Reserve org unit");
-                    }
-                } catch (error) {
-                    console.error("Error fetching incident type:", error);
-                }
-            }
-
-            setState(prev => ({
-                ...prev,
-                isNaturalReserve: isNaturalReserve,
-                unknownAccountId: unknownAccountId,
-                incidentTypeId: incidentTypeId,
-                orgUnitId: orgUnitId
-            }));
-
-            console.log("Organization Unit:", orgUnitName);
-            console.log("Organization Unit ID:", orgUnitId);
-            console.log("Is Natural Reserve:", isNaturalReserve);
-            console.log("Unknown Account ID:", unknownAccountId);
-            console.log("Incident Type ID:", incidentTypeId);
-
-        } catch (error) {
-            console.error("Error checking organization unit:", error);
-            setState(prev => ({
-                ...prev,
-                isNaturalReserve: false,
-                unknownAccountId: undefined,
-                incidentTypeId: undefined,
-                orgUnitId: undefined
-            }));
-        }
-    }, []);
-
     // Check patrol status on load
     const checkPatrolStatus = React.useCallback(async (): Promise<void> => {
         const ctx: any = props.context;
         try {
             const userSettings = ctx.userSettings;
             const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
-            
+
             // Get today's date in ISO format
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-            
+
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 activePatrolQuery
@@ -309,7 +224,7 @@ export const Main = (props: IProps) => {
 
             // Check for available patrol to start (status = 1 or 100000004)
             const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-            
+
             const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 availablePatrolQuery
@@ -439,17 +354,12 @@ export const Main = (props: IProps) => {
                     "MOCI_userCounts",
                     JSON.stringify({ userName: username })
                 );
-
-                // Check organization unit after loading user data
-                if (!isOffline()) {
-                    await checkOrganizationUnit(ctx, userId);
-                }
             }
         } catch (e) {
             console.warn("User data load failed, using cache.", e);
             restoreCache();
         }
-    }, [props.context, checkOrganizationUnit]);
+    }, [props.context]);
 
     const handleOpenAdvancedSearch = (): void => {
         setState(prev => ({ ...prev, showAdvancedSearch: true }));
@@ -619,38 +529,9 @@ export const Main = (props: IProps) => {
         void ctx.navigation.openForm({ entityName: "msdyn_workorder", useQuickCreateForm: true }, {});
     };
 
-    const startAnonymousInspection = (): void => {
-        const ctx: any = props.context;
-        if (isOffline()) {
-            setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
-            return;
-        }
-
-        // Prepare default values for anonymous inspection
-        const defaultValues: any = {
-            duc_anonymouscustomer: true // Set the anonymous field to Yes/True
-        };
-
-        // If we have unknown account ID, set it as default
-        if (state.unknownAccountId) {
-            defaultValues.duc_subaccount = state.unknownAccountId;
-            defaultValues.msdyn_serviceaccount = state.unknownAccountId;
-        }
-
-        // If we have incident type ID for Natural Reserve, set it as default
-        if (state.incidentTypeId) {
-            defaultValues.msdyn_primaryincidenttype = state.incidentTypeId;
-        }
-
-        void ctx.navigation.openForm(
-            { entityName: "msdyn_workorder", useQuickCreateForm: true },
-            defaultValues
-        );
-    };
-
     const startPatrol = async (): Promise<void> => {
         const ctx: any = props.context;
-        
+
         if (isOffline()) {
             setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
             return;
@@ -700,7 +581,7 @@ export const Main = (props: IProps) => {
 
     const endPatrol = async (): Promise<void> => {
         const ctx: any = props.context;
-        
+
         if (isOffline()) {
             setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
             return;
@@ -715,7 +596,7 @@ export const Main = (props: IProps) => {
 
             // Query for active patrol
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-            
+
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 activePatrolQuery
@@ -767,24 +648,8 @@ export const Main = (props: IProps) => {
         }
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, isNaturalReserve } = state;
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
     const isActionDisabled = isLoading;
-
-    // Determine which buttons to show based on patrol status and org unit
-    // For Non-Natural Reserve: 
-    //   - Always show Scheduled Inspections + Start Inspection
-    //   - Show Start/End Patrol based on patrol status (same as Natural Reserve)
-    //   - Never show Start Anonymous Inspection
-    // For Natural Reserve:
-    //   - When patrol status is 'start': show Start Patrol button only
-    //   - When patrol status is 'end': show Start Inspection + Start Anonymous Inspection + End Patrol
-    //   - When patrol status is 'none': show Scheduled Inspections + Start Inspection
-    
-    const showScheduledInspections = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'none');
-    const showStartInspection = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'end') || (isNaturalReserve && patrolStatus === 'none');
-    const showStartAnonymousInspection = isNaturalReserve && patrolStatus === 'end'; // Only Natural Reserve
-    const showStartPatrol = patrolStatus === 'start'; // Both Natural Reserve and Non-Natural Reserve
-    const showEndPatrol = patrolStatus === 'end'; // Both Natural Reserve and Non-Natural Reserve
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
         ...baseStyle,
@@ -820,21 +685,39 @@ export const Main = (props: IProps) => {
         React.createElement(
             "div",
             { style: containerStyle },
-            // Header
+            // Header with background image
             React.createElement(
                 "header",
-                { style: { ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.justifyContentCenter, paddingTop: 16, paddingBottom: 16 } },
+                {
+                    style: {
+                        backgroundImage: `url(${headerBase64})`,
+                        backgroundSize: 'cover',
+                        backgroundRepeat: 'no-repeat',
+                        width: '103%',
+                        maxwidth: '103%',
+                    }
+                },
+                // Logo centered
                 React.createElement(
-                    "a",
-                    { href: "#", style: { display: 'block' } },
-                    React.createElement("img", { alt: "", src: logoBase64 })
+                    "div",
+                    { style: { ...STYLES.dFlex, ...STYLES.justifyContentCenter, paddingBottom: 12, paddingTop: 16, width: '110%', maxWidth: '110%' } },
+                    React.createElement(
+                        "a",
+                        { href: "#", style: { display: 'block' } },
+                        React.createElement("img", { alt: "", src: logoBase64 })
+                    )
+                ),
+                // Welcome Banner inside header
+                React.createElement(
+                    "div",
+                    {
+                        style: {
+                            ...STYLES.welcomeBanner,
+                            ...STYLES.textWhite
+                        }
+                    },
+                    `${strings.WelcomeBack}, ${userName}`
                 )
-            ),
-            // Welcome Banner
-            React.createElement(
-                "div",
-                { style: STYLES.welcomeBanner },
-                `${strings.WelcomeBack}, ${userName}`
             ),
             // Main Content
             React.createElement(
@@ -878,6 +761,9 @@ export const Main = (props: IProps) => {
                         React.createElement("img", { src: filtersDataUri })
                     )
                 ),
+                // Messages
+                // message && React.createElement("div", { style: { color: "red", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, message),
+                // isLoading && React.createElement("div", { style: { color: "blue", marginTop: 10, marginBottom: 10, background: 'none', padding: 8, borderRadius: 4 } }, strings.Loading),
                 // Inspection Cards
                 React.createElement(
                     "div",
@@ -906,7 +792,7 @@ export const Main = (props: IProps) => {
                             React.createElement(
                                 "div",
                                 { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
-                                React.createElement("img", { src: clockDataUri })
+                                React.createElement("img", { src: stickynoteDataUri })
                             ),
                             React.createElement("h6", { style: STYLES.h6 }, strings.RemainingInspections)
                         ),
@@ -939,16 +825,42 @@ export const Main = (props: IProps) => {
                             React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
-                    )
+                    ),
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: closedWorkorders,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: 'pointer'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgpinkLight } },
+                                React.createElement("img", { src: clockDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.Pendingrequests)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
+                    ),
+
                 )
             ),
             // Action Buttons
             React.createElement(
                 "div",
                 { style: STYLES.actions },
-                
-                // Scheduled Inspections button - show for non-Natural Reserve OR Natural Reserve with no patrol
-                showScheduledInspections && React.createElement(
+                React.createElement(
                     "button",
                     {
                         onClick: openScheduled,
@@ -958,9 +870,7 @@ export const Main = (props: IProps) => {
                     React.createElement("img", { src: calenderDataUri }),
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
-                
-                // Start Inspection button - show for non-Natural Reserve, OR Natural Reserve when patrol is not started yet, OR when patrol is active (end status)
-                showStartInspection && React.createElement(
+                React.createElement(
                     "button",
                     {
                         onClick: startInspection,
@@ -981,75 +891,49 @@ export const Main = (props: IProps) => {
                         React.createElement("span", { key: "text" }, strings.StartInspection)
                     ]
                 ),
-
-                // Start Anonymous Inspection button - only for Natural Reserve when patrol is active (end status)
-                showStartAnonymousInspection && React.createElement(
-                    "button",
-                    {
-                        onClick: startAnonymousInspection,
-                        disabled: isActionDisabled,
-                        style: getButtonStyle({
-                            ...STYLES.btnOrangeDark,
-                            ...STYLES.textWhite,
-                            ...STYLES.rounded4,
-                            ...STYLES.p3,
-                            ...STYLES.dFlex,
-                            ...STYLES.alignItemsCenter,
-                            ...STYLES.justifyContentCenter,
-                            ...STYLES.gap3
-                        })
-                    },
-                    [
-                        React.createElement("img", { src: startDataUri, key: "icon" }),
-                        React.createElement("span", { key: "text" }, strings.StartAnonymousInspection)
-                    ]
-                ),
-                
-                // Start Patrol button - only for Natural Reserve when patrol is available to start
-                showStartPatrol && React.createElement(
-                    "button",
-                    {
-                        onClick: startPatrol,
-                        disabled: isActionDisabled,
-                        style: getButtonStyle({
-                            ...STYLES.btnBlueDark,
-                            ...STYLES.textWhite,
-                            ...STYLES.rounded4,
-                            ...STYLES.p3,
-                            ...STYLES.dFlex,
-                            ...STYLES.alignItemsCenter,
-                            ...STYLES.justifyContentCenter,
-                            ...STYLES.gap3
-                        })
-                    },
-                    [
-                        React.createElement("img", { src: startDataUri, key: "icon" }),
-                        React.createElement("span", { key: "text" }, strings.StartPatrol)
-                    ]
-                ),
-
-                // End Patrol button - only for Natural Reserve when patrol is active
-                showEndPatrol && React.createElement(
-                    "button",
-                    {
-                        onClick: endPatrol,
-                        disabled: isActionDisabled,
-                        style: getButtonStyle({
-                            ...STYLES.btnGreenDark,
-                            ...STYLES.textWhite,
-                            ...STYLES.rounded4,
-                            ...STYLES.p3,
-                            ...STYLES.dFlex,
-                            ...STYLES.alignItemsCenter,
-                            ...STYLES.justifyContentCenter,
-                            ...STYLES.gap3
-                        })
-                    },
-                    [
-                        React.createElement("img", { src: startDataUri, key: "icon" }),
-                        React.createElement("span", { key: "text" }, strings.EndPatrol)
-                    ]
-                )
+                // Conditional Patrol Button
+                // patrolStatus === 'start' && React.createElement(
+                //     "button",
+                //     {
+                //         onClick: startPatrol,
+                //         disabled: isActionDisabled,
+                //         style: getButtonStyle({
+                //             ...STYLES.btnBlueDark,
+                //             ...STYLES.textWhite,
+                //             ...STYLES.rounded4,
+                //             ...STYLES.p3,
+                //             ...STYLES.dFlex,
+                //             ...STYLES.alignItemsCenter,
+                //             ...STYLES.justifyContentCenter,
+                //             ...STYLES.gap3
+                //         })
+                //     },
+                //     [
+                //         React.createElement("img", { src: startDataUri, key: "icon" }),
+                //         React.createElement("span", { key: "text" }, strings.StartPatrol)
+                //     ]
+                // ),
+                // patrolStatus === 'end' && React.createElement(
+                //     "button",
+                //     {
+                //         onClick: endPatrol,
+                //         disabled: isActionDisabled,
+                //         style: getButtonStyle({
+                //             ...STYLES.btnGreenDark,
+                //             ...STYLES.textWhite,
+                //             ...STYLES.rounded4,
+                //             ...STYLES.p3,
+                //             ...STYLES.dFlex,
+                //             ...STYLES.alignItemsCenter,
+                //             ...STYLES.justifyContentCenter,
+                //             ...STYLES.gap3
+                //         })
+                //     },
+                //     [
+                //         React.createElement("img", { src: startDataUri, key: "icon" }),
+                //         React.createElement("span", { key: "text" }, strings.EndPatrol)
+                //     ]
+                // )
             )
         ),
         React.createElement(AdvancedSearch, {

@@ -10,18 +10,42 @@ function onLoad(executionContext) {
 
 function LookupFilterInit(executionContext) {
     var formContext = executionContext.getFormContext();
-
     var userId = Xrm.Utility.getGlobalContext().userSettings.userId.replace("{", "").replace("}", "");
 
     Xrm.WebApi.retrieveRecord("systemuser", userId, "?$select=_duc_organizationalunitid_value").then(
         function success(result) {
             currentOrgUnitId = result._duc_organizationalunitid_value;
 
-            AddCampaignLookupFilter(formContext);
+            Xrm.WebApi.retrieveRecord("msdyn_organizationalunit", currentOrgUnitId, "?$select=duc_englishname").then(
+                function success2(orgUnitResult) {
+                    var OUEnglishName = orgUnitResult["duc_englishname"];
+
+                    if (OUEnglishName == "Inspection Section – Natural Reserves") {
+
+                        var filter = "duc_campaignstatus eq 2 and duc_campaigninternaltype eq 100000004 and duc_campaigntype eq 100000004 and _ownerid_value eq " + userId + " and _duc_organizationalunitid_value eq " + currentOrgUnitId;
+
+                        Xrm.WebApi.retrieveMultipleRecords("new_inspectioncampaign", "?$select=new_inspectioncampaignid,new_name&$filter=" + encodeURIComponent(filter)).then(
+                            function success3(results) {
+                                if (results.entities && results.entities.length > 0) {
+                                    var result = results.entities[0];
+                                    formContext.getAttribute("new_campaign").setValue([{
+                                        id: result["new_inspectioncampaignid"],
+                                        name: result["new_name"],
+                                        entityType: "new_inspectioncampaign"
+                                    }]);
+                                }
+                            },
+                            function (error) { console.error("Campaign lookup error: " + error.message); }
+                        );
+                    }
+                    else {
+                        AddCampaignLookupFilter(formContext);
+                    }
+                },
+                function (error) { console.error("Org unit lookup error: " + error.message); }
+            );
         },
-        function (error) {
-            console.error("Error retrieving user's organization unit: " + JSON.stringify(error));
-        }
+        function (error) { console.error("User org unit error: " + error.message); }
     );
 }
 
@@ -113,7 +137,7 @@ function SetDepartment(executionContext) {
     Xrm.WebApi.retrieveRecord(
         "systemuser",
         userId,
-        "?$select=_duc_department_value"
+        "?$select=_duc_organizationalunitid_value"
     ).then(
         function success(result) {
             var OUId = result._duc_organizationalunitid_value;
@@ -170,21 +194,24 @@ function SetWorkOrderType(executionContext) {
     });
 }
 
-
 function onAnonymousCustomerChange(executionContext) {
     debugger
     var formContext = executionContext.getFormContext();
 
     var anonymousAttr = formContext.getAttribute("duc_anonymouscustomer");
     var subAccountAttr = formContext.getAttribute("duc_subaccount");
+    var serviceAccountAttr = formContext.getAttribute("msdyn_serviceaccount");
 
-    if (!anonymousAttr || !subAccountAttr) {
+    if (!anonymousAttr || !subAccountAttr || !serviceAccountAttr) {
         return;
     }
 
     var anonymousValue = anonymousAttr.getValue();
 
+    // If false, clear both fields
     if (anonymousValue != true) {
+        subAccountAttr.setValue(null);
+        serviceAccountAttr.setValue(null);
         return;
     }
 
@@ -205,58 +232,43 @@ function onAnonymousCustomerChange(executionContext) {
 
             var orgUnitId = user._duc_organizationalunitid_value;
 
-            // Retrieve the organizational unit and get business unit ID
+            // Retrieve the organizational unit and get the unknown account lookup
             Xrm.WebApi.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_businessunit_value"
+                "?$select=_duc_unknownaccount_value"
             ).then(
                 function successOrgUnit(orgUnit) {
-                    if (!orgUnit._duc_businessunit_value) {
-                        console.log("No business unit found for the organizational unit.");
+                    if (!orgUnit._duc_unknownaccount_value) {
+                        console.log("No unknown account found in the organizational unit.");
                         return;
                     }
 
-                    var businessUnitId = orgUnit._duc_businessunit_value;
+                    // Set the unknown account lookup value
+                    var lookupValue = [{
+                        id: orgUnit._duc_unknownaccount_value,
+                        name: orgUnit["_duc_unknownaccount_value@OData.Community.Display.V1.FormattedValue"] || "",
+                        entityType: "account"
+                    }];
 
-                    // Retrieve Account where duc_isunknown = true AND owningbusinessunit matches the business unit
-                    Xrm.WebApi.retrieveMultipleRecords(
-                        "account",
-                        "?$select=accountid,name&$filter=duc_isunknown eq true and _owningbusinessunit_value eq " + businessUnitId
-                    ).then(
-                        function successAccount(result) {
-                            if (result.entities.length === 0) {
-                                console.log("No unknown account found for the business unit.");
-                                return;
-                            }
+                    // Set both duc_subaccount and msdyn_serviceaccount
+                    subAccountAttr.setValue(lookupValue);
+                    subAccountAttr.setSubmitMode("always");
 
-                            var account = result.entities[0];
+                    serviceAccountAttr.setValue(lookupValue);
+                    serviceAccountAttr.setSubmitMode("always");
 
-                            var lookupValue = [{
-                                id: account.accountid,
-                                name: account.name,
-                                entityType: "account"
-                            }];
+                    // Hide both fields
+                    var subAccountControl = formContext.getControl("duc_subaccount");
+                    var searchServiceAccountControl = formContext.getControl("duc_searchserviceaccount");
 
-                            subAccountAttr.setValue(lookupValue);
-                            subAccountAttr.setSubmitMode("always");
+                    if (subAccountControl != null) {
+                        subAccountControl.setVisible(false);
+                    }
 
-                            // Hide both fields
-                            var subAccountControl = formContext.getControl("duc_subaccount");
-                            var searchServiceAccountControl = formContext.getControl("duc_searchserviceaccount");
-
-                            if (subAccountControl != null) {
-                                subAccountControl.setVisible(false);
-                            }
-
-                            if (searchServiceAccountControl != null) {
-                                searchServiceAccountControl.setVisible(false);
-                            }
-                        },
-                        function errorAccount(error) {
-                            console.error("Error retrieving unknown account:", error.message);
-                        }
-                    );
+                    if (searchServiceAccountControl != null) {
+                        searchServiceAccountControl.setVisible(false);
+                    }
                 },
                 function errorOrgUnit(error) {
                     console.error("Error retrieving organizational unit:", error.message);
@@ -276,5 +288,37 @@ function setIncidentTypeRequirement(executionContext) {
 
     if (incidentTypeAttr) {
         incidentTypeAttr.setRequiredLevel("required");
+    }
+}
+
+function fireIncidentTypeOnChange(executionContext) {
+    try {
+        var formContext = executionContext.getFormContext();
+        
+        var primaryIncidentTypeAttr = formContext.getAttribute("msdyn_primaryincidenttype");
+        
+        if (primaryIncidentTypeAttr == null) {
+            console.log("msdyn_primaryincidenttype field not found on form");
+            return;
+        }
+
+        // Check if the field has a value (set by default from PCF)
+        var primaryIncidentTypeValue = primaryIncidentTypeAttr.getValue();
+        
+        if (primaryIncidentTypeValue != null && primaryIncidentTypeValue.length > 0) {
+            console.log("Primary Incident Type found with default value:", primaryIncidentTypeValue[0].id);
+            
+            // Trigger the onChange event to execute any business logic
+            // This will fire any OnChange handlers registered for this field
+            primaryIncidentTypeAttr.fireOnChange();
+            
+            console.log("Primary Incident Type onChange event triggered successfully");
+        } else {
+            console.log("No default value found for Primary Incident Type");
+        }
+
+
+    } catch (error) {
+        console.error("Error in onLoadQuickCreate:", error.message);
     }
 }
