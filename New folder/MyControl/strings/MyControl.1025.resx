@@ -15,6 +15,8 @@
   <data name="NoResults" xml:space="preserve"><value>لم يتم العثور على نتائج</value></data>
   <data name="Loading" xml:space="preserve"><value>جاري التحميل...</value></data>
   <data name="SearchPrompt" xml:space="preserve"><value>الرجاء إدخال قيمة البحث</value></data>
+    <data name="PendingInspections" xml:space="preserve"><value>عمليات التفتيش المعلقة</value></data>
+
   <data name="OfflineNavigationBlocked" xml:space="preserve"><value>لا يمكن التنقل: وضع عدم الاتصال</value></data>
   <data name="OfflineQuickCreateBlocked" xml:space="preserve"><value>لا يمكن بدء التفتيش في وضع عدم الاتصال</value></data>
   <data name="StartAnonymousInspection" xml:space="preserve">

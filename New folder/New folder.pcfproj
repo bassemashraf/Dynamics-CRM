@@ -24,7 +24,9 @@
     <PackageReference Include="Microsoft.PowerApps.MSBuild.Pcf" Version="1.*" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.0" PrivateAssets="All" />
   </ItemGroup>
-
+<PropertyGroup>
+  <BuildInParallel>false</BuildInParallel>
+</PropertyGroup>
   <ItemGroup>
     <ExcludeDirectories Include="$(MSBuildThisFileDirectory)\.gitignore" />
     <ExcludeDirectories Include="$(MSBuildThisFileDirectory)\bin\**" />
@@ -36,9 +38,6 @@
     <ExcludeDirectories Include="$(MSBuildThisFileDirectory)\node_modules\**" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)\**" Exclude="@(ExcludeDirectories)" />
-  </ItemGroup>
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" />
   <Import Project="$(PowerAppsTargetsPath)\Microsoft.PowerApps.VisualStudio.Pcf.targets" Condition="Exists('$(PowerAppsTargetsPath)\Microsoft.PowerApps.VisualStudio.Pcf.targets')" />

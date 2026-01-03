@@ -10,7 +10,7 @@ import { clock } from "../images/clock";
 import { check } from "../images/check";
 import { filters } from "../images/filters";
 import { AdvancedSearch } from './AdvancedSearch';
-import {close} from '../images/close';
+import { close } from '../images/close';
 
 // Define the interface for the component's internal state.
 interface State {
@@ -28,6 +28,8 @@ interface State {
     activePatrolId?: string; // Store active patrol campaign ID
     isNaturalReserve: boolean; // Track if org unit is Natural Reserve
     unknownAccountId?: string; // Store unknown account ID for anonymous inspections
+    unknownAccountName?: string; // Store unknown account name
+    incidentTypeName?: string; // Store incident type name for Natural Reserve
     incidentTypeId?: string; // Store incident type ID for Natural Reserve
     orgUnitId?: string; // Store organization unit ID
 }
@@ -53,8 +55,9 @@ interface LocalizedStrings {
     OfflineNavigationBlocked: string;
     OfflineQuickCreateBlocked: string;
     StartPatrol: string;
-    EndPatrol: string;  
+    EndPatrol: string;
     StartAnonymousInspection: string;
+    PendingInspections: string;
 }
 
 // --- Custom Styles Derived from main.css & Bootstrap ---
@@ -152,6 +155,7 @@ export const Main = (props: IProps) => {
             StartPatrol: ctx.resources.getString("StartPatrol"),
             EndPatrol: ctx.resources.getString("EndPatrol"),
             StartAnonymousInspection: ctx.resources.getString("StartAnonymousInspection"),
+            PendingInspections: ctx.resources.getString("PendingInspections"),
         };
     }, [props.context]);
 
@@ -193,6 +197,9 @@ export const Main = (props: IProps) => {
         return ctx.mode?.isInOfflineMode === true;
     };
 
+
+
+
     const handleAdvancedSearchResults = (results: any[]): void => {
         setState(prev => ({
             ...prev,
@@ -222,21 +229,23 @@ export const Main = (props: IProps) => {
             const orgUnitResult = await ctx.webAPI.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname"
+                "?$select=_duc_unknownaccount_value,duc_englishname&$expand=duc_unknownaccount($select=name)"
             );
 
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
+            const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
 
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
 
             let incidentTypeId: string | undefined = undefined;
+            let incidentTypeName: string | undefined = undefined;
 
             // If Natural Reserve, get the incident type for this org unit
             if (isNaturalReserve) {
                 try {
-                    const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$top=1`;
+                    const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$top=1`;
                     const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
                         "msdyn_incidenttype",
                         incidentTypeQuery
@@ -244,7 +253,9 @@ export const Main = (props: IProps) => {
 
                     if (incidentTypeResults.entities.length > 0) {
                         incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
+                        incidentTypeName = incidentTypeResults.entities[0].msdyn_name;
                         console.log("Incident Type ID found:", incidentTypeId);
+                        console.log("Incident Type Name found:", incidentTypeName);
                     } else {
                         console.warn("No incident type found for Natural Reserve org unit");
                     }
@@ -257,7 +268,9 @@ export const Main = (props: IProps) => {
                 ...prev,
                 isNaturalReserve: isNaturalReserve,
                 unknownAccountId: unknownAccountId,
+                unknownAccountName: unknownAccountName,
                 incidentTypeId: incidentTypeId,
+                incidentTypeName: incidentTypeName,
                 orgUnitId: orgUnitId
             }));
 
@@ -265,7 +278,9 @@ export const Main = (props: IProps) => {
             console.log("Organization Unit ID:", orgUnitId);
             console.log("Is Natural Reserve:", isNaturalReserve);
             console.log("Unknown Account ID:", unknownAccountId);
+            console.log("Unknown Account Name:", unknownAccountName);
             console.log("Incident Type ID:", incidentTypeId);
+            console.log("Incident Type Name:", incidentTypeName);
 
         } catch (error) {
             console.error("Error checking organization unit:", error);
@@ -273,7 +288,9 @@ export const Main = (props: IProps) => {
                 ...prev,
                 isNaturalReserve: false,
                 unknownAccountId: undefined,
+                unknownAccountName: undefined,
                 incidentTypeId: undefined,
+                incidentTypeName: undefined,
                 orgUnitId: undefined
             }));
         }
@@ -285,13 +302,13 @@ export const Main = (props: IProps) => {
         try {
             const userSettings = ctx.userSettings;
             const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
-            
+
             // Get today's date in ISO format
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-            
+
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 activePatrolQuery
@@ -309,7 +326,7 @@ export const Main = (props: IProps) => {
 
             // Check for available patrol to start (status = 1 or 100000004)
             const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-            
+
             const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 availablePatrolQuery
@@ -573,18 +590,17 @@ export const Main = (props: IProps) => {
 
     const openScheduled = (): void => {
         const ctx: any = props.context;
-        if (isOffline()) {
-            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
-            return;
-        }
+        // if (isOffline()) {
+        //     setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+        //     return;
+        // }
         void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "bookableresourcebooking",
             viewId: "4073baca-cc5f-e611-8109-000d3a146973"
         });
     };
-
-    const openScheduledCampaigns = (): void => {
+    const openPendingWorkorders = (): void => {
         const ctx: any = props.context;
         if (isOffline()) {
             setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
@@ -592,10 +608,23 @@ export const Main = (props: IProps) => {
         }
         void ctx.navigation.navigateTo({
             pageType: "entitylist",
-            entityName: "new_inspectioncampaign",
-            viewId: "0628a5aa-88d7-f011-8406-7c1e524df347"
+            entityName: "msdyn_workorder",
+            viewId: "bee0efc7-40e4-f011-8406-6045bd9c224c"
         });
     };
+
+    // const openScheduledCampaigns = (): void => {
+    //     const ctx: any = props.context;
+    //     if (isOffline()) {
+    //         setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+    //         return;
+    //     }
+    //     void ctx.navigation.navigateTo({
+    //         pageType: "entitylist",
+    //         entityName: "new_inspectioncampaign",
+    //         viewId: "0628a5aa-88d7-f011-8406-7c1e524df347"
+    //     });
+    // };
 
     const closedWorkorders = (): void => {
         const ctx: any = props.context;
@@ -633,13 +662,31 @@ export const Main = (props: IProps) => {
 
         // If we have unknown account ID, set it as default
         if (state.unknownAccountId) {
-            defaultValues.duc_subaccount = state.unknownAccountId;
-            defaultValues.msdyn_serviceaccount = state.unknownAccountId;
+            defaultValues.duc_subaccount = [
+                {
+                    id: state.unknownAccountId,
+                    name: state.unknownAccountName, // You need to pass the account name
+                    entityType: "account"
+                }
+            ];
+            defaultValues.msdyn_serviceaccount = [
+                {
+                    id: state.unknownAccountId,
+                    name: state.unknownAccountName, // You need to pass the account name
+                    entityType: "account"
+                }
+            ];
         }
 
         // If we have incident type ID for Natural Reserve, set it as default
         if (state.incidentTypeId) {
-            defaultValues.msdyn_primaryincidenttype = state.incidentTypeId;
+            defaultValues.msdyn_primaryincidenttype = [
+                {
+                    id: state.incidentTypeId,
+                    name: state.incidentTypeName, // You need to pass the incident type name
+                    entityType: "msdyn_incidenttype"
+                }
+            ];
         }
 
         void ctx.navigation.openForm(
@@ -650,7 +697,7 @@ export const Main = (props: IProps) => {
 
     const startPatrol = async (): Promise<void> => {
         const ctx: any = props.context;
-        
+
         if (isOffline()) {
             setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
             return;
@@ -700,7 +747,7 @@ export const Main = (props: IProps) => {
 
     const endPatrol = async (): Promise<void> => {
         const ctx: any = props.context;
-        
+
         if (isOffline()) {
             setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
             return;
@@ -715,7 +762,7 @@ export const Main = (props: IProps) => {
 
             // Query for active patrol
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-            
+
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 activePatrolQuery
@@ -779,7 +826,7 @@ export const Main = (props: IProps) => {
     //   - When patrol status is 'start': show Start Patrol button only
     //   - When patrol status is 'end': show Start Inspection + Start Anonymous Inspection + End Patrol
     //   - When patrol status is 'none': show Scheduled Inspections + Start Inspection
-    
+
     const showScheduledInspections = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'none');
     const showStartInspection = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'end') || (isNaturalReserve && patrolStatus === 'none');
     const showStartAnonymousInspection = isNaturalReserve && patrolStatus === 'end'; // Only Natural Reserve
@@ -939,6 +986,35 @@ export const Main = (props: IProps) => {
                             React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
+                    ),
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: openPendingWorkorders,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: isActionDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isActionDisabled ? 0.5 : 1,
+                                pointerEvents: isActionDisabled ? 'none' : 'auto'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
+                                React.createElement("img", { src: clockDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.PendingInspections)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
                     )
                 )
             ),
@@ -946,7 +1022,7 @@ export const Main = (props: IProps) => {
             React.createElement(
                 "div",
                 { style: STYLES.actions },
-                
+
                 // Scheduled Inspections button - show for non-Natural Reserve OR Natural Reserve with no patrol
                 showScheduledInspections && React.createElement(
                     "button",
@@ -958,7 +1034,7 @@ export const Main = (props: IProps) => {
                     React.createElement("img", { src: calenderDataUri }),
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
-                
+
                 // Start Inspection button - show for non-Natural Reserve, OR Natural Reserve when patrol is not started yet, OR when patrol is active (end status)
                 showStartInspection && React.createElement(
                     "button",
@@ -1004,7 +1080,7 @@ export const Main = (props: IProps) => {
                         React.createElement("span", { key: "text" }, strings.StartAnonymousInspection)
                     ]
                 ),
-                
+
                 // Start Patrol button - only for Natural Reserve when patrol is available to start
                 showStartPatrol && React.createElement(
                     "button",

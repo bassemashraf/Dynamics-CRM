@@ -115,11 +115,73 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
         this.renderButton();
     }
 
-    private getJavaScriptCode(): string | null {
+    private getJavaScriptCodeFromField(): string | null {
         const field = this._context.parameters.jsCodeField;
         if (field && field.raw) {
             return field.raw as string;
         }
+        return null;
+    }
+
+    private getActionTypeId(): string | null {
+        const field = this._context.parameters.actionTypeId;
+        if (field && field.raw) {
+            return field.raw as string;
+        }
+        return null;
+    }
+
+    private async getJavaScriptCodeFromActionType(): Promise<string | null> {
+        const actionTypeId = this.getActionTypeId();
+        
+        if (!actionTypeId || actionTypeId.trim() === "") {
+            console.log("No action type ID provided");
+            return null;
+        }
+
+        try {
+            console.log("Retrieving action command from duc_actiontype:", actionTypeId);
+
+            // Clean the GUID by removing curly braces if present
+            const cleanGuid = actionTypeId.replace(/[{}]/g, "").trim();
+
+            // Retrieve the duc_actioncommand field from the duc_actiontype record
+            const result = await this._context.webAPI.retrieveRecord(
+                "duc_actiontype",
+                cleanGuid,
+                "?$select=duc_actioncommand"
+            );
+
+            if (result && result.duc_actioncommand) {
+                console.log("Action command retrieved successfully");
+                return result.duc_actioncommand as string;
+            } else {
+                console.log("No action command found in the action type record");
+                return null;
+            }
+
+        } catch (error) {
+            console.error("Error retrieving action type record:", error);
+            return null;
+        }
+    }
+
+    private async getJavaScriptCode(): Promise<string | null> {
+        // Priority 1: Check jsCodeField
+        const fieldCode = this.getJavaScriptCodeFromField();
+        if (fieldCode && fieldCode.trim() !== "") {
+            console.log("Using JavaScript code from field");
+            return fieldCode;
+        }
+
+        // Priority 2: Check action type lookup
+        const actionTypeCode = await this.getJavaScriptCodeFromActionType();
+        if (actionTypeCode && actionTypeCode.trim() !== "") {
+            console.log("Using JavaScript code from action type");
+            return actionTypeCode;
+        }
+
+        console.log("No JavaScript code found in either field or action type");
         return null;
     }
 
@@ -190,68 +252,70 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
         return "00000000-0000-0000-0000-000000000000";
     }
 
-private async handleButtonClick(): Promise<void> {
-    const jsCode = this.getJavaScriptCode();
+    private async handleButtonClick(): Promise<void> {
+        const jsCode = await this.getJavaScriptCode();
 
-    if (!jsCode || jsCode.trim() === "") {
-        console.error("No JavaScript code found in the field");
-        await this._context.navigation.openAlertDialog({
-            text: "No JavaScript code configured for this button.",
-            confirmButtonLabel: "OK"
-        });
-        return;
+        if (!jsCode || jsCode.trim() === "") {
+            console.error("No JavaScript code found in field or action type");
+            await this._context.navigation.openAlertDialog({
+                text: "No JavaScript code configured for this button.",
+                confirmButtonLabel: "OK"
+            });
+            return;
+        }
+
+        try {
+            const languageId = this.getLanguageId();
+            const relatedRecord = this.getRelatedRecordId();
+
+            console.log("Executing JavaScript with parameters:", {
+                languageId,
+                relatedRecord
+            });
+
+            // Use string concatenation to avoid template literal conflicts
+            const promiseWrapper = 
+                "return (async () => {" +
+                "    try {" +
+                "        " + jsCode +
+                "    } catch (innerError) {" +
+                "        console.error('Script execution error:', innerError);" +
+                "        throw innerError;" +
+                "    }" +
+                "})();";
+
+            const runCode = new Function(
+                "pcfContext",
+                "languageId",
+                "relatedRecord",
+                promiseWrapper
+            );
+
+            // Execute and wait for completion
+            const result = await runCode(this._context, languageId, relatedRecord);
+
+            console.log("JavaScript code executed successfully", result);
+
+        } catch (error: any) {
+            console.error("Error executing JavaScript code:", error);
+
+            const errorMessage = error?.message || String(error);
+            const stackTrace = error?.stack ? "\n\nStack: " + error.stack : "";
+
+            await this._context.navigation.openAlertDialog({
+                text: "Error executing code: " + errorMessage + stackTrace,
+                confirmButtonLabel: "OK"
+            });
+        }
     }
 
-    try {
-        const languageId = this.getLanguageId();
-        const relatedRecord = this.getRelatedRecordId();
-
-        console.log("Executing JavaScript with parameters:", {
-            languageId,
-            relatedRecord
-        });
-
-        // Use string concatenation to avoid template literal conflicts
-        const promiseWrapper = 
-            "return (async () => {" +
-            "    try {" +
-            "        " + jsCode +
-            "    } catch (innerError) {" +
-            "        console.error('Script execution error:', innerError);" +
-            "        throw innerError;" +
-            "    }" +
-            "})();";
-
-        const runCode = new Function(
-            "pcfContext",
-            "languageId",
-            "relatedRecord",
-            promiseWrapper
-        );
-
-        // Execute and wait for completion
-        const result = await runCode(this._context, languageId, relatedRecord);
-
-        console.log("JavaScript code executed successfully", result);
-
-    } catch (error: any) {
-        console.error("Error executing JavaScript code:", error);
-
-        const errorMessage = error?.message || String(error);
-        const stackTrace = error?.stack ? "\n\nStack: " + error.stack : "";
-
-        await this._context.navigation.openAlertDialog({
-            text: "Error executing code: " + errorMessage + stackTrace,
-            confirmButtonLabel: "OK"
-        });
-    }
-}
-
-    private renderButton(): void {
-        const jsCode = this.getJavaScriptCode();
+    private async renderButton(): Promise<void> {
         const buttonText = this.getButtonText();
         const buttonColor = this.getButtonColor();
         const buttonIcon = this.getButtonIcon();
+        
+        // Check if we have any JavaScript code available
+        const jsCode = await this.getJavaScriptCode();
         const isDisabled = !jsCode || jsCode.trim() === "";
 
         const element = React.createElement(

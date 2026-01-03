@@ -77,6 +77,8 @@
   <value>Search</value>
   <comment>Search button text</comment>
 </data>
+    <data name="PendingInspections" xml:space="preserve"><value>Pending Inspections</value></data>
+
 <data name="StartAnonymousInspection" xml:space="preserve">
   <value>Start Anonymous Inspection</value>
   <comment>Button text for starting an anonymous inspection</comment>

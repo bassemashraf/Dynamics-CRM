@@ -131,7 +131,7 @@ function customizeFieldsByDepartment(executionContext, deptName) {
 			"التقييم والتصاريح": { visible: true, enabled: true, label: { en: "Project", ar: "المشروع" } },
 		},
 		"duc_anonymouscustomer": {
-			"المحميات": { visible: true }
+			"المحميات": { visible: false }
 		},
 		"new_campaign:": {
 			"المحميات": { visible: true, enabled: true, label: { en: "Patrol", ar: "الدورية" } },

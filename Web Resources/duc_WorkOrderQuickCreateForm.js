@@ -301,24 +301,30 @@ function fireIncidentTypeOnChange(executionContext) {
             console.log("msdyn_primaryincidenttype field not found on form");
             return;
         }
-
-        // Check if the field has a value (set by default from PCF)
         var primaryIncidentTypeValue = primaryIncidentTypeAttr.getValue();
         
         if (primaryIncidentTypeValue != null && primaryIncidentTypeValue.length > 0) {
             console.log("Primary Incident Type found with default value:", primaryIncidentTypeValue[0].id);
             
-            // Trigger the onChange event to execute any business logic
-            // This will fire any OnChange handlers registered for this field
-            primaryIncidentTypeAttr.fireOnChange();
+            Xrm.Utility.showProgressIndicator("");
             
-            console.log("Primary Incident Type onChange event triggered successfully");
+            setTimeout(function() {
+                try {
+                    Xrm.Utility.closeProgressIndicator();
+                    
+                    primaryIncidentTypeAttr.fireOnChange();
+                    
+                    console.log("Primary Incident Type onChange event triggered successfully");
+                } catch (error) {
+                    console.error("Error firing onChange event:", error.message);
+                    Xrm.Utility.closeProgressIndicator();
+                }
+            }, 3000); 
+            
         } else {
             console.log("No default value found for Primary Incident Type");
         }
-
-
     } catch (error) {
-        console.error("Error in onLoadQuickCreate:", error.message);
+        console.error("Error in fireIncidentTypeOnChange:", error.message);
     }
 }

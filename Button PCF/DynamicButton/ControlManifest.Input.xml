@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="DynamicControls" constructor="DynamicButton" version="0.0.4" display-name-key="DynamicButton" description-key="DynamicButton description" control-type="standard" >
+  <control namespace="DynamicControls" constructor="DynamicButton" version="0.0.5" display-name-key="DynamicButton" description-key="DynamicButton description" control-type="standard" >
     <!--external-service-usage node declares whether this 3rd party PCF control is using external service or not, if yes, this control will be considered as premium and please also add the external domain it is using.
     If it is not using any external service, please set the enabled="false" and DO NOT add any domain below. The "enabled" will be false by default.
     Example1:
@@ -26,16 +26,14 @@
 <property name="buttonTextArabic" display-name-key="Button Text (Arabic)" 
           description-key="Button text in Arabic" of-type="SingleLine.Text" 
           usage="input" required="false" />
-
-
-
 <property name="jsCodeField" 
           display-name-key="JavaScript Code Field" 
           description-key="Field containing the JavaScript code to execute" 
           of-type="Multiple" 
           usage="input" 
-          required="true" />
-          <property name="buttonColor" display-name-key="Button Color" description-key="Button background color (hex or color name)" of-type="SingleLine.Text" usage="input" required="false" />
+          required="false" />
+<property name="actionTypeId" display-name-key="Action Type" description-key="Lookup to duc_actiontype entity for retrieving action command" of-type="SingleLine.Text" usage="input" required="false" />
+<property name="buttonColor" display-name-key="Button Color" description-key="Button background color (hex or color name)" of-type="SingleLine.Text" usage="input" required="false" />
 <property name="buttonIcon" display-name-key="Button Icon" description-key="Fluent UI icon name (e.g., Add, Delete, Edit)" of-type="SingleLine.Text" usage="input" required="false" />
 
     <!-- <property name="myLookup" display-name-key="My Lookup" of-type="Lookup.Simple" usage="bound" /> -->
@@ -59,17 +57,15 @@
       <resx path="strings/DynamicButton.1033.resx" version="1.0.0" />
       -->
     </resources>
-    <!-- UNCOMMENT TO ENABLE THE SPECIFIED API
     <feature-usage>
-      <uses-feature name="Device.captureAudio" required="true" />
+      <!-- <uses-feature name="Device.captureAudio" required="true" />
       <uses-feature name="Device.captureImage" required="true" />
       <uses-feature name="Device.captureVideo" required="true" />
       <uses-feature name="Device.getBarcodeValue" required="true" />
       <uses-feature name="Device.getCurrentPosition" required="true" />
-      <uses-feature name="Device.pickFile" required="true" />
+      <uses-feature name="Device.pickFile" required="true" /> -->
       <uses-feature name="Utility" required="true" />
       <uses-feature name="WebAPI" required="true" />
     </feature-usage>
-    -->
   </control>
 </manifest>
