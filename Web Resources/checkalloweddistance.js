@@ -218,6 +218,181 @@ async function hasWorkOrderServiceTask(workOrderId) {
     return result.entities && result.entities.length > 0;
 }
 
+// function WO_CheckAllowedDistance() {
+//     var lang = Xrm.Utility.getGlobalContext().userSettings.languageId;
+//     var MSG = (lang === 1025) ? {
+//         cannotGetLoc: "تعذر استرداد الموقع الحالي، يرجى مراجعة إعدادات الموقع في الهاتف.",
+//         checking: "جاري التحقق من الموقع...",
+//         outOfRange: "الموقع الحالي يبعد بمسافة {0} متر عن موقع التفتيش المسجل وأقصى مسافة مسموحة هي {1}.",
+//         outOfRangeTitle: "خارج المسافة المسموحة",
+//         updateError: "فشل تحديث الموقع على أمر العمل."
+//     } : {
+//         cannotGetLoc: "Can't get current location. Please check your mobile location settings.",
+//         checking: "Checking location...",
+//         outOfRange: "The current location is {0} meters away from the registered location and max allowed distance is {1}.",
+//         outOfRangeTitle: "Out of Range",
+//         updateError: "Failed to update location on work order."
+//     };
+
+//     Xrm.Utility.showProgressIndicator(MSG.checking);
+
+//     var workorderId = Xrm.Page.data.entity.getId().replace(/[{}]/g, "");
+
+//     return Xrm.WebApi.retrieveRecord("msdyn_workorder", workorderId,
+//         "?$select=duc_details_islandmark,duc_details_alloweddistance,duc_channel,_duc_department_value"
+//     ).then(function (workOrder) {
+
+//         var allowedDist = null;
+//         var isLandmark = workOrder.duc_details_islandmark;
+//         var isBSS = workOrder.duc_channel === 100000002;
+
+//         if (isLandmark && workOrder.duc_details_alloweddistance) {
+//             allowedDist = workOrder.duc_details_alloweddistance;
+//             return proceedWithDistanceCheck(allowedDist);
+//         }
+//         else if (workOrder._duc_department_value) {
+//             var ouId = workOrder._duc_department_value.replace(/[{}]/g, "");
+//             var fieldName = isBSS ? "duc_bssdistanceinmeter" : "duc_distanceinmeter";
+
+//             return Xrm.WebApi.retrieveRecord("msdyn_organizationalunit", ouId,
+//                 "?$select=" + fieldName
+//             ).then(function (ou) {
+//                 if (ou[fieldName] != null) {
+//                     allowedDist = ou[fieldName] - 100000000;
+//                 } else {
+//                     allowedDist = 0;
+//                 }
+//                 return proceedWithDistanceCheck(allowedDist);
+//             }).catch(function () {
+//                 allowedDist = 0;
+//                 return proceedWithDistanceCheck(allowedDist);
+//             });
+//         }
+//         else {
+//             allowedDist = 0;
+//             return proceedWithDistanceCheck(allowedDist);
+//         }
+
+//     }).catch(function (error) {
+//         Xrm.Utility.closeProgressIndicator();
+//         Xrm.Navigation.openAlertDialog({
+//             text: (error && error.message) ? error.message : "Failed to read work order."
+//         });
+//         return Promise.resolve(false); // Return false on error
+//     });
+
+//     function proceedWithDistanceCheck(allowedDistance) {
+//         if (!allowedDistance || allowedDistance <= 0) {
+//             return getCurrentLocationAndUpdate(null, null, null);
+//         }
+
+//         var addrAttr = Xrm.Page.getAttribute("duc_address");
+//         var addrVal = addrAttr ? addrAttr.getValue() : null;
+//         if (!addrVal || !addrVal[0] || !addrVal[0].id) {
+//             return getCurrentLocationAndUpdate(null, null, allowedDistance);
+//         }
+
+//         var addressId = addrVal[0].id.replace(/[{}]/g, "");
+//         var addressEntity = "duc_addressinformation";
+
+//         return Xrm.WebApi.retrieveRecord(addressEntity, addressId, "?$select=duc_latitude,duc_longitude").then(
+//             function (result) {
+//                 var destLat = result.duc_latitude;
+//                 var destLng = result.duc_longitude;
+
+//                 if (destLat == null || destLng == null) {
+//                     return getCurrentLocationAndUpdate(null, null, allowedDistance);
+//                 }
+
+//                 return getCurrentLocationAndUpdate(destLat, destLng, allowedDistance);
+//             },
+//             function (error) {
+//                 Xrm.Utility.closeProgressIndicator();
+//                 Xrm.Navigation.openAlertDialog({
+//                     text: (error && error.message) ? error.message : "Failed to read address record."
+//                 });
+//                 return Promise.resolve(false); // Return false on error
+//             }
+//         );
+//     }
+
+//     function getCurrentLocationAndUpdate(destLat, destLng, allowedDistance) {
+//         return Xrm.Device.getCurrentPosition().then(function (location) {
+//             var originLat = location.coords.latitude;
+//             var originLng = location.coords.longitude;
+
+//             if (destLat != null && destLng != null && allowedDistance != null && allowedDistance > 0) {
+//                 var distance = GetDistance(originLat, originLng, destLat, destLng);
+
+//                 if (distance > allowedDistance) {
+//                     Xrm.Utility.closeProgressIndicator();
+
+//                     var errorMsg = MSG.outOfRange.replace("{0}", Math.round(distance)).replace("{1}", allowedDistance);
+
+//                     Xrm.Navigation.openAlertDialog({
+//                         title: MSG.outOfRangeTitle,
+//                         text: errorMsg
+//                     });
+
+//                     return Promise.resolve(false); // Return false - out of range
+//                 }
+//             }
+
+//             return updateWorkOrderLocation(originLat, originLng);
+
+//         }, function () {
+//             Xrm.Utility.closeProgressIndicator();
+//             Xrm.Navigation.openAlertDialog({ text: MSG.cannotGetLoc });
+//             return Promise.resolve(false); // Return false on location error
+//         });
+//     }
+
+//     function updateWorkOrderLocation(originLat, originLng) {
+//         var updateData = {
+//             "msdyn_latitude": originLat,
+//             "msdyn_longitude": originLng
+//         };
+
+//         return Xrm.WebApi.updateRecord("msdyn_workorder", workorderId, updateData).then(
+//             function success(result) {
+//                 Xrm.Utility.closeProgressIndicator();
+
+//                 // Safely refresh the form if available
+//                 if (Xrm.Page && Xrm.Page.data && Xrm.Page.data.refresh) {
+//                     Xrm.Page.data.refresh(false);
+//                 }
+
+//                 return Promise.resolve(true); // Return true - success
+//             },
+//             function (error) {
+//                 Xrm.Utility.closeProgressIndicator();
+//                 Xrm.Navigation.openAlertDialog({
+//                     text: MSG.updateError + "\n" + ((error && error.message) ? error.message : "")
+//                 });
+//                 return Promise.resolve(false); // Return false on update error
+//             }
+//         );
+//     }
+// }
+
+// function GetDistance(lat1, lon1, lat2, lon2) {
+//     var R = 6371000;
+//     var dLat = (lat2 - lat1) * Math.PI / 180;
+//     var dLon = (lon2 - lon1) * Math.PI / 180;
+//     var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+//         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+//         Math.sin(dLon / 2) * Math.sin(dLon / 2);
+//     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+//     var distance = R * c;
+//     return distance;
+// }
+
+// ============================================
+// MAIN EXECUTION - ONLY CHECK DISTANCE ON MOBILE
+// ============================================
+
+
+
 function WO_CheckAllowedDistance() {
     var lang = Xrm.Utility.getGlobalContext().userSettings.languageId;
     var MSG = (lang === 1025) ? {
@@ -225,13 +400,17 @@ function WO_CheckAllowedDistance() {
         checking: "جاري التحقق من الموقع...",
         outOfRange: "الموقع الحالي يبعد بمسافة {0} متر عن موقع التفتيش المسجل وأقصى مسافة مسموحة هي {1}.",
         outOfRangeTitle: "خارج المسافة المسموحة",
-        updateError: "فشل تحديث الموقع على أمر العمل."
+        updateError: "فشل تحديث الموقع على أمر العمل.",
+        noSubAccount: "لا يوجد حساب فرعي محدد في أمر العمل.",
+        noAddresses: "لم يتم العثور على عناوين مرتبطة بالحساب الفرعي."
     } : {
         cannotGetLoc: "Can't get current location. Please check your mobile location settings.",
         checking: "Checking location...",
         outOfRange: "The current location is {0} meters away from the registered location and max allowed distance is {1}.",
         outOfRangeTitle: "Out of Range",
-        updateError: "Failed to update location on work order."
+        updateError: "Failed to update location on work order.",
+        noSubAccount: "No sub-account is selected on the Work Order.",
+        noAddresses: "No addresses found linked to the sub-account."
     };
 
     Xrm.Utility.showProgressIndicator(MSG.checking);
@@ -278,7 +457,7 @@ function WO_CheckAllowedDistance() {
         Xrm.Navigation.openAlertDialog({
             text: (error && error.message) ? error.message : "Failed to read work order."
         });
-        return Promise.resolve(false); // Return false on error
+        return Promise.resolve(false);
     });
 
     function proceedWithDistanceCheck(allowedDistance) {
@@ -286,32 +465,120 @@ function WO_CheckAllowedDistance() {
             return getCurrentLocationAndUpdate(null, null, null);
         }
 
+        // First, try to get address from duc_address lookup
         var addrAttr = Xrm.Page.getAttribute("duc_address");
         var addrVal = addrAttr ? addrAttr.getValue() : null;
-        if (!addrVal || !addrVal[0] || !addrVal[0].id) {
-            return getCurrentLocationAndUpdate(null, null, allowedDistance);
+        
+        if (addrVal && addrVal[0] && addrVal[0].id) {
+            var addressId = addrVal[0].id.replace(/[{}]/g, "");
+            var addressEntity = "duc_addressinformation";
+
+            return Xrm.WebApi.retrieveRecord(addressEntity, addressId, "?$select=duc_latitude,duc_longitude").then(
+                function (result) {
+                    var destLat = result.duc_latitude;
+                    var destLng = result.duc_longitude;
+
+                    if (destLat != null && destLng != null) {
+                        return getCurrentLocationAndUpdate(destLat, destLng, allowedDistance);
+                    } else {
+                        // If address doesn't have coordinates, fall back to account addresses
+                        return checkNearestAccountAddress(allowedDistance);
+                    }
+                },
+                function (error) {
+                    // If error retrieving address, fall back to account addresses
+                    return checkNearestAccountAddress(allowedDistance);
+                }
+            );
+        } else {
+            // No duc_address lookup, check account addresses
+            return checkNearestAccountAddress(allowedDistance);
+        }
+    }
+
+    function checkNearestAccountAddress(allowedDistance) {
+        // Get the sub-account from the work order
+        var subAccountAttr = Xrm.Page.getAttribute("duc_subaccount");
+        var subAccountVal = subAccountAttr ? subAccountAttr.getValue() : null;
+        
+        if (!subAccountVal || !subAccountVal[0] || !subAccountVal[0].id) {
+            // No sub-account, proceed without distance check
+            return getCurrentLocationAndUpdate(null, null, null);
         }
 
-        var addressId = addrVal[0].id.replace(/[{}]/g, "");
-        var addressEntity = "duc_addressinformation";
+        var accountId = subAccountVal[0].id.replace(/[{}]/g, "");
 
-        return Xrm.WebApi.retrieveRecord(addressEntity, addressId, "?$select=duc_latitude,duc_longitude").then(
+        // Build OData query to fetch addresses linked to the account
+        var options = "?$select=duc_addressinformationid,duc_latitude,duc_longitude";
+        options += "&$filter=_duc_account_value eq " + accountId;
+        options += " and duc_latitude ne null and duc_longitude ne null";
+
+        return Xrm.WebApi.retrieveMultipleRecords("duc_addressinformation", options).then(
             function (result) {
-                var destLat = result.duc_latitude;
-                var destLng = result.duc_longitude;
-
-                if (destLat == null || destLng == null) {
-                    return getCurrentLocationAndUpdate(null, null, allowedDistance);
+                if (!result.entities || result.entities.length === 0) {
+                    // No addresses found, proceed without distance check
+                    return getCurrentLocationAndUpdate(null, null, null);
                 }
 
-                return getCurrentLocationAndUpdate(destLat, destLng, allowedDistance);
+                // Filter addresses with valid coordinates
+                var addresses = result.entities.filter(function(addr) {
+                    return addr.duc_latitude != null && addr.duc_longitude != null;
+                });
+
+                if (addresses.length === 0) {
+                    // No valid addresses, proceed without distance check
+                    return getCurrentLocationAndUpdate(null, null, null);
+                }
+
+                // Get current location first to find nearest address
+                return Xrm.Device.getCurrentPosition().then(function (location) {
+                    var originLat = location.coords.latitude;
+                    var originLng = location.coords.longitude;
+
+                    // Calculate distance to each address and find the nearest
+                    var nearestAddress = null;
+                    var minDistance = Infinity;
+
+                    addresses.forEach(function(addr) {
+                        var distance = GetDistance(originLat, originLng, addr.duc_latitude, addr.duc_longitude);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestAddress = {
+                                lat: addr.duc_latitude,
+                                lng: addr.duc_longitude,
+                                distance: distance
+                            };
+                        }
+                    });
+
+                    // Check if nearest address is within allowed distance
+                    if (nearestAddress && allowedDistance > 0 && nearestAddress.distance > allowedDistance) {
+                        Xrm.Utility.closeProgressIndicator();
+
+                        var errorMsg = MSG.outOfRange
+                            .replace("{0}", Math.round(nearestAddress.distance))
+                            .replace("{1}", allowedDistance);
+
+                        Xrm.Navigation.openAlertDialog({
+                            title: MSG.outOfRangeTitle,
+                            text: errorMsg
+                        });
+
+                        return Promise.resolve(false);
+                    }
+
+                    // Within range or no distance check needed, update work order
+                    return updateWorkOrderLocation(originLat, originLng);
+
+                }, function () {
+                    Xrm.Utility.closeProgressIndicator();
+                    Xrm.Navigation.openAlertDialog({ text: MSG.cannotGetLoc });
+                    return Promise.resolve(false);
+                });
             },
             function (error) {
-                Xrm.Utility.closeProgressIndicator();
-                Xrm.Navigation.openAlertDialog({
-                    text: (error && error.message) ? error.message : "Failed to read address record."
-                });
-                return Promise.resolve(false); // Return false on error
+                // Error retrieving addresses, proceed without distance check
+                return getCurrentLocationAndUpdate(null, null, null);
             }
         );
     }
@@ -334,7 +601,7 @@ function WO_CheckAllowedDistance() {
                         text: errorMsg
                     });
 
-                    return Promise.resolve(false); // Return false - out of range
+                    return Promise.resolve(false);
                 }
             }
 
@@ -343,7 +610,7 @@ function WO_CheckAllowedDistance() {
         }, function () {
             Xrm.Utility.closeProgressIndicator();
             Xrm.Navigation.openAlertDialog({ text: MSG.cannotGetLoc });
-            return Promise.resolve(false); // Return false on location error
+            return Promise.resolve(false);
         });
     }
 
@@ -357,19 +624,18 @@ function WO_CheckAllowedDistance() {
             function success(result) {
                 Xrm.Utility.closeProgressIndicator();
 
-                // Safely refresh the form if available
                 if (Xrm.Page && Xrm.Page.data && Xrm.Page.data.refresh) {
                     Xrm.Page.data.refresh(false);
                 }
 
-                return Promise.resolve(true); // Return true - success
+                return Promise.resolve(true);
             },
             function (error) {
                 Xrm.Utility.closeProgressIndicator();
                 Xrm.Navigation.openAlertDialog({
                     text: MSG.updateError + "\n" + ((error && error.message) ? error.message : "")
                 });
-                return Promise.resolve(false); // Return false on update error
+                return Promise.resolve(false);
             }
         );
     }
@@ -386,10 +652,6 @@ function GetDistance(lat1, lon1, lat2, lon2) {
     var distance = R * c;
     return distance;
 }
-
-// ============================================
-// MAIN EXECUTION - ONLY CHECK DISTANCE ON MOBILE
-// ============================================
 (async function () {
     try {
         const workOrderId = Xrm.Page.data.entity.getId();

@@ -17,9 +17,21 @@ async function createAutoBookingOnWorkOrderCreate(executionContext) {
             console.log("Booking already created for this work order");
             return;
         }
+        const userLanguageCode = Xrm.Utility.getGlobalContext().userSettings.languageId;
 
+        // Translation messages
+        const translations = {
+            1025: "جاري إنشاء الحجز، يرجى الانتظار...",  // Arabic
+            1033: "Creating booking, please wait...",      // English
+            // Add more language codes as needed
+        };
+
+        // Get translated message or default to English
+        const loadingMessage = translations[userLanguageCode] || translations[1033];
+
+        // Show loading indicator with translated message
+        Xrm.Utility.showProgressIndicator(loadingMessage);
         // Show loading indicator
-        Xrm.Utility.showProgressIndicator("Creating booking, please wait...");
         progressIndicator = true;
 
         const createdBy = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
@@ -104,7 +116,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext) {
                     entityId: workorderId
                 },
                 {
-                    target: 1   
+                    target: 1
                 }
             );
         }

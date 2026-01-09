@@ -9,11 +9,18 @@ interface IButtonState {
     isLoading: boolean;
 }
 
+interface IActionTypeData {
+    code: string | null;
+    color: string | null;
+    icon: string | null;
+}
+
 class ButtonComponent extends React.Component<{
     buttonText: string;
     buttonColor: string;
     buttonIcon: string | null;
     isDisabled: boolean;
+    languageId: number;
     onClick: () => Promise<void>;
 }, IButtonState> {
 
@@ -22,6 +29,16 @@ class ButtonComponent extends React.Component<{
         this.state = {
             isLoading: false
         };
+    }
+
+    private getLoadingMessage(): string {
+        const languageId = this.props.languageId;
+        const translations: { [key: number]: string } = {
+            1025: "جاري العمل ...", 
+            1033: "Processing...",     
+        };
+
+        return translations[languageId] || translations[1033];
     }
 
     private handleClick = async (): Promise<void> => {
@@ -61,7 +78,7 @@ class ButtonComponent extends React.Component<{
                     className: "Jsaction",
                     iconProps: { iconName: iconName },
                     onClick: this.handleClick,
-                    title: isLoading ? "Processing..." : iconName,
+                    title: isLoading ? this.getLoadingMessage() : iconName,
                     ariaLabel: iconName,
                     disabled: isDisabled || isLoading,
                     style: {
@@ -72,8 +89,8 @@ class ButtonComponent extends React.Component<{
                 }
             );
         } else {
-            // Use PrimaryButton with text - Add "..." when loading
-            const displayText = isLoading ? `${buttonText}...` : buttonText;
+            // Use PrimaryButton with text - Add loading message when loading
+            const displayText = isLoading ? this.getLoadingMessage() : buttonText;
 
             return React.createElement(
                 PrimaryButton,
@@ -101,6 +118,7 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
     private _context: ComponentFramework.Context<IInputs>;
     private _container: HTMLDivElement;
     private _buttonComponentRef: ButtonComponent | null = null;
+    private _actionTypeData: IActionTypeData | null = null;
 
     public init(
         context: ComponentFramework.Context<IInputs>,
@@ -123,7 +141,7 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
         return null;
     }
 
-    private getActionTypeId(): string | null {
+    private getActionTypeName(): string | null {
         const field = this._context.parameters.actionTypeId;
         if (field && field.raw) {
             return field.raw as string;
@@ -131,32 +149,38 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
         return null;
     }
 
-    private async getJavaScriptCodeFromActionType(): Promise<string | null> {
-        const actionTypeId = this.getActionTypeId();
-        
-        if (!actionTypeId || actionTypeId.trim() === "") {
-            console.log("No action type ID provided");
+    private async getActionTypeData(): Promise<IActionTypeData | null> {
+        const actionTypeName = this.getActionTypeName();
+
+        if (!actionTypeName || actionTypeName.trim() === "") {
+            console.log("No action type name provided");
             return null;
         }
 
         try {
-            console.log("Retrieving action command from duc_actiontype:", actionTypeId);
+            console.log("Retrieving action type data:", actionTypeName);
 
-            // Clean the GUID by removing curly braces if present
-            const cleanGuid = actionTypeId.replace(/[{}]/g, "").trim();
+            // Use OData filter query to get all needed fields
+            const filter = `?$select=duc_actioncommand,duc_color,duc_icon&$filter=duc_name eq '${actionTypeName}'&$top=1`;
 
-            // Retrieve the duc_actioncommand field from the duc_actiontype record
-            const result = await this._context.webAPI.retrieveRecord(
+            const result = await this._context.webAPI.retrieveMultipleRecords(
                 "duc_actiontype",
-                cleanGuid,
-                "?$select=duc_actioncommand"
+                filter
             );
 
-            if (result && result.duc_actioncommand) {
-                console.log("Action command retrieved successfully");
-                return result.duc_actioncommand as string;
+            if (result && result.entities && result.entities.length > 0) {
+                const entity = result.entities[0];
+                
+                const actionTypeData: IActionTypeData = {
+                    code: entity.duc_actioncommand || null,
+                    color: entity.duc_color || null,
+                    icon: entity.duc_icon || null
+                };
+
+                console.log("Action type data retrieved successfully:", actionTypeData);
+                return actionTypeData;
             } else {
-                console.log("No action command found in the action type record");
+                console.log("No action type found with name:", actionTypeName);
                 return null;
             }
 
@@ -175,10 +199,13 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
         }
 
         // Priority 2: Check action type lookup
-        const actionTypeCode = await this.getJavaScriptCodeFromActionType();
-        if (actionTypeCode && actionTypeCode.trim() !== "") {
+        if (!this._actionTypeData) {
+            this._actionTypeData = await this.getActionTypeData();
+        }
+
+        if (this._actionTypeData && this._actionTypeData.code && this._actionTypeData.code.trim() !== "") {
             console.log("Using JavaScript code from action type");
-            return actionTypeCode;
+            return this._actionTypeData.code;
         }
 
         console.log("No JavaScript code found in either field or action type");
@@ -224,19 +251,45 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
         return englishText || arabicText || "";
     }
 
-    private getButtonColor(): string {
+
+    private async getButtonColor(): Promise<string> {
+        // Priority 1: Check parameter field
         const field = this._context.parameters.buttonColor;
         if (field && field.raw) {
             return field.raw as string;
         }
-        return "#307eafff"; // Default color
+
+        // Priority 2: Check action type
+        if (!this._actionTypeData) {
+            this._actionTypeData = await this.getActionTypeData();
+        }
+
+        if (this._actionTypeData && this._actionTypeData.color) {
+            console.log("Using button color from action type:", this._actionTypeData.color);
+            return this._actionTypeData.color;
+        }
+
+        // Default color
+        return "#0078d4"; // Default Fluent UI blue
     }
 
-    private getButtonIcon(): string | null {
+    private async getButtonIcon(): Promise<string | null> {
+        // Priority 1: Check parameter field
         const field = this._context.parameters.buttonIcon;
         if (field && field.raw) {
             return field.raw as string;
         }
+
+        // Priority 2: Check action type
+        if (!this._actionTypeData) {
+            this._actionTypeData = await this.getActionTypeData();
+        }
+
+        if (this._actionTypeData && this._actionTypeData.icon) {
+            console.log("Using button icon from action type:", this._actionTypeData.icon);
+            return this._actionTypeData.icon;
+        }
+
         return null;
     }
 
@@ -274,7 +327,7 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
             });
 
             // Use string concatenation to avoid template literal conflicts
-            const promiseWrapper = 
+            const promiseWrapper =
                 "return (async () => {" +
                 "    try {" +
                 "        " + jsCode +
@@ -311,9 +364,10 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
 
     private async renderButton(): Promise<void> {
         const buttonText = this.getButtonText();
-        const buttonColor = this.getButtonColor();
-        const buttonIcon = this.getButtonIcon();
-        
+        const buttonColor = await this.getButtonColor();
+        const buttonIcon = await this.getButtonIcon();
+        const languageId = this.getLanguageId();
+
         // Check if we have any JavaScript code available
         const jsCode = await this.getJavaScriptCode();
         const isDisabled = !jsCode || jsCode.trim() === "";
@@ -328,6 +382,7 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
                 buttonColor: buttonColor,
                 buttonIcon: buttonIcon,
                 isDisabled: isDisabled,
+                languageId: languageId,
                 onClick: () => this.handleButtonClick()
             }
         );
@@ -337,6 +392,8 @@ export class DynamicButton implements ComponentFramework.StandardControl<IInputs
 
     public updateView(context: ComponentFramework.Context<IInputs>): void {
         this._context = context;
+        // Reset cached action type data on update
+        this._actionTypeData = null;
         this.renderButton();
     }
 

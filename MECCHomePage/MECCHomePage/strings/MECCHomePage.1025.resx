@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  
+  <data name="WelcomeBack" xml:space="preserve"><value>مرحبا بعودتك</value></data>
+  <data name="FindFacility" xml:space="preserve"><value>البحث عن منشأة</value></data>
+  <data name="RemainingInspections" xml:space="preserve"><value>عمليات التفتيش المتبقية اليوم</value></data>
+  <data name="CompletedInspections" xml:space="preserve"><value>عمليات التفتيش المكتملة اليوم</value></data>
+  <data name="ScheduledInspections" xml:space="preserve"><value>عمليات التفتيش المجدولة</value></data>
+  <data name="StartInspection" xml:space="preserve"><value>بدء التفتيش</value></data>
+  <data name="SearchPlaceholder" xml:space="preserve"><value>البحث عن منشأة</value></data>
+  <data name="NoResults" xml:space="preserve"><value>لم يتم العثور على نتائج</value></data>
+  <data name="Loading" xml:space="preserve"><value>جاري التحميل...</value></data>
+  <data name="SearchPrompt" xml:space="preserve"><value>الرجاء إدخال قيمة البحث</value></data>
+    <data name="PendingInspections" xml:space="preserve"><value>عمليات التفتيش المعلقة</value></data>
+
+  <data name="OfflineNavigationBlocked" xml:space="preserve"><value>لا يمكن التنقل: وضع عدم الاتصال</value></data>
+  <data name="OfflineQuickCreateBlocked" xml:space="preserve"><value>لا يمكن بدء التفتيش في وضع عدم الاتصال</value></data>
+  <data name="StartAnonymousInspection" xml:space="preserve">
+  <value>بدء تفتيش مجهول</value>
+  <comment>Button text for starting an anonymous inspection</comment>
+</data>
+  <data name="Search" xml:space="preserve">
+    <value>بحث</value>
+    <comment>Search button text</comment>
+  </data>
+      <data name="StartPatrol" xml:space="preserve"><value>بدء الحملة</value></data>
+      <data name="EndPatrol" xml:space="preserve"><value>إنهاء الحملة</value></data>
+  <data name="SearchResults" xml:space="preserve">
+    <value>نتائج البحث ({0})</value>
+    <comment>Search results title with count placeholder</comment>
+  </data>
+      <data name="TodaysPatrols" xml:space="preserve"><value>حملات التفتيش</value></data>
+
+  <data name="AccountName" xml:space="preserve">
+    <value>اسم الحساب</value>
+    <comment>Header for account name column</comment>
+  </data>
+  <data name="Email" xml:space="preserve">
+    <value>البريد الإلكتروني</value>
+    <comment>Header for email column</comment>
+  </data>
+  <data name="Phone" xml:space="preserve">
+    <value>الهاتف</value>
+    <comment>Header for phone column</comment>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>إغلاق</value>
+    <comment>Close button aria label</comment>
+  </data>
+  
+  <data name="AdvancedSearch" xml:space="preserve">
+    <value>بحث متخصص</value>
+  </data>
+  <data name="FacilityName" xml:space="preserve">
+    <value>اسم المنشأه:</value>
+  </data>
+  <data name="LicenseNumber" xml:space="preserve">
+    <value>رقم الرخصة / الترخيص:</value>
+  </data>
+  <data name="AreaNumber" xml:space="preserve">
+    <value>رقم المنطقة:</value>
+  </data>
+  <data name="AreaName" xml:space="preserve">
+    <value>اسم المنطقة:</value>
+  </data>
+  <data name="StreetNumber" xml:space="preserve">
+    <value>رقم الشارع:</value>
+  </data>
+  <data name="StreetName" xml:space="preserve">
+    <value>اسم الشارع:</value>
+  </data>
+  <data name="BuildingNumber" xml:space="preserve">
+    <value>رقم المبني:</value>
+  </data>
+  <data name="PINNumber" xml:space="preserve">
+    <value>رقم التعريف (PIN):</value>
+  </data>
+  <data name="PleaseEnterSearchText" xml:space="preserve">
+    <value>الرجاء إدخال نص البحث ذي الصلة</value>
+  </data>
+  <data name="SearchError" xml:space="preserve">
+    <value>حدث خطأ أثناء البحث</value>
+  </data>
+</root>

@@ -68,8 +68,20 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
             return;
         }
 
-        // Show loading indicator
-        Xrm.Utility.showProgressIndicator("Creating booking, please wait...");
+        const userLanguageCode = Xrm.Utility.getGlobalContext().userSettings.languageId;
+
+        // Translation messages
+        const translations = {
+            1025: "جاري إنشاء الحجز، يرجى الانتظار...",  // Arabic
+            1033: "Creating booking, please wait...",      // English
+            // Add more language codes as needed
+        };
+
+        // Get translated message or default to English
+        const loadingMessage = translations[userLanguageCode] || translations[1033];
+
+        // Show loading indicator with translated message
+        Xrm.Utility.showProgressIndicator(loadingMessage);
         progressIndicator = true;
 
         const createdBy = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
@@ -173,7 +185,7 @@ async function onSubaccountChange(executionContext) {
         var serviceAccount = formContext.getAttribute("msdyn_serviceaccount");
 
         // Retrieve the selected account to check parent account and address lookup
-        await Xrm.WebApi.retrieveRecord("account", subaccountId, "?$select=parentaccountid,_duc_address_value").then(
+        await Xrm.WebApi.retrieveRecord("account", subaccountId, "?$select=parentaccountid").then(
             async function success(result) {
                 var serviceAccountValue;
 
@@ -193,41 +205,41 @@ async function onSubaccountChange(executionContext) {
                 formContext.getAttribute("msdyn_serviceaccount").setValue(serviceAccountValue);
 
                 // Handle address lookup if duc_address has a value
-                if (result._duc_address_value) {
-                    var addressId = result._duc_address_value;
-                    var addressName = result["_duc_address_value@OData.Community.Display.V1.FormattedValue"];
+                // if (result._duc_address_value) {
+                //     var addressId = result._duc_address_value;
+                //     var addressName = result["_duc_address_value@OData.Community.Display.V1.FormattedValue"];
 
-                    // Set the address lookup on the current form
-                    formContext.getAttribute("duc_address").setValue([{
-                        id: addressId,
-                        name: addressName,
-                        entityType: "duc_addressinformation"
-                    }]);
+                //     // Set the address lookup on the current form
+                //     formContext.getAttribute("duc_address").setValue([{
+                //         id: addressId,
+                //         name: addressName,
+                //         entityType: "duc_addressinformation"
+                //     }]);
 
-                    // Now retrieve the address information to get longitude and latitude
-                    await Xrm.WebApi.retrieveRecord("duc_addressinformation", addressId, "?$select=duc_longitude,duc_latitude").then(
-                        function successAddress(addressResult) {
-                            // Set longitude if available
-                            if (addressResult.duc_longitude != null) {
-                                formContext.getAttribute("msdyn_longitude").setValue(addressResult.duc_longitude);
-                            }
+                //     // Now retrieve the address information to get longitude and latitude
+                //     await Xrm.WebApi.retrieveRecord("duc_addressinformation", addressId, "?$select=duc_longitude,duc_latitude").then(
+                //         function successAddress(addressResult) {
+                //             // Set longitude if available
+                //             if (addressResult.duc_longitude != null) {
+                //                 formContext.getAttribute("msdyn_longitude").setValue(addressResult.duc_longitude);
+                //             }
 
-                            // Set latitude if available
-                            if (addressResult.duc_latitude != null) {
-                                formContext.getAttribute("msdyn_latitude").setValue(addressResult.duc_latitude);
-                            }
-                        },
-                        function errorAddress(error) {
-                            console.log("Error retrieving address information: " + error.message);
-                        }
-                    );
+                //             // Set latitude if available
+                //             if (addressResult.duc_latitude != null) {
+                //                 formContext.getAttribute("msdyn_latitude").setValue(addressResult.duc_latitude);
+                //             }
+                //         },
+                //         function errorAddress(error) {
+                //             console.log("Error retrieving address information: " + error.message);
+                //         }
+                //     );
 
-                } else {
-                    // Clear address fields if no address found
-                    formContext.getAttribute("duc_address").setValue(null);
-                    formContext.getAttribute("msdyn_longitude").setValue(null);
-                    formContext.getAttribute("msdyn_latitude").setValue(null);
-                }
+                // } else {
+                //     // Clear address fields if no address found
+                //     formContext.getAttribute("duc_address").setValue(null);
+                //     formContext.getAttribute("msdyn_longitude").setValue(null);
+                //     formContext.getAttribute("msdyn_latitude").setValue(null);
+                // }
             },
             function error(error) {
                 console.log("Error retrieving account: " + error.message);
@@ -242,5 +254,32 @@ async function onSubaccountChange(executionContext) {
         formContext.getAttribute("duc_address").setValue(null);
         formContext.getAttribute("msdyn_longitude").setValue(null);
         formContext.getAttribute("msdyn_latitude").setValue(null);
+    }
+}
+
+
+
+function hideFieldOnWeb(executionContext) {
+    var formContext = executionContext.getFormContext();
+    
+    var client = formContext.context.client;
+    var clientType = client.getClient();
+    
+    console.log("Client Type: ", clientType);
+
+    var fieldName = "duc_mapsredirect"; 
+    
+    var field = formContext.getControl(fieldName);
+    
+    if (field) {
+        if (clientType === "Web" || clientType === "Outlook") {
+            field.setVisible(false);
+            console.log("Field hidden - Client is: " + clientType);
+        } else {
+            field.setVisible(true);
+            console.log("Field visible - Client is: " + clientType);
+        }
+    } else {
+        console.error("Field not found: " + fieldName);
     }
 }

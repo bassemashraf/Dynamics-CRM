@@ -600,6 +600,19 @@ export const Main = (props: IProps) => {
             viewId: "4073baca-cc5f-e611-8109-000d3a146973"
         });
     };
+    const openAllScheduled = (): void => {
+        const ctx: any = props.context;
+        // if (isOffline()) {
+        //     setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+        //     return;
+        // }
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "bookableresourcebooking",
+            viewId: "f52b7a9b-cae8-f011-8406-6045bd9c20cb"
+        });
+    };
+
     const openPendingWorkorders = (): void => {
         const ctx: any = props.context;
         if (isOffline()) {
@@ -987,35 +1000,35 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
                     ),
-                    React.createElement(
-                        "div",
-                        {
-                            onClick: openPendingWorkorders,
-                            style: {
-                                ...STYLES.border,
-                                ...STYLES.rounded4,
-                                ...STYLES.dFlex,
-                                ...STYLES.alignItemsCenter,
-                                ...STYLES.justifyContentBetween,
-                                ...STYLES.p3,
-                                ...STYLES.gap3,
-                                cursor: isActionDisabled ? 'not-allowed' : 'pointer',
-                                opacity: isActionDisabled ? 0.5 : 1,
-                                pointerEvents: isActionDisabled ? 'none' : 'auto'
-                            }
-                        },
-                        React.createElement(
-                            "div",
-                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
-                            React.createElement(
-                                "div",
-                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
-                                React.createElement("img", { src: clockDataUri })
-                            ),
-                            React.createElement("h6", { style: STYLES.h6 }, strings.PendingInspections)
-                        ),
-                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
-                    )
+                    // React.createElement(
+                    //     "div",
+                    //     {
+                    //         onClick: openPendingWorkorders,
+                    //         style: {
+                    //             ...STYLES.border,
+                    //             ...STYLES.rounded4,
+                    //             ...STYLES.dFlex,
+                    //             ...STYLES.alignItemsCenter,
+                    //             ...STYLES.justifyContentBetween,
+                    //             ...STYLES.p3,
+                    //             ...STYLES.gap3,
+                    //             cursor: isActionDisabled ? 'not-allowed' : 'pointer',
+                    //             opacity: isActionDisabled ? 0.5 : 1,
+                    //             pointerEvents: isActionDisabled ? 'none' : 'auto'
+                    //         }
+                    //     },
+                    //     React.createElement(
+                    //         "div",
+                    //         { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                    //         React.createElement(
+                    //             "div",
+                    //             { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
+                    //             React.createElement("img", { src: clockDataUri })
+                    //         ),
+                    //         React.createElement("h6", { style: STYLES.h6 }, strings.PendingInspections)
+                    //     ),
+                    //     React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
+                    // )
                 )
             ),
             // Action Buttons
@@ -1027,7 +1040,7 @@ export const Main = (props: IProps) => {
                 showScheduledInspections && React.createElement(
                     "button",
                     {
-                        onClick: openScheduled,
+                        onClick: openAllScheduled,
                         disabled: isActionDisabled,
                         style: getButtonStyle({ ...STYLES.btnBlueDark, ...STYLES.textWhite, ...STYLES.rounded4, ...STYLES.p3, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.justifyContentCenter, ...STYLES.gap3 })
                     },
