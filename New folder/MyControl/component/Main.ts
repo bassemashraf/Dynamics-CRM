@@ -27,6 +27,7 @@ interface State {
     patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
     activePatrolId?: string; // Store active patrol campaign ID
     isNaturalReserve: boolean; // Track if org unit is Natural Reserve
+    isWildlifeSection: boolean; // NEW: Track if org unit is Wildlife section
     unknownAccountId?: string; // Store unknown account ID for anonymous inspections
     unknownAccountName?: string; // Store unknown account name
     incidentTypeName?: string; // Store incident type name for Natural Reserve
@@ -179,6 +180,7 @@ export const Main = (props: IProps) => {
         patrolStatus: 'none',
         activePatrolId: undefined,
         isNaturalReserve: false,
+        isWildlifeSection: false,
         unknownAccountId: undefined,
         incidentTypeId: undefined,
         orgUnitId: undefined,
@@ -196,9 +198,6 @@ export const Main = (props: IProps) => {
         const ctx: any = props.context;
         return ctx.mode?.isInOfflineMode === true;
     };
-
-
-
 
     const handleAdvancedSearchResults = (results: any[]): void => {
         setState(prev => ({
@@ -239,6 +238,11 @@ export const Main = (props: IProps) => {
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
 
+            // NEW LOGIC: Check if organization unit is Wildlife section
+            const isWildlifePlantLife = orgUnitName.includes("Wildlife - Plant Life Section");
+            const isWildlifeNaturalResources = orgUnitName.includes("Wildlife - Natural Resources Section");
+            const isWildlifeSection = isWildlifePlantLife || isWildlifeNaturalResources;
+
             let incidentTypeId: string | undefined = undefined;
             let incidentTypeName: string | undefined = undefined;
 
@@ -267,6 +271,7 @@ export const Main = (props: IProps) => {
             setState(prev => ({
                 ...prev,
                 isNaturalReserve: isNaturalReserve,
+                isWildlifeSection: isWildlifeSection,
                 unknownAccountId: unknownAccountId,
                 unknownAccountName: unknownAccountName,
                 incidentTypeId: incidentTypeId,
@@ -277,6 +282,7 @@ export const Main = (props: IProps) => {
             console.log("Organization Unit:", orgUnitName);
             console.log("Organization Unit ID:", orgUnitId);
             console.log("Is Natural Reserve:", isNaturalReserve);
+            console.log("Is Wildlife Section:", isWildlifeSection);
             console.log("Unknown Account ID:", unknownAccountId);
             console.log("Unknown Account Name:", unknownAccountName);
             console.log("Incident Type ID:", incidentTypeId);
@@ -287,6 +293,7 @@ export const Main = (props: IProps) => {
             setState(prev => ({
                 ...prev,
                 isNaturalReserve: false,
+                isWildlifeSection: false,
                 unknownAccountId: undefined,
                 unknownAccountName: undefined,
                 incidentTypeId: undefined,
@@ -600,6 +607,7 @@ export const Main = (props: IProps) => {
             viewId: "4073baca-cc5f-e611-8109-000d3a146973"
         });
     };
+
     const openAllScheduled = (): void => {
         const ctx: any = props.context;
         // if (isOffline()) {
@@ -625,19 +633,6 @@ export const Main = (props: IProps) => {
             viewId: "bee0efc7-40e4-f011-8406-6045bd9c224c"
         });
     };
-
-    // const openScheduledCampaigns = (): void => {
-    //     const ctx: any = props.context;
-    //     if (isOffline()) {
-    //         setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
-    //         return;
-    //     }
-    //     void ctx.navigation.navigateTo({
-    //         pageType: "entitylist",
-    //         entityName: "new_inspectioncampaign",
-    //         viewId: "0628a5aa-88d7-f011-8406-7c1e524df347"
-    //     });
-    // };
 
     const closedWorkorders = (): void => {
         const ctx: any = props.context;
@@ -678,14 +673,14 @@ export const Main = (props: IProps) => {
             defaultValues.duc_subaccount = [
                 {
                     id: state.unknownAccountId,
-                    name: state.unknownAccountName, // You need to pass the account name
+                    name: state.unknownAccountName,
                     entityType: "account"
                 }
             ];
             defaultValues.msdyn_serviceaccount = [
                 {
                     id: state.unknownAccountId,
-                    name: state.unknownAccountName, // You need to pass the account name
+                    name: state.unknownAccountName,
                     entityType: "account"
                 }
             ];
@@ -696,7 +691,7 @@ export const Main = (props: IProps) => {
             defaultValues.msdyn_primaryincidenttype = [
                 {
                     id: state.incidentTypeId,
-                    name: state.incidentTypeName, // You need to pass the incident type name
+                    name: state.incidentTypeName,
                     entityType: "msdyn_incidenttype"
                 }
             ];
@@ -827,24 +822,38 @@ export const Main = (props: IProps) => {
         }
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, isNaturalReserve } = state;
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, isNaturalReserve, isWildlifeSection } = state;
     const isActionDisabled = isLoading;
 
     // Determine which buttons to show based on patrol status and org unit
-    // For Non-Natural Reserve: 
+    // For Non-Natural Reserve (including Wildlife sections): 
     //   - Always show Scheduled Inspections + Start Inspection
     //   - Show Start/End Patrol based on patrol status (same as Natural Reserve)
     //   - Never show Start Anonymous Inspection
+    // For Wildlife Sections (NEW LOGIC):
+    //   - ALWAYS show Start Inspection button regardless of patrol status
+    //   - Show Start/End Patrol buttons based on patrol status
+    //   - NEVER show Start Anonymous Inspection
     // For Natural Reserve:
     //   - When patrol status is 'start': show Start Patrol button only
     //   - When patrol status is 'end': show Start Inspection + Start Anonymous Inspection + End Patrol
     //   - When patrol status is 'none': show Scheduled Inspections + Start Inspection
 
-    const showScheduledInspections = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'none');
-    const showStartInspection = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'end') || (isNaturalReserve && patrolStatus === 'none');
-    const showStartAnonymousInspection = isNaturalReserve && patrolStatus === 'end'; // Only Natural Reserve
-    const showStartPatrol = patrolStatus === 'start'; // Both Natural Reserve and Non-Natural Reserve
-    const showEndPatrol = patrolStatus === 'end'; // Both Natural Reserve and Non-Natural Reserve
+    const showScheduledInspections = true; // Always show for all org units
+    
+    // (!isNaturalReserve && !isWildlifeSection) || (isNaturalReserve && patrolStatus === 'none') || (isWildlifeSection && patrolStatus === 'none');
+
+    // NEW LOGIC: Wildlife sections always show Start Inspection
+    const showStartInspection = isWildlifeSection ||
+        (!isNaturalReserve && !isWildlifeSection) ||
+        (isNaturalReserve && patrolStatus === 'end') ||
+        (isNaturalReserve && patrolStatus === 'none');
+
+    // NEW LOGIC: Wildlife sections NEVER show Start Anonymous Inspection
+    const showStartAnonymousInspection = !isWildlifeSection && isNaturalReserve && patrolStatus === 'end';
+
+    const showStartPatrol = patrolStatus === 'start'; // All org units
+    const showEndPatrol = patrolStatus === 'end'; // All org units
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
         ...baseStyle,
@@ -1048,7 +1057,7 @@ export const Main = (props: IProps) => {
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
 
-                // Start Inspection button - show for non-Natural Reserve, OR Natural Reserve when patrol is not started yet, OR when patrol is active (end status)
+                // Start Inspection button - show for non-Natural Reserve, OR Natural Reserve when patrol is not started yet, OR when patrol is active (end status), OR Wildlife sections ALWAYS
                 showStartInspection && React.createElement(
                     "button",
                     {
@@ -1071,7 +1080,7 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // Start Anonymous Inspection button - only for Natural Reserve when patrol is active (end status)
+                // Start Anonymous Inspection button - only for Natural Reserve when patrol is active (end status), NOT for Wildlife sections
                 showStartAnonymousInspection && React.createElement(
                     "button",
                     {
@@ -1094,7 +1103,7 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // Start Patrol button - only for Natural Reserve when patrol is available to start
+                // Start Patrol button - show for all org units when patrol is available to start
                 showStartPatrol && React.createElement(
                     "button",
                     {
@@ -1117,7 +1126,7 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // End Patrol button - only for Natural Reserve when patrol is active
+                // End Patrol button - show for all org units when patrol is active
                 showEndPatrol && React.createElement(
                     "button",
                     {
