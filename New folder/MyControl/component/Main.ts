@@ -26,6 +26,7 @@ interface State {
     showAdvancedSearch: boolean;
     patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
     activePatrolId?: string; // Store active patrol campaign ID
+    activePatrolName?: string; // Store active patrol campaign name
     isNaturalReserve: boolean; // Track if org unit is Natural Reserve
     isWildlifeSection: boolean; // NEW: Track if org unit is Wildlife section
     unknownAccountId?: string; // Store unknown account ID for anonymous inspections
@@ -179,6 +180,7 @@ export const Main = (props: IProps) => {
         showAdvancedSearch: false,
         patrolStatus: 'none',
         activePatrolId: undefined,
+        activePatrolName: undefined,
         isNaturalReserve: false,
         isWildlifeSection: false,
         unknownAccountId: undefined,
@@ -314,7 +316,7 @@ export const Main = (props: IProps) => {
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -326,13 +328,14 @@ export const Main = (props: IProps) => {
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'end',
-                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid
+                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: activePatrolResults.entities[0].new_name
                 }));
                 return;
             }
 
             // Check for available patrol to start (status = 1 or 100000004)
-            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -344,14 +347,16 @@ export const Main = (props: IProps) => {
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'start',
-                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid
+                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: availablePatrolResults.entities[0].new_name
                 }));
             } else {
                 // No patrol available
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'none',
-                    activePatrolId: undefined
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
                 }));
             }
 
@@ -360,7 +365,8 @@ export const Main = (props: IProps) => {
             setState(prev => ({
                 ...prev,
                 patrolStatus: 'none',
-                activePatrolId: undefined
+                activePatrolId: undefined,
+                activePatrolName: undefined
             }));
         }
     }, [props.context]);
@@ -653,7 +659,25 @@ export const Main = (props: IProps) => {
             setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
             return;
         }
-        void ctx.navigation.openForm({ entityName: "msdyn_workorder", useQuickCreateForm: true }, {});
+
+        // Prepare default values
+        const defaultValues: any = {};
+
+        // If we have an active patrol campaign, set it as default
+        if (state.activePatrolId && state.activePatrolName) {
+            defaultValues.new_campaign = [
+                {
+                    id: state.activePatrolId,
+                    name: state.activePatrolName,
+                    entityType: "new_inspectioncampaign"
+                }
+            ];
+        }
+
+        void ctx.navigation.openForm(
+            { entityName: "msdyn_workorder", useQuickCreateForm: true },
+            defaultValues
+        );
     };
 
     const startAnonymousInspection = (): void => {
@@ -667,6 +691,17 @@ export const Main = (props: IProps) => {
         const defaultValues: any = {
             duc_anonymouscustomer: true // Set the anonymous field to Yes/True
         };
+
+        // If we have an active patrol campaign, set it as default
+        if (state.activePatrolId && state.activePatrolName) {
+            defaultValues.new_campaign = [
+                {
+                    id: state.activePatrolId,
+                    name: state.activePatrolName,
+                    entityType: "new_inspectioncampaign"
+                }
+            ];
+        }
 
         // If we have unknown account ID, set it as default
         if (state.unknownAccountId) {
