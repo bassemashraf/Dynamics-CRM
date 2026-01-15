@@ -20,14 +20,15 @@ interface State {
     pendingTodayBookings: number | null;
     completedTodayWorkorders: number | null;
     TodayCampaigns: number | null;
+    pendingRequests: number | null; // Add this line
     userName: string;
     message?: string;
     isLoading: boolean;
     showResults: boolean;
     searchResults: any[];
     showAdvancedSearch: boolean;
-    patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
-    activePatrolId?: string; // Store active patrol campaign ID
+    patrolStatus: 'none' | 'start' | 'end';
+    activePatrolId?: string;
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -162,6 +163,7 @@ export const Main = (props: IProps) => {
         pendingTodayBookings: null,
         completedTodayWorkorders: null,
         TodayCampaigns: null,
+        pendingRequests: null, // Add this line
         userName: strings.Loading,
         message: undefined,
         isLoading: false,
@@ -256,13 +258,14 @@ export const Main = (props: IProps) => {
         }
     }, [props.context]);
 
-    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
+    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number; pendingRequests: number }> => {
         const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
 
         try {
             let completedToday = 0;
             let remainingToday = 0;
             let campaignsToday = 0;
+            let pendingRequests = 0;
 
             try {
                 debugger;
@@ -282,14 +285,14 @@ export const Main = (props: IProps) => {
                         console.log("Resource ID fetched and cached:", resourceId);
                     } else {
                         console.warn(`User ${userId} is not linked to a Bookable Resource.`);
-                        return { completedToday, remainingToday, campaignsToday };
+                        return { completedToday, remainingToday, campaignsToday, pendingRequests };
                     }
                 } else {
                     console.log("Resource ID retrieved from cache:", resourceId);
                 }
 
                 if (!resourceId) {
-                    return { completedToday, remainingToday, campaignsToday };
+                    return { completedToday, remainingToday, campaignsToday, pendingRequests };
                 }
 
                 const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
@@ -303,16 +306,32 @@ export const Main = (props: IProps) => {
                 remainingToday = remainingResults.entities.length;
                 console.log("Remaining Bookings Count:", remainingToday);
 
-                return { completedToday, remainingToday, campaignsToday };
+                // Add Pending Requests Query using retrieveMultipleRecords
+                // Query work orders with linked inspection actions where owner is current user and status is not 100000005 or 100000003
+                const pendingQuery = `?$select=msdyn_workorderid&$expand=duc_primaryinspectionaction($select=duc_inspectionactionid,duc_status;$filter=_ownerid_value eq '${userId}' and duc_status ne 100000005 and duc_status ne 100000003)&$filter=duc_primaryinspectionaction/duc_inspectionactionid ne null`;
+
+                const pendingResults = await ctx.webAPI.retrieveMultipleRecords("msdyn_workorder", pendingQuery);
+
+                // Filter results to only include those with valid expanded inspection actions
+                const filteredPendingResults = pendingResults.entities.filter((entity: any) =>
+                    entity.duc_primaryinspectionaction &&
+                    entity.duc_primaryinspectionaction.duc_status !== 100000005 &&
+                    entity.duc_primaryinspectionaction.duc_status !== 100000003
+                );
+
+                pendingRequests = filteredPendingResults.length;
+                console.log("Pending Requests Count:", pendingRequests);
+
+                return { completedToday, remainingToday, campaignsToday, pendingRequests };
 
             } catch (error) {
                 console.error("Error retrieving counts:", error);
-                return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+                return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingRequests: 0 };
             }
 
         } catch (e) {
             console.log("Failed to load today's counts:", e);
-            return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+            return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingRequests: 0 };
         }
     };
 
@@ -340,13 +359,15 @@ export const Main = (props: IProps) => {
 
             if (res) {
                 const username = res.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
-                const { completedToday, remainingToday, campaignsToday } = await loadTodaysCounts(ctx, userId);
+                const { completedToday, remainingToday, campaignsToday, pendingRequests } = await loadTodaysCounts(ctx, userId);
 
                 setState(prev => ({
                     ...prev,
                     pendingTodayBookings: remainingToday,
                     completedTodayWorkorders: completedToday,
                     TodayCampaigns: campaignsToday,
+                    pendingRequests: pendingRequests, // Add this line
+
                     userName: username,
                 }));
 
@@ -520,6 +541,19 @@ export const Main = (props: IProps) => {
         });
     };
 
+    const pendingActions = (): void => {
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "msdyn_workorder",
+            viewId: "50fa3c58-76f1-f011-8406-7c1e527683ca"
+        });
+    };
+
     const startInspection = (): void => {
         const ctx: any = props.context;
         if (isOffline()) {
@@ -648,7 +682,7 @@ export const Main = (props: IProps) => {
         }
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, pendingRequests, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
     const isActionDisabled = isLoading;
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
@@ -826,10 +860,11 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
                     ),
+                    // Pending Actions  Card
                     React.createElement(
                         "div",
                         {
-                            onClick: closedWorkorders,
+                            onClick: pendingActions,
                             style: {
                                 ...STYLES.border,
                                 ...STYLES.rounded4,
@@ -851,7 +886,7 @@ export const Main = (props: IProps) => {
                             ),
                             React.createElement("h6", { style: STYLES.h6 }, strings.Pendingrequests)
                         ),
-                        React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
+                        React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, pendingRequests ?? "...")
                     ),
 
                 )
