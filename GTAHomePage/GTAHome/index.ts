@@ -4,7 +4,7 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import { Main } from "./component/Main";
-export class GTAHome implements ComponentFramework.StandardControl<IInputs, IOutputs> {
+export class GHome implements ComponentFramework.StandardControl<IInputs, IOutputs> {
 
     private container: HTMLDivElement;
     private _context: ComponentFramework.Context<IInputs>;
