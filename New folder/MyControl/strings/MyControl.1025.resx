@@ -85,4 +85,40 @@
   <data name="SearchError" xml:space="preserve">
     <value>حدث خطأ أثناء البحث</value>
   </data>
+  <data name="StartMultiTypeInspection" xml:space="preserve">
+    <value>بدء تفتيش متعدد الأنواع</value>
+    <comment>Button text for starting a multi-type inspection</comment>
+  </data>
+  <data name="InspectionType" xml:space="preserve">
+    <value>نوع التفتيش:</value>
+    <comment>Label for inspection type field</comment>
+  </data>
+  <data name="QataryID" xml:space="preserve">
+    <value>الرقم القطري:</value>
+    <comment>Label for Qatary ID field</comment>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>الاسم:</value>
+    <comment>Label for name field</comment>
+  </data>
+  <data name="CRNumber" xml:space="preserve">
+    <value>رقم السجل التجاري:</value>
+    <comment>Label for CR Number field</comment>
+  </data>
+  <data name="ID" xml:space="preserve">
+    <value>الرقم:</value>
+    <comment>Label for ID field</comment>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>ابدأ</value>
+    <comment>Start button text</comment>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>إلغاء</value>
+    <comment>Cancel button text</comment>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>جاري المعالجة...</value>
+    <comment>Processing message</comment>
+  </data>
 </root>

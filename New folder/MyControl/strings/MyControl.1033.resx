@@ -77,10 +77,46 @@
   <value>Search</value>
   <comment>Search button text</comment>
 </data>
-    <data name="PendingInspections" xml:space="preserve"><value>Pending Inspections</value></data>
+<data name="PendingInspections" xml:space="preserve"><value>Pending Inspections</value></data>
 
 <data name="StartAnonymousInspection" xml:space="preserve">
   <value>Start Anonymous Inspection</value>
   <comment>Button text for starting an anonymous inspection</comment>
+</data>
+<data name="StartMultiTypeInspection" xml:space="preserve">
+  <value>Start Multi Type Inspection</value>
+  <comment>Button text for starting a multi-type inspection</comment>
+</data>
+<data name="InspectionType" xml:space="preserve">
+  <value>Inspection Type:</value>
+  <comment>Label for inspection type field</comment>
+</data>
+<data name="QataryID" xml:space="preserve">
+  <value>Qatary ID:</value>
+  <comment>Label for Qatary ID field</comment>
+</data>
+<data name="Name" xml:space="preserve">
+  <value>Name:</value>
+  <comment>Label for name field</comment>
+</data>
+<data name="CRNumber" xml:space="preserve">
+  <value>CR Number:</value>
+  <comment>Label for CR Number field</comment>
+</data>
+<data name="ID" xml:space="preserve">
+  <value>ID:</value>
+  <comment>Label for ID field</comment>
+</data>
+<data name="Start" xml:space="preserve">
+  <value>Start</value>
+  <comment>Start button text</comment>
+</data>
+<data name="Cancel" xml:space="preserve">
+  <value>Cancel</value>
+  <comment>Cancel button text</comment>
+</data>
+<data name="Processing" xml:space="preserve">
+  <value>Processing...</value>
+  <comment>Processing message</comment>
 </data>
 </root>

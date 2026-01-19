@@ -50,7 +50,6 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
 
     constructor(props: IAdvancedSearchProps) {
         super(props);
-
         const userSettings = (props.context as any).userSettings;
         const rtlLanguages = [1025, 1037, 1054, 1056, 1065, 1068, 1069, 1101, 1114, 1119];
         const isRTL = rtlLanguages.includes(userSettings?.languageId);

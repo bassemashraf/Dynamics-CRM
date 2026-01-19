@@ -10,6 +10,7 @@ import { clock } from "../images/clock";
 import { check } from "../images/check";
 import { filters } from "../images/filters";
 import { AdvancedSearch } from './AdvancedSearch';
+import { MultiTypeInspection } from './MultiTypeInspection';
 import { close } from '../images/close';
 
 // Define the interface for the component's internal state.
@@ -34,6 +35,7 @@ interface State {
     incidentTypeName?: string; // Store incident type name for Natural Reserve
     incidentTypeId?: string; // Store incident type ID for Natural Reserve
     orgUnitId?: string; // Store organization unit ID
+    showMultiTypeInspection: boolean; // Track if MultiTypeInspection modal is open
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -60,6 +62,7 @@ interface LocalizedStrings {
     EndPatrol: string;
     StartAnonymousInspection: string;
     PendingInspections: string;
+    StartMultiTypeInspection: string;
 }
 
 // --- Custom Styles Derived from main.css & Bootstrap ---
@@ -158,6 +161,7 @@ export const Main = (props: IProps) => {
             EndPatrol: ctx.resources.getString("EndPatrol"),
             StartAnonymousInspection: ctx.resources.getString("StartAnonymousInspection"),
             PendingInspections: ctx.resources.getString("PendingInspections"),
+            StartMultiTypeInspection: ctx.resources.getString("StartMultiTypeInspection"),
         };
     }, [props.context]);
 
@@ -186,6 +190,7 @@ export const Main = (props: IProps) => {
         unknownAccountId: undefined,
         incidentTypeId: undefined,
         orgUnitId: undefined,
+        showMultiTypeInspection: false,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -875,7 +880,7 @@ export const Main = (props: IProps) => {
     //   - When patrol status is 'none': show Scheduled Inspections + Start Inspection
 
     const showScheduledInspections = true; // Always show for all org units
-    
+
     // (!isNaturalReserve && !isWildlifeSection) || (isNaturalReserve && patrolStatus === 'none') || (isWildlifeSection && patrolStatus === 'none');
 
     // NEW LOGIC: Wildlife sections always show Start Inspection
@@ -1115,6 +1120,29 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
+                // Start Multi Type Inspection button - only for Natural Reserve
+                isNaturalReserve && React.createElement(
+                    "button",
+                    {
+                        onClick: () => setState(prev => ({ ...prev, showMultiTypeInspection: true })),
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({
+                            ...STYLES.btnBlueDark,
+                            ...STYLES.textWhite,
+                            ...STYLES.rounded4,
+                            ...STYLES.p3,
+                            ...STYLES.dFlex,
+                            ...STYLES.alignItemsCenter,
+                            ...STYLES.justifyContentCenter,
+                            ...STYLES.gap3
+                        })
+                    },
+                    [
+                        React.createElement("img", { src: startDataUri, key: "icon" }),
+                        React.createElement("span", { key: "text" }, strings.StartMultiTypeInspection)
+                    ]
+                ),
+
                 // Start Anonymous Inspection button - only for Natural Reserve when patrol is active (end status), NOT for Wildlife sections
                 showStartAnonymousInspection && React.createElement(
                     "button",
@@ -1191,6 +1219,12 @@ export const Main = (props: IProps) => {
             onClose: handleCloseAdvancedSearch,
             onSearchResults: handleAdvancedSearchResults
         }),
+        // MultiTypeInspection Modal
+        state.showMultiTypeInspection && React.createElement(MultiTypeInspection, {
+            context: props.context,
+            isOpen: true,  // Add this line
+            onClose: () => setState(prev => ({ ...prev, showMultiTypeInspection: false }))
+        } as any),
         // Search Results Modal
         showResults && React.createElement(SearchResults, {
             results: searchResults,
