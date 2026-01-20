@@ -5,6 +5,12 @@ interface IMultiTypeInspectionProps {
     context: ComponentFramework.Context<any>;
     onClose?: () => void;
     isOpen?: boolean;
+    activePatrolId?: string;
+    activePatrolName?: string;
+    incidentTypeId?: string;
+    incidentTypeName?: string;
+    unknownAccountId?: string;
+    unknownAccountName?: string;
 }
 
 interface IMultiTypeInspectionState {
@@ -226,6 +232,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 const newAccount: any = {
                     name: this.getAccountName(),
                     duc_accountidentifier: identifierValue || '',
+                    duc_accountinspectiontype: this.state.selectedInspectionType
                 };
 
                 const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
@@ -250,6 +257,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             const newAccount: any = {
                 name: this.getAccountName(),
                 duc_accountidentifier: identifierValue,
+                duc_accountinspectiontype: this.state.selectedInspectionType
             };
 
             const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
@@ -269,18 +277,92 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             return;
         }
 
-        const accountId = await this.searchOrCreateAccount();
+        try {
+            this.setState({ loading: true, error: null });
 
-        if (accountId) {
-            console.log('Processing with account ID:', accountId);
-            // Account has been found or created successfully
-            // TODO: Work Order creation logic will be handled in future task
-            this.setState({ loading: false });
-            if (this.props.onClose) {
-                this.props.onClose();
+            const accountId = await this.searchOrCreateAccount();
+
+            if (accountId) {
+                console.log('Processing with account ID:', accountId);
+                // Open work order quick create form with the account and inspection type as default values
+                await this.openWorkOrderForm(accountId);
+
+                // Close the modal after successfully opening the work order form
+                if (this.props.onClose) {
+                    this.props.onClose();
+                }
             }
-        } else {
+        } catch (error: any) {
+            console.error('Error in handleStart:', error);
+            this.setState({ error: error.message || 'Error starting inspection', loading: false });
+        } finally {
             this.setState({ loading: false });
+        }
+    };
+
+    private openWorkOrderForm = async (accountId: string): Promise<void> => {
+        try {
+            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
+            // Get account name
+            const accountRecord = await xrm.WebApi.retrieveRecord('account', accountId, '?$select=name');
+            const accountName = accountRecord?.name || '';
+
+            // Prepare default values for the work order quick create form
+            const defaultValues: any = {
+                // Set the sub-account (duc_subaccount)
+                duc_subaccount: [
+                    {
+                        id: accountId,
+                        name: accountName,
+                        entityType: "account"
+                    }
+                ],
+                // Set the service account (msdyn_serviceaccount)
+                msdyn_serviceaccount: [
+                    {
+                        id: accountId,
+                        name: accountName,
+                        entityType: "account"
+                    }
+                ],
+                // Set the inspection type (duc_accountinspectiontype) - this is an option set value
+                duc_accountinspectiontype: this.state.selectedInspectionType
+            };
+
+            // If we have an active patrol campaign, set it as default
+            if (this.props.activePatrolId && this.props.activePatrolName) {
+                defaultValues.new_campaign = [
+                    {
+                        id: this.props.activePatrolId,
+                        name: this.props.activePatrolName,
+                        entityType: "new_inspectioncampaign"
+                    }
+                ];
+            }
+
+            // If we have incident type ID (from organization unit like Natural Reserve), set it as default
+            if (this.props.incidentTypeId && this.props.incidentTypeName) {
+                defaultValues.msdyn_primaryincidenttype = [
+                    {
+                        id: this.props.incidentTypeId,
+                        name: this.props.incidentTypeName,
+                        entityType: "msdyn_incidenttype"
+                    }
+                ];
+            }
+
+            console.log('Opening work order form with default values:', defaultValues);
+
+            // Open the work order quick create form
+            await xrm.Navigation.openForm(
+                { entityName: "msdyn_workorder", useQuickCreateForm: true },
+                defaultValues
+            );
+
+        } catch (error: any) {
+            console.error('Error opening work order form:', error);
+            throw error; // Re-throw to be caught by handleStart
         }
     };
 

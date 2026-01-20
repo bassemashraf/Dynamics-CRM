@@ -1,13 +1,23 @@
 var currentOrgUnitId = null;
 
 function onLoad(executionContext) {
-    LookupFilterInit(executionContext);
+    if (!IsFromMobile()) {
+        LookupFilterInit(executionContext);
+    }
 
     SetDepartment(executionContext);
 
     setIncidentTypeRequirement(executionContext);
 }
 
+function IsFromMobile() {
+    if (Xrm.Page.context.client.getClient() == "Mobile"
+        && (Xrm.Page.context.client.getFormFactor() == 2 || Xrm.Page.context.client.getFormFactor() == 3)
+    ) {
+        return true;
+    }
+    return false;
+}
 function LookupFilterInit(executionContext) {
     var formContext = executionContext.getFormContext();
     var userId = Xrm.Utility.getGlobalContext().userSettings.userId.replace("{", "").replace("}", "");
@@ -156,6 +166,16 @@ function SetDepartment(executionContext) {
         }
     );
 }
+function setIncidentTypeRequirement(executionContext) {
+    var formContext = executionContext.getFormContext();
+
+    var incidentTypeAttr = formContext.getAttribute("msdyn_primaryincidenttype");
+
+    if (incidentTypeAttr) {
+        incidentTypeAttr.setRequiredLevel("required");
+    }
+}
+
 
 function SetWorkOrderType(executionContext) {
     var formContext = executionContext.getFormContext();
@@ -281,50 +301,44 @@ function onAnonymousCustomerChange(executionContext) {
     );
 }
 
-function setIncidentTypeRequirement(executionContext) {
-    var formContext = executionContext.getFormContext();
-
-    var incidentTypeAttr = formContext.getAttribute("msdyn_primaryincidenttype");
-
-    if (incidentTypeAttr) {
-        incidentTypeAttr.setRequiredLevel("required");
-    }
-}
-
 function fireIncidentTypeOnChange(executionContext) {
     try {
         var formContext = executionContext.getFormContext();
-        
+
         var primaryIncidentTypeAttr = formContext.getAttribute("msdyn_primaryincidenttype");
-        
+
         if (primaryIncidentTypeAttr == null) {
             console.log("msdyn_primaryincidenttype field not found on form");
             return;
         }
         var primaryIncidentTypeValue = primaryIncidentTypeAttr.getValue();
-        
+
         if (primaryIncidentTypeValue != null && primaryIncidentTypeValue.length > 0) {
             console.log("Primary Incident Type found with default value:", primaryIncidentTypeValue[0].id);
-            
+
             Xrm.Utility.showProgressIndicator("");
-            
-            setTimeout(function() {
+
+            setTimeout(function () {
                 try {
                     Xrm.Utility.closeProgressIndicator();
-                    
+
                     primaryIncidentTypeAttr.fireOnChange();
-                    
+
                     console.log("Primary Incident Type onChange event triggered successfully");
                 } catch (error) {
                     console.error("Error firing onChange event:", error.message);
                     Xrm.Utility.closeProgressIndicator();
                 }
-            }, 3000); 
-            
+            }, 3000);
+
         } else {
             console.log("No default value found for Primary Incident Type");
         }
     } catch (error) {
         console.error("Error in fireIncidentTypeOnChange:", error.message);
     }
+}
+function onSaveGetDepartment(executionContext) {
+    // Just call the existing logic
+    SetDepartment(executionContext);
 }

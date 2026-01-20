@@ -270,7 +270,12 @@ export const Main = (props: IProps) => {
             try {
                 debugger;
                 let resourceId: string | null = localStorage.getItem(CACHE_KEY);
+                const pendingQuery = `?$select=duc_inspectionactionid&$filter=_ownerid_value eq '${userId}' and duc_status ne 100000005 and duc_status ne 100000003`;
 
+                const pendingResults = await ctx.webAPI.retrieveMultipleRecords("duc_inspectionaction", pendingQuery);
+
+                pendingRequests = pendingResults.entities.length;
+                console.log("Pending Requests Count:", pendingRequests);
                 if (!resourceId) {
                     const userQuery = `?$select=_duc_bookableresourceid_value&$filter=systemuserid eq '${userId}'`;
                     const userResults = await ctx.webAPI.retrieveMultipleRecords("systemuser", userQuery);
@@ -308,19 +313,7 @@ export const Main = (props: IProps) => {
 
                 // Add Pending Requests Query using retrieveMultipleRecords
                 // Query work orders with linked inspection actions where owner is current user and status is not 100000005 or 100000003
-                const pendingQuery = `?$select=msdyn_workorderid&$expand=duc_primaryinspectionaction($select=duc_inspectionactionid,duc_status;$filter=_ownerid_value eq '${userId}' and duc_status ne 100000005 and duc_status ne 100000003)&$filter=duc_primaryinspectionaction/duc_inspectionactionid ne null`;
 
-                const pendingResults = await ctx.webAPI.retrieveMultipleRecords("msdyn_workorder", pendingQuery);
-
-                // Filter results to only include those with valid expanded inspection actions
-                const filteredPendingResults = pendingResults.entities.filter((entity: any) =>
-                    entity.duc_primaryinspectionaction &&
-                    entity.duc_primaryinspectionaction.duc_status !== 100000005 &&
-                    entity.duc_primaryinspectionaction.duc_status !== 100000003
-                );
-
-                pendingRequests = filteredPendingResults.length;
-                console.log("Pending Requests Count:", pendingRequests);
 
                 return { completedToday, remainingToday, campaignsToday, pendingRequests };
 

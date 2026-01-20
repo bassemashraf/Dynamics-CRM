@@ -1127,7 +1127,7 @@ export const Main = (props: IProps) => {
                         onClick: () => setState(prev => ({ ...prev, showMultiTypeInspection: true })),
                         disabled: isActionDisabled,
                         style: getButtonStyle({
-                            ...STYLES.btnBlueDark,
+                            ...STYLES.btnRedDark,
                             ...STYLES.textWhite,
                             ...STYLES.rounded4,
                             ...STYLES.p3,
@@ -1223,7 +1223,13 @@ export const Main = (props: IProps) => {
         state.showMultiTypeInspection && React.createElement(MultiTypeInspection, {
             context: props.context,
             isOpen: true,  // Add this line
-            onClose: () => setState(prev => ({ ...prev, showMultiTypeInspection: false }))
+            onClose: () => setState(prev => ({ ...prev, showMultiTypeInspection: false })),
+            activePatrolId: state.activePatrolId,
+            activePatrolName: state.activePatrolName,
+            incidentTypeId: state.incidentTypeId,
+            incidentTypeName: state.incidentTypeName,
+            unknownAccountId: state.unknownAccountId,
+            unknownAccountName: state.unknownAccountName
         } as any),
         // Search Results Modal
         showResults && React.createElement(SearchResults, {
