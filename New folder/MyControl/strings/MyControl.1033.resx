@@ -84,7 +84,7 @@
   <comment>Button text for starting an anonymous inspection</comment>
 </data>
 <data name="StartMultiTypeInspection" xml:space="preserve">
-  <value>Start Multi Type Inspection</value>
+  <value>Start Inspection</value>
   <comment>Button text for starting a multi-type inspection</comment>
 </data>
 <data name="InspectionType" xml:space="preserve">

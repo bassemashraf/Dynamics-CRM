@@ -86,7 +86,7 @@
     <value>حدث خطأ أثناء البحث</value>
   </data>
   <data name="StartMultiTypeInspection" xml:space="preserve">
-    <value>بدء تفتيش متعدد الأنواع</value>
+    <value>بدء تفتيش</value>
     <comment>Button text for starting a multi-type inspection</comment>
   </data>
   <data name="InspectionType" xml:space="preserve">

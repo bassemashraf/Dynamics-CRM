@@ -44,6 +44,15 @@ interface LocalizedStrings {
     AccountCreated: string;
 }
 
+// Cache constants
+const INSPECTION_TYPES_CACHE_KEY = 'MOCI_InspectionTypes_Cache';
+const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface InspectionTypesCache {
+    types: Array<{ value: number; label: string }>;
+    timestamp: number;
+}
+
 export class MultiTypeInspection extends React.Component<IMultiTypeInspectionProps, IMultiTypeInspectionState> {
     private strings: LocalizedStrings;
 
@@ -91,8 +100,53 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         await this.loadInspectionTypes();
     }
 
+    // Get inspection types from cache
+    private getInspectionTypesFromCache = (): Array<{ value: number; label: string }> | null => {
+        try {
+            const cached = localStorage.getItem(INSPECTION_TYPES_CACHE_KEY);
+            if (!cached) return null;
+
+            const cacheData: InspectionTypesCache = JSON.parse(cached);
+            const now = Date.now();
+
+            // Check if cache is still valid
+            if (now - cacheData.timestamp > CACHE_DURATION) {
+                localStorage.removeItem(INSPECTION_TYPES_CACHE_KEY);
+                return null;
+            }
+
+            console.log("Using cached inspection types");
+            return cacheData.types;
+        } catch (error) {
+            console.error("Error reading inspection types cache:", error);
+            return null;
+        }
+    };
+
+    // Save inspection types to cache
+    private saveInspectionTypesToCache = (types: Array<{ value: number; label: string }>): void => {
+        try {
+            const cacheData: InspectionTypesCache = {
+                types,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(INSPECTION_TYPES_CACHE_KEY, JSON.stringify(cacheData));
+            console.log("Inspection types cached successfully");
+        } catch (error) {
+            console.error("Error saving inspection types cache:", error);
+        }
+    };
+
     private loadInspectionTypes = async (): Promise<void> => {
         try {
+            // Try to get from cache first
+            const cachedTypes = this.getInspectionTypesFromCache();
+            if (cachedTypes) {
+                this.setState({ inspectionTypes: cachedTypes });
+                return;
+            }
+
+            // If not in cache, fetch from metadata
             const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
 
             const entityMetadata = await xrm.Utility.getEntityMetadata('account', ['duc_accountinspectiontype']);
@@ -103,6 +157,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     value: opt.value,
                     label: opt.text,
                 }));
+
+                // Save to cache
+                this.saveInspectionTypesToCache(types);
+
                 this.setState({ inspectionTypes: types });
             }
         } catch (error) {
@@ -227,8 +285,28 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
             const identifierValue = this.getIdentifierValue();
 
-            // For Anonymous type or if no identifier, create account directly
-            if (!identifierValue || this.state.selectedInspectionType === 4) {
+            // For Anonymous type (4), use the unknown account from props if available
+            if (this.state.selectedInspectionType === 4) {
+                if (this.props.unknownAccountId) {
+                    console.log('Using unknown account for anonymous inspection:', this.props.unknownAccountId);
+                    return this.props.unknownAccountId;
+                } else {
+                    // If no unknown account is available, create a new anonymous account
+                    const newAccount: any = {
+                        name: this.getAccountName(),
+                        duc_accountidentifier: identifierValue || '',
+                        duc_accountinspectiontype: this.state.selectedInspectionType
+                    };
+
+                    const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
+                    const newAccountId = createdAccount?.id;
+                    console.log('Anonymous account created:', newAccountId);
+                    return newAccountId;
+                }
+            }
+
+            // For other types, if no identifier, create account directly
+            if (!identifierValue) {
                 const newAccount: any = {
                     name: this.getAccountName(),
                     duc_accountidentifier: identifierValue || '',
@@ -237,7 +315,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
                 const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
                 const newAccountId = createdAccount?.id;
-                console.log('Anonymous account created:', newAccountId);
+                console.log('Account created:', newAccountId);
                 return newAccountId;
             }
 
@@ -329,6 +407,11 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 // Set the inspection type (duc_accountinspectiontype) - this is an option set value
                 duc_accountinspectiontype: this.state.selectedInspectionType
             };
+
+            // For Anonymous type (4), set the anonymous customer field
+            if (this.state.selectedInspectionType === 4) {
+                defaultValues.duc_anonymouscustomer = true;
+            }
 
             // If we have an active patrol campaign, set it as default
             if (this.props.activePatrolId && this.props.activePatrolName) {

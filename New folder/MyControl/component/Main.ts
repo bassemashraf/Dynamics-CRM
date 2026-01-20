@@ -13,6 +13,19 @@ import { AdvancedSearch } from './AdvancedSearch';
 import { MultiTypeInspection } from './MultiTypeInspection';
 import { close } from '../images/close';
 
+// Cache interface for organization unit data
+interface OrgUnitCache {
+    orgUnitId: string;
+    orgUnitName: string;
+    isNaturalReserve: boolean;
+    isWildlifeSection: boolean;
+    unknownAccountId?: string;
+    unknownAccountName?: string;
+    incidentTypeId?: string;
+    incidentTypeName?: string;
+    timestamp: number;
+}
+
 // Define the interface for the component's internal state.
 interface State {
     searchText: string;
@@ -29,7 +42,7 @@ interface State {
     activePatrolId?: string; // Store active patrol campaign ID
     activePatrolName?: string; // Store active patrol campaign name
     isNaturalReserve: boolean; // Track if org unit is Natural Reserve
-    isWildlifeSection: boolean; // NEW: Track if org unit is Wildlife section
+    isWildlifeSection: boolean; // Track if org unit is Wildlife section
     unknownAccountId?: string; // Store unknown account ID for anonymous inspections
     unknownAccountName?: string; // Store unknown account name
     incidentTypeName?: string; // Store incident type name for Natural Reserve
@@ -139,6 +152,10 @@ const STYLES = {
     width: { width: '90%' }
 };
 
+// Cache constants
+const ORG_UNIT_CACHE_KEY = 'MOCI_OrgUnit_Cache';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
 export const Main = (props: IProps) => {
     // Load localized strings
     const strings: LocalizedStrings = React.useMemo(() => {
@@ -214,9 +231,64 @@ export const Main = (props: IProps) => {
         }));
     };
 
+    // Get organization unit data from cache
+    const getOrgUnitFromCache = (userId: string): OrgUnitCache | null => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cached = localStorage.getItem(cacheKey);
+            if (!cached) return null;
+
+            const cacheData: OrgUnitCache = JSON.parse(cached);
+            const now = Date.now();
+
+            // Check if cache is still valid
+            if (now - cacheData.timestamp > CACHE_DURATION) {
+                localStorage.removeItem(cacheKey);
+                return null;
+            }
+
+            return cacheData;
+        } catch (error) {
+            console.error("Error reading org unit cache:", error);
+            return null;
+        }
+    };
+
+    // Save organization unit data to cache
+    const saveOrgUnitToCache = (userId: string, data: Omit<OrgUnitCache, 'timestamp'>): void => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cacheData: OrgUnitCache = {
+                ...data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            console.log("Organization unit data cached successfully");
+        } catch (error) {
+            console.error("Error saving org unit cache:", error);
+        }
+    };
+
     // Check organization unit and get unknown account
     const checkOrganizationUnit = React.useCallback(async (ctx: any, userId: string): Promise<void> => {
         try {
+            // Try to get from cache first
+            const cachedData = getOrgUnitFromCache(userId);
+            if (cachedData) {
+                console.log("Using cached organization unit data");
+                setState(prev => ({
+                    ...prev,
+                    isNaturalReserve: cachedData.isNaturalReserve,
+                    isWildlifeSection: cachedData.isWildlifeSection,
+                    unknownAccountId: cachedData.unknownAccountId,
+                    unknownAccountName: cachedData.unknownAccountName,
+                    incidentTypeId: cachedData.incidentTypeId,
+                    incidentTypeName: cachedData.incidentTypeName,
+                    orgUnitId: cachedData.orgUnitId
+                }));
+                return;
+            }
+
             // Get user's organizational unit
             const userResult = await ctx.webAPI.retrieveRecord(
                 "systemuser",
@@ -245,7 +317,7 @@ export const Main = (props: IProps) => {
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
 
-            // NEW LOGIC: Check if organization unit is Wildlife section
+            // Check if organization unit is Wildlife section
             const isWildlifePlantLife = orgUnitName.includes("Wildlife - Plant Life Section");
             const isWildlifeNaturalResources = orgUnitName.includes("Wildlife - Natural Resources Section");
             const isWildlifeSection = isWildlifePlantLife || isWildlifeNaturalResources;
@@ -274,6 +346,18 @@ export const Main = (props: IProps) => {
                     console.error("Error fetching incident type:", error);
                 }
             }
+
+            // Save to cache
+            saveOrgUnitToCache(userId, {
+                orgUnitId,
+                orgUnitName,
+                isNaturalReserve,
+                isWildlifeSection,
+                unknownAccountId,
+                unknownAccountName,
+                incidentTypeId,
+                incidentTypeName
+            });
 
             setState(prev => ({
                 ...prev,
@@ -608,10 +692,6 @@ export const Main = (props: IProps) => {
 
     const openScheduled = (): void => {
         const ctx: any = props.context;
-        // if (isOffline()) {
-        //     setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
-        //     return;
-        // }
         void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "bookableresourcebooking",
@@ -621,10 +701,6 @@ export const Main = (props: IProps) => {
 
     const openAllScheduled = (): void => {
         const ctx: any = props.context;
-        // if (isOffline()) {
-        //     setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
-        //     return;
-        // }
         void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "bookableresourcebooking",
@@ -675,64 +751,6 @@ export const Main = (props: IProps) => {
                     id: state.activePatrolId,
                     name: state.activePatrolName,
                     entityType: "new_inspectioncampaign"
-                }
-            ];
-        }
-
-        void ctx.navigation.openForm(
-            { entityName: "msdyn_workorder", useQuickCreateForm: true },
-            defaultValues
-        );
-    };
-
-    const startAnonymousInspection = (): void => {
-        const ctx: any = props.context;
-        if (isOffline()) {
-            setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
-            return;
-        }
-
-        // Prepare default values for anonymous inspection
-        const defaultValues: any = {
-            duc_anonymouscustomer: true // Set the anonymous field to Yes/True
-        };
-
-        // If we have an active patrol campaign, set it as default
-        if (state.activePatrolId && state.activePatrolName) {
-            defaultValues.new_campaign = [
-                {
-                    id: state.activePatrolId,
-                    name: state.activePatrolName,
-                    entityType: "new_inspectioncampaign"
-                }
-            ];
-        }
-
-        // If we have unknown account ID, set it as default
-        if (state.unknownAccountId) {
-            defaultValues.duc_subaccount = [
-                {
-                    id: state.unknownAccountId,
-                    name: state.unknownAccountName,
-                    entityType: "account"
-                }
-            ];
-            defaultValues.msdyn_serviceaccount = [
-                {
-                    id: state.unknownAccountId,
-                    name: state.unknownAccountName,
-                    entityType: "account"
-                }
-            ];
-        }
-
-        // If we have incident type ID for Natural Reserve, set it as default
-        if (state.incidentTypeId) {
-            defaultValues.msdyn_primaryincidenttype = [
-                {
-                    id: state.incidentTypeId,
-                    name: state.incidentTypeName,
-                    entityType: "msdyn_incidenttype"
                 }
             ];
         }
@@ -865,35 +883,23 @@ export const Main = (props: IProps) => {
     const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, isNaturalReserve, isWildlifeSection } = state;
     const isActionDisabled = isLoading;
 
-    // Determine which buttons to show based on patrol status and org unit
-    // For Non-Natural Reserve (including Wildlife sections): 
-    //   - Always show Scheduled Inspections + Start Inspection
-    //   - Show Start/End Patrol based on patrol status (same as Natural Reserve)
-    //   - Never show Start Anonymous Inspection
-    // For Wildlife Sections (NEW LOGIC):
-    //   - ALWAYS show Start Inspection button regardless of patrol status
-    //   - Show Start/End Patrol buttons based on patrol status
-    //   - NEVER show Start Anonymous Inspection
-    // For Natural Reserve:
-    //   - When patrol status is 'start': show Start Patrol button only
-    //   - When patrol status is 'end': show Start Inspection + Start Anonymous Inspection + End Patrol
-    //   - When patrol status is 'none': show Scheduled Inspections + Start Inspection
+    // UPDATED BUTTON VISIBILITY LOGIC
+    // Always show Scheduled Inspections
+    const showScheduledInspections = true;
 
-    const showScheduledInspections = true; // Always show for all org units
+    // Start Inspection: Show for Wildlife sections ALWAYS, OR for non-Natural Reserve units
+    // NEVER show for Natural Reserve
+    const showStartInspection = isWildlifeSection || (!isNaturalReserve && !isWildlifeSection);
 
-    // (!isNaturalReserve && !isWildlifeSection) || (isNaturalReserve && patrolStatus === 'none') || (isWildlifeSection && patrolStatus === 'none');
+    // Multi Type Inspection: Show ONLY for Natural Reserve, with same patrol conditions
+    // When patrol status is 'start': DON'T show (user needs to start patrol first)
+    // When patrol status is 'end': SHOW (patrol is active)
+    // When patrol status is 'none': SHOW (no patrol system active)
+    const showMultiTypeInspection = isNaturalReserve && (patrolStatus === 'end' || patrolStatus === 'none');
 
-    // NEW LOGIC: Wildlife sections always show Start Inspection
-    const showStartInspection = isWildlifeSection ||
-        (!isNaturalReserve && !isWildlifeSection) ||
-        (isNaturalReserve && patrolStatus === 'end') ||
-        (isNaturalReserve && patrolStatus === 'none');
-
-    // NEW LOGIC: Wildlife sections NEVER show Start Anonymous Inspection
-    const showStartAnonymousInspection = !isWildlifeSection && isNaturalReserve && patrolStatus === 'end';
-
-    const showStartPatrol = patrolStatus === 'start'; // All org units
-    const showEndPatrol = patrolStatus === 'end'; // All org units
+    // Start/End Patrol buttons - show for all org units based on patrol status
+    const showStartPatrol = patrolStatus === 'start';
+    const showEndPatrol = patrolStatus === 'end';
 
     const getButtonStyle = (baseStyle: React.CSSProperties) => ({
         ...baseStyle,
@@ -1048,36 +1054,7 @@ export const Main = (props: IProps) => {
                             React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
-                    ),
-                    // React.createElement(
-                    //     "div",
-                    //     {
-                    //         onClick: openPendingWorkorders,
-                    //         style: {
-                    //             ...STYLES.border,
-                    //             ...STYLES.rounded4,
-                    //             ...STYLES.dFlex,
-                    //             ...STYLES.alignItemsCenter,
-                    //             ...STYLES.justifyContentBetween,
-                    //             ...STYLES.p3,
-                    //             ...STYLES.gap3,
-                    //             cursor: isActionDisabled ? 'not-allowed' : 'pointer',
-                    //             opacity: isActionDisabled ? 0.5 : 1,
-                    //             pointerEvents: isActionDisabled ? 'none' : 'auto'
-                    //         }
-                    //     },
-                    //     React.createElement(
-                    //         "div",
-                    //         { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
-                    //         React.createElement(
-                    //             "div",
-                    //             { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
-                    //             React.createElement("img", { src: clockDataUri })
-                    //         ),
-                    //         React.createElement("h6", { style: STYLES.h6 }, strings.PendingInspections)
-                    //     ),
-                    //     React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
-                    // )
+                    )
                 )
             ),
             // Action Buttons
@@ -1085,7 +1062,7 @@ export const Main = (props: IProps) => {
                 "div",
                 { style: STYLES.actions },
 
-                // Scheduled Inspections button - show for non-Natural Reserve OR Natural Reserve with no patrol
+                // Scheduled Inspections button - always show
                 showScheduledInspections && React.createElement(
                     "button",
                     {
@@ -1097,7 +1074,7 @@ export const Main = (props: IProps) => {
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
 
-                // Start Inspection button - show for non-Natural Reserve, OR Natural Reserve when patrol is not started yet, OR when patrol is active (end status), OR Wildlife sections ALWAYS
+                // Start Inspection button - show for Wildlife sections OR non-Natural Reserve, NEVER for Natural Reserve
                 showStartInspection && React.createElement(
                     "button",
                     {
@@ -1120,8 +1097,8 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // Start Multi Type Inspection button - only for Natural Reserve
-                isNaturalReserve && React.createElement(
+                // Multi Type Inspection button - ONLY for Natural Reserve
+                showMultiTypeInspection && React.createElement(
                     "button",
                     {
                         onClick: () => setState(prev => ({ ...prev, showMultiTypeInspection: true })),
@@ -1143,30 +1120,7 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // Start Anonymous Inspection button - only for Natural Reserve when patrol is active (end status), NOT for Wildlife sections
-                showStartAnonymousInspection && React.createElement(
-                    "button",
-                    {
-                        onClick: startAnonymousInspection,
-                        disabled: isActionDisabled,
-                        style: getButtonStyle({
-                            ...STYLES.btnOrangeDark,
-                            ...STYLES.textWhite,
-                            ...STYLES.rounded4,
-                            ...STYLES.p3,
-                            ...STYLES.dFlex,
-                            ...STYLES.alignItemsCenter,
-                            ...STYLES.justifyContentCenter,
-                            ...STYLES.gap3
-                        })
-                    },
-                    [
-                        React.createElement("img", { src: startDataUri, key: "icon" }),
-                        React.createElement("span", { key: "text" }, strings.StartAnonymousInspection)
-                    ]
-                ),
-
-                // Start Patrol button - show for all org units when patrol is available to start
+                // Start Patrol button - show for all org units when patrol is available
                 showStartPatrol && React.createElement(
                     "button",
                     {
@@ -1222,7 +1176,7 @@ export const Main = (props: IProps) => {
         // MultiTypeInspection Modal
         state.showMultiTypeInspection && React.createElement(MultiTypeInspection, {
             context: props.context,
-            isOpen: true,  // Add this line
+            isOpen: true,
             onClose: () => setState(prev => ({ ...prev, showMultiTypeInspection: false })),
             activePatrolId: state.activePatrolId,
             activePatrolName: state.activePatrolName,
