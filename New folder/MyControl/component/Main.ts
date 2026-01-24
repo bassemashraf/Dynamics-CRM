@@ -400,18 +400,37 @@ export const Main = (props: IProps) => {
     }, []);
 
     // Check patrol status on load
-    const checkPatrolStatus = React.useCallback(async (): Promise<void> => {
+    const checkPatrolStatus = React.useCallback(async (orgUnitIdParam?: string): Promise<void> => {
         const ctx: any = props.context;
         try {
             const userSettings = ctx.userSettings;
             const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
-            const cachedData = getOrgUnitFromCache(userId);
+            
+            // Try to get orgUnitId from parameter, state, or cache
+            let orgUnitId = orgUnitIdParam || state.orgUnitId;
+            
+            if (!orgUnitId) {
+                const cachedData = getOrgUnitFromCache(userId);
+                orgUnitId = cachedData?.orgUnitId;
+            }
+            
+            // If still no orgUnitId, we can't check patrol status
+            if (!orgUnitId) {
+                //console.log("No organization unit ID available for patrol status check");
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'none',
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
+                }));
+                return;
+            }
             
             // Get today's date in ISO format
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq ${cachedData?.orgUnitId} and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -430,7 +449,7 @@ export const Main = (props: IProps) => {
             }
 
             // Check for available patrol to start (status = 1 or 100000004)
-            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq ${cachedData?.orgUnitId} and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -464,7 +483,7 @@ export const Main = (props: IProps) => {
                 activePatrolName: undefined
             }));
         }
-    }, [props.context]);
+    }, [props.context, state.orgUnitId]);
 
     const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
         const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
@@ -568,13 +587,18 @@ export const Main = (props: IProps) => {
                 // Check organization unit after loading user data
                 if (!isOffline()) {
                     await checkOrganizationUnit(ctx, userId);
+                    // After checkOrganizationUnit completes, get the orgUnitId and check patrol status
+                    const cachedData = getOrgUnitFromCache(userId);
+                    if (cachedData?.orgUnitId) {
+                        await checkPatrolStatus(cachedData.orgUnitId);
+                    }
                 }
             }
         } catch (e) {
             console.warn("User data load failed, using cache.", e);
             restoreCache();
         }
-    }, [props.context, checkOrganizationUnit]);
+    }, [props.context, checkOrganizationUnit, checkPatrolStatus]);
 
     const handleOpenAdvancedSearch = (): void => {
         setState(prev => ({ ...prev, showAdvancedSearch: true }));
@@ -604,9 +628,8 @@ export const Main = (props: IProps) => {
 
     React.useEffect(() => {
         void loadUserData();
-        void checkPatrolStatus();
         restoreCache();
-    }, [loadUserData, checkPatrolStatus]);
+    }, [loadUserData]);
 
     const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>): void => {
         if (e.key === "Enter") void onSearchClick();
@@ -863,7 +886,9 @@ export const Main = (props: IProps) => {
             );
 
             // Check if there's another patrol available
-            await checkPatrolStatus();
+            if (state.orgUnitId) {
+                await checkPatrolStatus(state.orgUnitId);
+            }
 
             setState(prev => ({
                 ...prev,

@@ -1,6 +1,6 @@
 function DetectMObileCreation(executionContext) {
     try {
-        
+
         const formContext = executionContext.getFormContext();
         const context = Xrm.Utility.getGlobalContext().client;
         const isMobileApp = context.getClient() === "Mobile";
@@ -53,7 +53,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
     let progressIndicator = null;
     try {
         const formContext = executionContext.getFormContext();
-        
+
 
         if (formContext.ui.getFormType() == 1) return;
 
@@ -174,7 +174,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
 }
 
 async function onSubaccountChange(executionContext) {
-    
+
     var formContext = executionContext.getFormContext();
 
     // Get the selected subaccount
@@ -261,25 +261,29 @@ async function onSubaccountChange(executionContext) {
 
 function hideFieldOnWeb(executionContext) {
     var formContext = executionContext.getFormContext();
-    
+
     var client = formContext.context.client;
     var clientType = client.getClient();
-    
+
     console.log("Client Type: ", clientType);
 
-    var fieldName = "duc_mapsredirect"; 
-    
-    var field = formContext.getControl(fieldName);
-    
-    if (field) {
-        if (clientType === "Web" || clientType === "Outlook") {
-            field.setVisible(false);
-            console.log("Field hidden - Client is: " + clientType);
+    // Array of field names to hide
+    var fieldNames = ["duc_homebutton"];
+
+    // Loop through each field and hide/show based on client type
+    fieldNames.forEach(function (fieldName) {
+        var field = formContext.getControl(fieldName);
+
+        if (field) {
+            if (clientType === "Web" || clientType === "Outlook") {
+                field.setVisible(false);
+                console.log("Field '" + fieldName + "' hidden - Client is: " + clientType);
+            } else {
+                field.setVisible(true);
+                console.log("Field '" + fieldName + "' visible - Client is: " + clientType);
+            }
         } else {
-            field.setVisible(true);
-            console.log("Field visible - Client is: " + clientType);
+            console.error("Field not found: " + fieldName);
         }
-    } else {
-        console.error("Field not found: " + fieldName);
-    }
+    });
 }
