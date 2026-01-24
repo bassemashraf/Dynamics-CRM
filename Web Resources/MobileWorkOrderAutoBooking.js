@@ -3,7 +3,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext) {
     let workorderId = null;
     try {
         const formContext = executionContext.getFormContext();
-        debugger
+        
 
         if (formContext.ui.getFormType() == 1) return;
 

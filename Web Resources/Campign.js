@@ -1,6 +1,6 @@
 //#region From duc_advancedfind.js
 function Onload(executionContext) {
-    debugger;
+    
 
     var formContext = executionContext.getFormContext();
     var inspectionCampaignId = formContext.data.entity.getId();
@@ -62,7 +62,7 @@ function Onload(executionContext) {
     }
 
     // Section visibility logic for Patrol_Section
-    debugger
+    
     var tab = formContext.ui.tabs.get("{dfbcbc11-d392-495f-a96a-11c14d55af9e}")
     var sections = tab.sections;
     var patrolSection = sections.get("Patrol_Section");
@@ -128,7 +128,7 @@ function Onload(executionContext) {
 function GetWOType(woTypeId) {
     Xrm.WebApi.retrieveRecord("msdyn_workordertype", woTypeId, "?$select=duc_type").then(
         function success(result) {
-            debugger;
+            
             var msdyn_workordertypeid = result["msdyn_workordertypeid"];
             var duc_type = result["duc_type"];
 
@@ -145,7 +145,7 @@ function GetWOType(woTypeId) {
 
 //#region From duc_Inspection_Campaign_KPI.js
 function OnChangeKPIsTab(executionContext) {
-    debugger;
+    
     RefreshKPIs(executionContext);
     waitForElementsToExist(['[data-id*="COMPLETED_INSPECTIONS_section"]'], () => KPIStyle(), { checkFrequency: 4000, timeout: 10000 });
 }
@@ -221,7 +221,7 @@ function AlignRollupLastUpdated() {
 }
 
 async function RefreshKPIs(executionContext) {
-    debugger;
+    
     var formContext = executionContext.getFormContext();
 
     var entityName = 'new_inspectioncampaigns'; // Name of Entity 
@@ -299,7 +299,7 @@ async function RefreshKPIs(executionContext) {
 }
 
 function refreshRoleupField(formContext, entityName, entityId, rollup_fieldName) {
-    debugger;
+    
     //var formContext = executionContext.getFormContext();
     var clientUrl = formContext.context.getClientUrl();
 
@@ -756,7 +756,7 @@ function setorgunit(executionContext) {
     fc = executionContext.getFormContext();
     var dept = fc.getAttribute("duc_organizationalunitid").getValue();
     if (dept == null || dept == '') {
-        debugger;
+        
 
         var parentCampaginAttr = fc.getAttribute("duc_parentcampagin");
         var parentCampaign = parentCampaginAttr ? parentCampaginAttr.getValue() : null;
@@ -876,7 +876,7 @@ function showCancelCampaign(formContext) {
 }
 
 function showModifyCampaign(formContext) {
-    debugger;
+    
     return showCancelCampaign(formContext);
 }
 
@@ -978,7 +978,7 @@ function handleCampaignTypeVisibility(executionContext) {
         100000005: "PatrolCampaign Form"
 
     };
-    debugger;
+    
     // Centralized tab visibility rules
     var tabRules = {
         Department_Tab: campaignType === 100000003,              // Show only for Main Joint Campaign
@@ -1452,7 +1452,7 @@ function ReadOnly(executionContext, conditionFieldName, expectedVal, condition2F
             subGridCtrl.setDisabled(true);
         }
 
-        //debugger;
+        //
         //var tabs = formContext.ui.tabs.get();
         //for (var i in tabs) {
         //    var sections = tabs[i].sections.get();

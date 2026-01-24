@@ -4,7 +4,7 @@
 async function createTawasolRequest() {
     try {
 
-        debugger;
+        
 
         var form = Xrm.Page;
 
@@ -105,7 +105,7 @@ async function createTawasolRequest() {
 }
 async function openTawasolRequestQuickCreate() {
     try {
-        debugger;
+        
 
         var form = Xrm.Page;
 
@@ -202,7 +202,7 @@ async function openTawasolRequestQuickCreate() {
 
 async function updateLastActionOnProcessExtension() {
     try {
-        debugger;
+        
 
         var urlParams = new URLSearchParams(window.location.search);
         var currentEntity = urlParams.get("etn");

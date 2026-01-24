@@ -1,6 +1,6 @@
 function DetectMObileCreation(executionContext) {
     try {
-        debugger
+        
         const formContext = executionContext.getFormContext();
         const context = Xrm.Utility.getGlobalContext().client;
         const isMobileApp = context.getClient() === "Mobile";
@@ -53,7 +53,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
     let progressIndicator = null;
     try {
         const formContext = executionContext.getFormContext();
-        debugger
+        
 
         if (formContext.ui.getFormType() == 1) return;
 
@@ -174,7 +174,7 @@ async function createAutoBookingOnWorkOrderCreate(executionContext, workorderId)
 }
 
 async function onSubaccountChange(executionContext) {
-    debugger
+    
     var formContext = executionContext.getFormContext();
 
     // Get the selected subaccount

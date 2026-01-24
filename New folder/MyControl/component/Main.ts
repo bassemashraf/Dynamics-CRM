@@ -48,6 +48,7 @@ interface State {
     incidentTypeName?: string; // Store incident type name for Natural Reserve
     incidentTypeId?: string; // Store incident type ID for Natural Reserve
     orgUnitId?: string; // Store organization unit ID
+    organizationUnitName?: string; // Store organization unit name
     showMultiTypeInspection: boolean; // Track if MultiTypeInspection modal is open
 }
 
@@ -154,7 +155,7 @@ const STYLES = {
 
 // Cache constants
 const ORG_UNIT_CACHE_KEY = 'MOCI_OrgUnit_Cache';
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_DURATION = 60_000; // 1 minute
 
 export const Main = (props: IProps) => {
     // Load localized strings
@@ -207,6 +208,7 @@ export const Main = (props: IProps) => {
         unknownAccountId: undefined,
         incidentTypeId: undefined,
         orgUnitId: undefined,
+        organizationUnitName: undefined,
         showMultiTypeInspection: false,
     });
 
@@ -263,7 +265,7 @@ export const Main = (props: IProps) => {
                 timestamp: Date.now()
             };
             localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-            console.log("Organization unit data cached successfully");
+            //console.log("Organization unit data cached successfully");
         } catch (error) {
             console.error("Error saving org unit cache:", error);
         }
@@ -275,7 +277,7 @@ export const Main = (props: IProps) => {
             // Try to get from cache first
             const cachedData = getOrgUnitFromCache(userId);
             if (cachedData) {
-                console.log("Using cached organization unit data");
+                //console.log("Using cached organization unit data");
                 setState(prev => ({
                     ...prev,
                     isNaturalReserve: cachedData.isNaturalReserve,
@@ -284,7 +286,8 @@ export const Main = (props: IProps) => {
                     unknownAccountName: cachedData.unknownAccountName,
                     incidentTypeId: cachedData.incidentTypeId,
                     incidentTypeName: cachedData.incidentTypeName,
-                    orgUnitId: cachedData.orgUnitId
+                    orgUnitId: cachedData.orgUnitId,
+                    organizationUnitName: cachedData.orgUnitName
                 }));
                 return;
             }
@@ -297,7 +300,7 @@ export const Main = (props: IProps) => {
             );
 
             if (!userResult._duc_organizationalunitid_value) {
-                console.log("No organizational unit found for the user.");
+                //console.log("No organizational unit found for the user.");
                 return;
             }
 
@@ -337,8 +340,8 @@ export const Main = (props: IProps) => {
                     if (incidentTypeResults.entities.length > 0) {
                         incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
                         incidentTypeName = incidentTypeResults.entities[0].msdyn_name;
-                        console.log("Incident Type ID found:", incidentTypeId);
-                        console.log("Incident Type Name found:", incidentTypeName);
+                        //console.log("Incident Type ID found:", incidentTypeId);
+                        //console.log("Incident Type Name found:", incidentTypeName);
                     } else {
                         console.warn("No incident type found for Natural Reserve org unit");
                     }
@@ -367,17 +370,18 @@ export const Main = (props: IProps) => {
                 unknownAccountName: unknownAccountName,
                 incidentTypeId: incidentTypeId,
                 incidentTypeName: incidentTypeName,
-                orgUnitId: orgUnitId
+                orgUnitId: orgUnitId,
+                organizationUnitName: orgUnitName
             }));
 
-            console.log("Organization Unit:", orgUnitName);
-            console.log("Organization Unit ID:", orgUnitId);
-            console.log("Is Natural Reserve:", isNaturalReserve);
-            console.log("Is Wildlife Section:", isWildlifeSection);
-            console.log("Unknown Account ID:", unknownAccountId);
-            console.log("Unknown Account Name:", unknownAccountName);
-            console.log("Incident Type ID:", incidentTypeId);
-            console.log("Incident Type Name:", incidentTypeName);
+            //console.log("Organization Unit:", orgUnitName);
+            //console.log("Organization Unit ID:", orgUnitId);
+            //console.log("Is Natural Reserve:", isNaturalReserve);
+            //console.log("Is Wildlife Section:", isWildlifeSection);
+            //console.log("Unknown Account ID:", unknownAccountId);
+            //console.log("Unknown Account Name:", unknownAccountName);
+            //console.log("Incident Type ID:", incidentTypeId);
+            //console.log("Incident Type Name:", incidentTypeName);
 
         } catch (error) {
             console.error("Error checking organization unit:", error);
@@ -389,7 +393,8 @@ export const Main = (props: IProps) => {
                 unknownAccountName: undefined,
                 incidentTypeId: undefined,
                 incidentTypeName: undefined,
-                orgUnitId: undefined
+                orgUnitId: undefined,
+                organizationUnitName: undefined
             }));
         }
     }, []);
@@ -400,12 +405,13 @@ export const Main = (props: IProps) => {
         try {
             const userSettings = ctx.userSettings;
             const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
-
+            const cachedData = getOrgUnitFromCache(userId);
+            
             // Get today's date in ISO format
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq ${cachedData?.orgUnitId} and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -424,7 +430,7 @@ export const Main = (props: IProps) => {
             }
 
             // Check for available patrol to start (status = 1 or 100000004)
-            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq ${cachedData?.orgUnitId} and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -469,7 +475,7 @@ export const Main = (props: IProps) => {
             let campaignsToday = 0;
 
             try {
-                debugger;
+                
                 let resourceId: string | null = localStorage.getItem(CACHE_KEY);
 
                 if (!resourceId) {
@@ -483,13 +489,13 @@ export const Main = (props: IProps) => {
                     if (retrievedResourceId) {
                         resourceId = retrievedResourceId;
                         localStorage.setItem(CACHE_KEY, resourceId?.toString() ?? "");
-                        console.log("Resource ID fetched and cached:", resourceId);
+                        //console.log("Resource ID fetched and cached:", resourceId);
                     } else {
                         console.warn(`User ${userId} is not linked to a Bookable Resource.`);
                         return { completedToday, remainingToday, campaignsToday };
                     }
                 } else {
-                    console.log("Resource ID retrieved from cache:", resourceId);
+                    //console.log("Resource ID retrieved from cache:", resourceId);
                 }
 
                 if (!resourceId) {
@@ -499,13 +505,13 @@ export const Main = (props: IProps) => {
                 const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
                 const completedResults = await ctx.webAPI.retrieveMultipleRecords("msdyn_workorder", completedQuery);
                 completedToday = completedResults.entities.length;
-                console.log("Completed Work Orders Count:", completedToday);
+                //console.log("Completed Work Orders Count:", completedToday);
 
                 const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
                 const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and _bookingstatus_value eq '${bookingStatusGuid}' and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
                 const remainingResults = await ctx.webAPI.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                 remainingToday = remainingResults.entities.length;
-                console.log("Remaining Bookings Count:", remainingToday);
+                //console.log("Remaining Bookings Count:", remainingToday);
 
                 return { completedToday, remainingToday, campaignsToday };
 
@@ -515,7 +521,7 @@ export const Main = (props: IProps) => {
             }
 
         } catch (e) {
-            console.log("Failed to load today's counts:", e);
+            //console.log("Failed to load today's counts:", e);
             return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
         }
     };
@@ -1183,7 +1189,9 @@ export const Main = (props: IProps) => {
             incidentTypeId: state.incidentTypeId,
             incidentTypeName: state.incidentTypeName,
             unknownAccountId: state.unknownAccountId,
-            unknownAccountName: state.unknownAccountName
+            unknownAccountName: state.unknownAccountName,
+            organizationUnitId: state.orgUnitId,
+            organizationUnitName: state.organizationUnitName
         } as any),
         // Search Results Modal
         showResults && React.createElement(SearchResults, {

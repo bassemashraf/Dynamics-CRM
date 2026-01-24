@@ -218,7 +218,7 @@ async function hasWorkOrderServiceTask(workOrderId) {
     return result.entities && result.entities.length > 0;
 }
 
-debugger;
+
 const workOrderId = Xrm.Page.data.entity.getId();
 
 const hasTasks = await hasWorkOrderServiceTask(workOrderId);

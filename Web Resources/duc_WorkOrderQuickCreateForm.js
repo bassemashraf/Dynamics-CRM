@@ -215,7 +215,7 @@ function SetWorkOrderType(executionContext) {
 }
 
 function onAnonymousCustomerChange(executionContext) {
-    debugger
+    
     var formContext = executionContext.getFormContext();
 
     var anonymousAttr = formContext.getAttribute("duc_anonymouscustomer");

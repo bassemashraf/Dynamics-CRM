@@ -33,7 +33,7 @@ export class MECCHomePage implements ComponentFramework.StandardControl<IInputs,
         const element = React.createElement(Main, {
             context: this._context,
         });
-        debugger
+        
         const sectionElement = document.querySelector('[aria-label="General"]') as HTMLElement;
 
         if (sectionElement) {

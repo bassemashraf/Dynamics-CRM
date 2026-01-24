@@ -11,6 +11,8 @@ interface IMultiTypeInspectionProps {
     incidentTypeName?: string;
     unknownAccountId?: string;
     unknownAccountName?: string;
+    organizationUnitId?: string;
+    organizationUnitName?: string;
 }
 
 interface IMultiTypeInspectionState {
@@ -278,6 +280,77 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         return 'Account';
     };
 
+    private getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> => {
+        return new Promise((resolve, reject) => {
+            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
+            // Try to use Xrm.Device API first (works in Field Service Mobile app)
+            if (xrm && xrm.Device && xrm.Device.getCurrentPosition) {
+                console.log('Using Xrm.Device.getCurrentPosition (Field Service Mobile)');
+                xrm.Device.getCurrentPosition().then(
+                    (location: any) => {
+                        resolve({
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude
+                        });
+                    },
+                    (error: any) => {
+                        console.error('Xrm.Device.getCurrentPosition failed, falling back to navigator.geolocation:', error);
+                        return;
+                        // Fallback to navigator.geolocation
+                        // this.getLocationViaNavigator(resolve, reject);
+                    }
+                );
+            } else {
+                console.log('Using navigator.geolocation (Web/PWA)');
+                return;
+            }
+        });
+    };
+
+
+    private createAddressInformation = async (accountId: string, accountName: string): Promise<void> => {
+        try {
+            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
+            // Get current location
+            const location = await this.getCurrentLocation();
+            if (location) {
+                // Format today's date (YYYY-MM-DD)
+                const today = new Date();
+                const formattedDate = today.toISOString().split('T')[0].replace(/\//g, '-');
+
+                // Create address name: AccountName + Date
+                const addressName = `${accountName} ${formattedDate}`;
+
+                // Create address information record
+                const addressData: any = {
+                    duc_name: addressName,
+                    duc_latitude: location.latitude,
+                    duc_longitude: location.longitude,
+                    'duc_Account@odata.bind': `/accounts(${accountId})`
+                };
+
+                const createdAddress = await xrm.WebApi.createRecord('duc_addressinformation', addressData);
+                // console.log('Address information created:', createdAddress.id);
+                // console.log('Address details:', {
+                //     name: addressName,
+                //     latitude: location.latitude,
+                //     longitude: location.longitude,
+                //     accountId: accountId
+                // });
+            }
+
+        } catch (error: any) {
+            console.error('Error creating address information:', error);
+            // alert('Failed to create address information: ' + (error.message || error));
+            return;
+
+            // Don't throw error - we don't want to block the inspection if address creation fails
+            // Just log it for troubleshooting
+        }
+    };
+
     private searchOrCreateAccount = async (): Promise<string | null> => {
         try {
             this.setState({ loading: true, error: null });
@@ -289,11 +362,14 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             if (this.state.selectedInspectionType === 4) {
                 if (this.props.unknownAccountId) {
                     console.log('Using unknown account for anonymous inspection:', this.props.unknownAccountId);
+                    // Create address information for the unknown account
+                    (this.props.unknownAccountId, this.props.unknownAccountName || 'Unknown Account');
                     return this.props.unknownAccountId;
                 } else {
                     // If no unknown account is available, create a new anonymous account
+                    const accountName = this.getAccountName();
                     const newAccount: any = {
-                        name: this.getAccountName(),
+                        name: accountName,
                         duc_accountidentifier: identifierValue || '',
                         duc_accountinspectiontype: this.state.selectedInspectionType
                     };
@@ -301,14 +377,19 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
                     const newAccountId = createdAccount?.id;
                     console.log('Anonymous account created:', newAccountId);
+
+                    // Create address information for the new account
+                    await this.createAddressInformation(newAccountId, accountName);
+
                     return newAccountId;
                 }
             }
 
             // For other types, if no identifier, create account directly
             if (!identifierValue) {
+                const accountName = this.getAccountName();
                 const newAccount: any = {
-                    name: this.getAccountName(),
+                    name: accountName,
                     duc_accountidentifier: identifierValue || '',
                     duc_accountinspectiontype: this.state.selectedInspectionType
                 };
@@ -316,6 +397,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
                 const newAccountId = createdAccount?.id;
                 console.log('Account created:', newAccountId);
+
+                // Create address information for the new account
+                await this.createAddressInformation(newAccountId, accountName);
+
                 return newAccountId;
             }
 
@@ -327,13 +412,19 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
             if (searchResults?.entities && searchResults.entities.length > 0) {
                 const accountId = searchResults.entities[0].accountid;
+                const accountName = searchResults.entities[0].name;
                 console.log('Account found:', accountId);
+
+                // Create address information for the existing account
+                await this.createAddressInformation(accountId, accountName);
+
                 return accountId;
             }
 
             // Account doesn't exist, create new one
+            const accountName = this.getAccountName();
             const newAccount: any = {
-                name: this.getAccountName(),
+                name: accountName,
                 duc_accountidentifier: identifierValue,
                 duc_accountinspectiontype: this.state.selectedInspectionType
             };
@@ -342,6 +433,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             const newAccountId = createdAccount?.id;
 
             console.log('Account created:', newAccountId);
+
+            // Create address information for the new account
+            await this.createAddressInformation(newAccountId, accountName);
+
             return newAccountId;
         } catch (error: any) {
             console.error('Error searching/creating account:', error);
@@ -431,6 +526,17 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                         id: this.props.incidentTypeId,
                         name: this.props.incidentTypeName,
                         entityType: "msdyn_incidenttype"
+                    }
+                ];
+            }
+
+            // If we have organization unit (department), set it as default
+            if (this.props.organizationUnitId && this.props.organizationUnitName) {
+                defaultValues.duc_department = [
+                    {
+                        id: this.props.organizationUnitId,
+                        name: this.props.organizationUnitName,
+                        entityType: "msdyn_organizationalunit"
                     }
                 ];
             }

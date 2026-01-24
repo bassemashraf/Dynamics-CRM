@@ -268,7 +268,7 @@ export const Main = (props: IProps) => {
             let pendingRequests = 0;
 
             try {
-                debugger;
+                
                 let resourceId: string | null = localStorage.getItem(CACHE_KEY);
                 const pendingQuery = `?$select=duc_inspectionactionid&$filter=_ownerid_value eq '${userId}' and duc_status ne 100000005 and duc_status ne 100000003`;
 

@@ -93,6 +93,10 @@
     <value>نوع التفتيش:</value>
     <comment>Label for inspection type field</comment>
   </data>
+  <data name="PleaseEnterRequiredFields" xml:space="preserve">
+  <value>الرجاء إدخال الحقول المطلوبة</value>
+  <comment>Message when required fields are missing</comment>
+</data>
   <data name="QataryID" xml:space="preserve">
     <value>الرقم القطري:</value>
     <comment>Label for Qatary ID field</comment>
