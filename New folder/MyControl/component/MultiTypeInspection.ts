@@ -25,6 +25,7 @@ interface IMultiTypeInspectionState {
     id: string;
     loading: boolean;
     error: string | null;
+    accountTypeRecord: any | null; // Store the retrieved account type record
 }
 
 interface LocalizedStrings {
@@ -97,6 +98,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             id: '',
             loading: false,
             error: null,
+            accountTypeRecord: null,
         };
     }
 
@@ -173,8 +175,35 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
     };
 
-    private handleInspectionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
+    /**
+     * Retrieve account type record based on the selected inspection type option set value
+     */
+    private retrieveAccountTypeByOptionSet = async (optionSetValue: number): Promise<any | null> => {
+        try {
+            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
+            // Query duc_AccountType entity where duc_accounttype equals the option set value
+            const result = await xrm.WebApi.retrieveMultipleRecords(
+                'duc_accounttype',
+                `?$select=duc_accounttypeid,duc_name,duc_accounttype&$filter=duc_accounttype eq ${optionSetValue}&$top=1`
+            );
+
+            if (result?.entities && result.entities.length > 0) {
+                console.log('Account type record found:', result.entities[0]);
+                return result.entities[0];
+            } else {
+                console.warn('No account type record found for option set value:', optionSetValue);
+                return null;
+            }
+        } catch (error) {
+            console.error('Error retrieving account type:', error);
+            return null;
+        }
+    };
+
+    private handleInspectionTypeChange = async (e: React.ChangeEvent<HTMLSelectElement>): Promise<void> => {
         const value = e.target.value ? parseInt(e.target.value, 10) : null;
+        
         this.setState({
             selectedInspectionType: value,
             qataryId: '',
@@ -182,7 +211,14 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             crNumber: '',
             id: '',
             error: null,
+            accountTypeRecord: null,
         });
+
+        // Retrieve account type record when inspection type is selected
+        if (value !== null) {
+            const accountTypeRecord = await this.retrieveAccountTypeByOptionSet(value);
+            this.setState({ accountTypeRecord });
+        }
     };
 
     private handleInputChange = (field: keyof IMultiTypeInspectionState, value: string): void => {
@@ -207,7 +243,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         else if (selectedInspectionType === 5) {
             requiredFields.push('crNumber');
         }
-        // Type 4 (Anonymous) => No required fields
+        // Type 4 (Anonymous) => No required fields (uses unknown account from props)
 
         return requiredFields;
     };
@@ -220,11 +256,13 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             return false;
         }
 
-        // Type 4 (Anonymous) doesn't need any fields
+        // Type 4 (Anonymous) doesn't need field validation (uses unknown account from props)
+        // The account availability check happens in searchOrCreateAccount
         if (selectedInspectionType === 4) {
             return true;
         }
 
+        // All other types require identifier fields
         const requiredFields = this.getRequiredFields();
         for (const field of requiredFields) {
             if (!this.state[field]) {
@@ -251,7 +289,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         else if (selectedInspectionType === 5) {
             return crNumber;
         }
-        // Type 4 (Anonymous) => Empty
+        // Type 4 (Anonymous) => Empty (uses unknown account from props)
+        
         return '';
     };
 
@@ -274,7 +313,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         else if (selectedInspectionType === 5) {
             return `Company ${crNumber}`;
         }
-        // Type 4 (Anonymous) => "Anonymous Account"
+        // Type 4 (Anonymous) => "Anonymous Account" (uses unknown account from props)
         else if (selectedInspectionType === 4) {
             return 'Anonymous Account';
         }
@@ -359,57 +398,42 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
             const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
             const identifierValue = this.getIdentifierValue();
+            const { accountTypeRecord } = this.state;
 
-            // For Anonymous type (4), use the unknown account from props if available
+            // For Anonymous type (4), ONLY use the unknown account from props
             if (this.state.selectedInspectionType === 4) {
                 if (this.props.unknownAccountId) {
                     console.log('Using unknown account for anonymous inspection:', this.props.unknownAccountId);
                     // Create address information for the unknown account
-                    (this.props.unknownAccountId, this.props.unknownAccountName || 'Unknown Account');
+                    await this.createAddressInformation(this.props.unknownAccountId, this.props.unknownAccountName || 'Unknown Account');
                     return this.props.unknownAccountId;
                 } else {
-                    // If no unknown account is available, create a new anonymous account
-                    const accountName = this.getAccountName();
-                    const newAccount: any = {
-                        name: accountName,
-                        duc_accountidentifier: identifierValue || '',
-                        duc_accountinspectiontype: this.state.selectedInspectionType
-                    };
-
-                    const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
-                    const newAccountId = createdAccount?.id;
-                    console.log('Anonymous account created:', newAccountId);
-
-                    // Create address information for the new account
-                    await this.createAddressInformation(newAccountId, accountName);
-
-                    return newAccountId;
+                    // No unknown account available - show error
+                    this.setState({ 
+                        error: 'No anonymous account',
+                        loading: false 
+                    });
+                    return null;
                 }
             }
 
-            // For other types, if no identifier, create account directly
+            // Identifier is mandatory for all other types
             if (!identifierValue) {
-                const accountName = this.getAccountName();
-                const newAccount: any = {
-                    name: accountName,
-                    duc_accountidentifier: identifierValue || '',
-                    duc_accountinspectiontype: this.state.selectedInspectionType
-                };
-
-                const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
-                const newAccountId = createdAccount?.id;
-                console.log('Account created:', newAccountId);
-
-                // Create address information for the new account
-                await this.createAddressInformation(newAccountId, accountName);
-
-                return newAccountId;
+                this.setState({ error: this.strings.PleaseEnterRequiredFields, loading: false });
+                return null;
             }
 
-            // Search for existing account by duc_accountidentifier
+            // Search for existing account by duc_accountidentifier AND account type
+            let filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
+            
+            // Add account type filter if we have the account type record
+            if (accountTypeRecord?.duc_accounttypeid) {
+                filterQuery += ` and _duc_newaccounttype_value eq ${accountTypeRecord.duc_accounttypeid}`;
+            }
+
             const searchResults = await xrm.WebApi.retrieveMultipleRecords(
                 'account',
-                `?$select=accountid,name&$filter=duc_accountidentifier eq '${identifierValue}'`
+                `?$select=accountid,name&$filter=${filterQuery}`
             );
 
             if (searchResults?.entities && searchResults.entities.length > 0) {
@@ -430,6 +454,11 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 duc_accountidentifier: identifierValue,
                 duc_accountinspectiontype: this.state.selectedInspectionType
             };
+
+            // Set account type lookup if found
+            if (accountTypeRecord?.duc_accounttypeid) {
+                newAccount['duc_NewAccountType@odata.bind'] = `/duc_accounttypes(${accountTypeRecord.duc_accounttypeid})`;
+            }
 
             const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
             const newAccountId = createdAccount?.id;
@@ -577,7 +606,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             return selectedInspectionType === 5;
         }
 
-        // Type 4 (Anonymous) => Show nothing
+        // Type 4 (Anonymous) => Show nothing (uses unknown account from props)
         return false;
     };
 
