@@ -98,7 +98,7 @@
   <comment>Message when required fields are missing</comment>
 </data>
   <data name="QataryID" xml:space="preserve">
-    <value>الرقم القطري:</value>
+    <value>رقم البطاقة القطرية</value>
     <comment>Label for Qatary ID field</comment>
   </data>
   <data name="Name" xml:space="preserve">
@@ -125,4 +125,10 @@
     <value>جاري المعالجة...</value>
     <comment>Processing message</comment>
   </data>
+  <data name="chooseInspectionType" xml:space="preserve">
+    <value>...اختر...</value>
+    <comment>Label for choosing inspection type</comment>
+  </data>
+
+  
 </root>

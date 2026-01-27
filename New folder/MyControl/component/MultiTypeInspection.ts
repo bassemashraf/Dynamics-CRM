@@ -44,11 +44,12 @@ interface LocalizedStrings {
     Error: string;
     AccountNotFound: string;
     AccountCreated: string;
+    chooseInspectionType: string;
 }
 
 // Cache constants
 const INSPECTION_TYPES_CACHE_KEY = 'MOCI_InspectionTypes_Cache';
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_DURATION = 0; // 1min
 
 interface InspectionTypesCache {
     types: Array<{ value: number; label: string }>;
@@ -83,6 +84,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             Error: props.context.resources.getString("Error"),
             AccountNotFound: props.context.resources.getString("AccountNotFound"),
             AccountCreated: props.context.resources.getString("AccountCreated"),
+            chooseInspectionType: props.context.resources.getString("chooseInspectionType"),
         };
 
         this.state = {
@@ -709,7 +711,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                             disabled: loading,
                             style: inputStyle,
                         },
-                        React.createElement('option', { value: '' }, '-- Select --'),
+                        React.createElement('option', { value: '' }, this.strings.chooseInspectionType),
                         inspectionTypes.map((type) =>
                             React.createElement(
                                 'option',

@@ -123,4 +123,8 @@
   <value>Processing...</value>
   <comment>Processing message</comment>
 </data>
+  <data name="chooseInspectionType" xml:space="preserve">
+    <value>...choose...</value>
+    <comment>Label for choosing inspection type</comment>
+  </data>
 </root>
