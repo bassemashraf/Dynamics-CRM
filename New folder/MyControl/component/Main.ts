@@ -23,6 +23,7 @@ interface OrgUnitCache {
     unknownAccountName?: string;
     incidentTypeId?: string;
     incidentTypeName?: string;
+    inspectionCustomerClassification?: number; // NEW: Store the classification value
     timestamp: number;
 }
 
@@ -50,6 +51,9 @@ interface State {
     orgUnitId?: string; // Store organization unit ID
     organizationUnitName?: string; // Store organization unit name
     showMultiTypeInspection: boolean; // Track if MultiTypeInspection modal is open
+    inspectionCustomerClassification?: number; // NEW: Store the classification value (100000000=Company, 100000001=Individuals, 100000002=Mixed)
+    defaultInspectionType?: number; // NEW: Store default inspection type for MultiTypeInspection
+    lockInspectionType?: boolean; // NEW: Flag to lock inspection type field
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -210,6 +214,9 @@ export const Main = (props: IProps) => {
         orgUnitId: undefined,
         organizationUnitName: undefined,
         showMultiTypeInspection: false,
+        inspectionCustomerClassification: undefined,
+        defaultInspectionType: undefined,
+        lockInspectionType: false,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -287,7 +294,8 @@ export const Main = (props: IProps) => {
                     incidentTypeId: cachedData.incidentTypeId,
                     incidentTypeName: cachedData.incidentTypeName,
                     orgUnitId: cachedData.orgUnitId,
-                    organizationUnitName: cachedData.orgUnitName
+                    organizationUnitName: cachedData.orgUnitName,
+                    inspectionCustomerClassification: cachedData.inspectionCustomerClassification
                 }));
                 return;
             }
@@ -306,16 +314,17 @@ export const Main = (props: IProps) => {
 
             const orgUnitId = userResult._duc_organizationalunitid_value;
 
-            // Retrieve the organizational unit details
+            // Retrieve the organizational unit details INCLUDING the new classification field
             const orgUnitResult = await ctx.webAPI.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname&$expand=duc_unknownaccount($select=name)"
+                "?$select=_duc_unknownaccount_value,duc_englishname,duc_inspectioncustomerclassification&$expand=duc_unknownaccount($select=name)"
             );
 
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
             const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
+            const inspectionCustomerClassification = orgUnitResult.duc_inspectioncustomerclassification; // NEW: Get the classification
 
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
@@ -359,7 +368,8 @@ export const Main = (props: IProps) => {
                 unknownAccountId,
                 unknownAccountName,
                 incidentTypeId,
-                incidentTypeName
+                incidentTypeName,
+                inspectionCustomerClassification // NEW: Cache the classification
             });
 
             setState(prev => ({
@@ -371,7 +381,8 @@ export const Main = (props: IProps) => {
                 incidentTypeId: incidentTypeId,
                 incidentTypeName: incidentTypeName,
                 orgUnitId: orgUnitId,
-                organizationUnitName: orgUnitName
+                organizationUnitName: orgUnitName,
+                inspectionCustomerClassification: inspectionCustomerClassification // NEW: Set the classification
             }));
 
             //console.log("Organization Unit:", orgUnitName);
@@ -382,6 +393,7 @@ export const Main = (props: IProps) => {
             //console.log("Unknown Account Name:", unknownAccountName);
             //console.log("Incident Type ID:", incidentTypeId);
             //console.log("Incident Type Name:", incidentTypeName);
+            //console.log("Inspection Customer Classification:", inspectionCustomerClassification);
 
         } catch (error) {
             console.error("Error checking organization unit:", error);
@@ -394,7 +406,8 @@ export const Main = (props: IProps) => {
                 incidentTypeId: undefined,
                 incidentTypeName: undefined,
                 orgUnitId: undefined,
-                organizationUnitName: undefined
+                organizationUnitName: undefined,
+                inspectionCustomerClassification: undefined
             }));
         }
     }, []);
@@ -911,22 +924,45 @@ export const Main = (props: IProps) => {
         }
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, isNaturalReserve, isWildlifeSection } = state;
+    // NEW: Handle opening MultiTypeInspection with appropriate defaults
+    const handleOpenMultiTypeInspection = (): void => {
+        const { inspectionCustomerClassification } = state;
+
+        let defaultType: number | undefined = undefined;
+        let lockType = false;
+
+        // Based on classification value:
+        // 100000000 (Company) - should not reach here, uses Start Inspection instead
+        // 100000001 (Individuals) - default to Individual (2) and lock
+        // 100000002 (Mixed) - no default, no lock
+        if (inspectionCustomerClassification === 100000001) {
+            defaultType = 2; // Individual
+            lockType = true;
+        }
+
+        setState(prev => ({
+            ...prev,
+            showMultiTypeInspection: true,
+            defaultInspectionType: defaultType,
+            lockInspectionType: lockType
+        }));
+    };
+
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, inspectionCustomerClassification } = state;
     const isActionDisabled = isLoading;
 
-    // UPDATED BUTTON VISIBILITY LOGIC
+    // NEW BUTTON VISIBILITY LOGIC based on duc_InspectionCustomerClassification
     // Always show Scheduled Inspections
     const showScheduledInspections = true;
 
-    // Start Inspection: Show for Wildlife sections ALWAYS, OR for non-Natural Reserve units
-    // NEVER show for Natural Reserve
-    const showStartInspection = isWildlifeSection || (!isNaturalReserve && !isWildlifeSection);
+    // Start Inspection button: Show ONLY when classification is 100000000 (Company)
+    const showStartInspection = inspectionCustomerClassification === 100000000;
 
-    // Multi Type Inspection: Show ONLY for Natural Reserve, with same patrol conditions
-    // When patrol status is 'start': DON'T show (user needs to start patrol first)
-    // When patrol status is 'end': SHOW (patrol is active)
-    // When patrol status is 'none': SHOW (no patrol system active)
-    const showMultiTypeInspection = isNaturalReserve && (patrolStatus === 'end' || patrolStatus === 'none');
+    // Multi Type Inspection button: Show when classification is 100000001 (Individuals) or 100000002 (Mixed)
+    // Also respect patrol status: when patrol status is 'start', don't show (user needs to start patrol first)
+    const showMultiTypeInspection = 
+        (inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) &&
+        (patrolStatus === 'end' || patrolStatus === 'none');
 
     // Start/End Patrol buttons - show for all org units based on patrol status
     const showStartPatrol = patrolStatus === 'start';
@@ -1105,7 +1141,7 @@ export const Main = (props: IProps) => {
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
 
-                // Start Inspection button - show for Wildlife sections OR non-Natural Reserve, NEVER for Natural Reserve
+                // Start Inspection button - ONLY for Company classification (100000000)
                 showStartInspection && React.createElement(
                     "button",
                     {
@@ -1128,11 +1164,11 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // Multi Type Inspection button - ONLY for Natural Reserve
+                // Multi Type Inspection button - for Individuals (100000001) or Mixed (100000002)
                 showMultiTypeInspection && React.createElement(
                     "button",
                     {
-                        onClick: () => setState(prev => ({ ...prev, showMultiTypeInspection: true })),
+                        onClick: handleOpenMultiTypeInspection,
                         disabled: isActionDisabled,
                         style: getButtonStyle({
                             ...STYLES.btnRedDark,
@@ -1216,7 +1252,9 @@ export const Main = (props: IProps) => {
             unknownAccountId: state.unknownAccountId,
             unknownAccountName: state.unknownAccountName,
             organizationUnitId: state.orgUnitId,
-            organizationUnitName: state.organizationUnitName
+            organizationUnitName: state.organizationUnitName,
+            defaultInspectionType: state.defaultInspectionType,
+            lockInspectionType: state.lockInspectionType
         } as any),
         // Search Results Modal
         showResults && React.createElement(SearchResults, {

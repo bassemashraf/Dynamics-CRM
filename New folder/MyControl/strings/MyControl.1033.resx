@@ -49,6 +49,13 @@
 <data name="LicenseNumber" xml:space="preserve">
   <value>License Number:</value>
 </data>
+<data name="CarColor" xml:space="preserve">
+  <value>Car Color</value>
+</data>
+
+<data name="VehicleBrand" xml:space="preserve">
+  <value>Vehicle Brand</value>
+</data>
 <data name="AreaNumber" xml:space="preserve">
   <value>Area Number:</value>
 </data>

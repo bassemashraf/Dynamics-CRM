@@ -70,6 +70,13 @@
   <data name="StreetNumber" xml:space="preserve">
     <value>رقم الشارع:</value>
   </data>
+  <data name="CarColor" xml:space="preserve">
+  <value>لون السيارة</value>
+</data>
+
+<data name="VehicleBrand" xml:space="preserve">
+  <value>ماركة السيارة</value>
+</data>
   <data name="StreetName" xml:space="preserve">
     <value>اسم الشارع:</value>
   </data>

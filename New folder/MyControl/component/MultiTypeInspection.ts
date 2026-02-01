@@ -13,6 +13,8 @@ interface IMultiTypeInspectionProps {
     unknownAccountName?: string;
     organizationUnitId?: string;
     organizationUnitName?: string;
+    defaultInspectionType?: number; // NEW: Default inspection type to pre-select
+    lockInspectionType?: boolean; // NEW: Whether to lock the inspection type field
 }
 
 interface IMultiTypeInspectionState {
@@ -23,6 +25,8 @@ interface IMultiTypeInspectionState {
     name: string;
     crNumber: string;
     id: string;
+    carColor: string; // NEW: Car color field for vehicles
+    vehicleBrand: string; // NEW: Vehicle brand field for vehicles
     loading: boolean;
     error: string | null;
     accountTypeRecord: any | null; // Store the retrieved account type record
@@ -35,6 +39,8 @@ interface LocalizedStrings {
     Name: string;
     CRNumber: string;
     ID: string;
+    CarColor: string; // NEW
+    VehicleBrand: string; // NEW
     Start: string;
     Close: string;
     Loading: string;
@@ -75,6 +81,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             Name: props.context.resources.getString("Name"),
             CRNumber: props.context.resources.getString("CRNumber"),
             ID: props.context.resources.getString("ID"),
+            CarColor: props.context.resources.getString("CarColor") || "Car Color", // NEW
+            VehicleBrand: props.context.resources.getString("VehicleBrand") || "Vehicle Brand", // NEW
             Start: props.context.resources.getString("Start"),
             Close: props.context.resources.getString("Close"),
             Loading: props.context.resources.getString("Loading"),
@@ -91,11 +99,13 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         this.state = {
             isRTL: isRTL,
             inspectionTypes: [],
-            selectedInspectionType: null,
+            selectedInspectionType: props.defaultInspectionType || null, // NEW: Use default if provided
             qataryId: '',
             name: '',
             crNumber: '',
             id: '',
+            carColor: '', // NEW
+            vehicleBrand: '', // NEW
             loading: false,
             error: null,
             accountTypeRecord: null,
@@ -104,6 +114,12 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
     async componentDidMount(): Promise<void> {
         await this.loadInspectionTypes();
+
+        // NEW: If default inspection type is provided, retrieve account type
+        if (this.props.defaultInspectionType) {
+            const accountTypeRecord = await this.retrieveAccountTypeByOptionSet(this.props.defaultInspectionType);
+            this.setState({ accountTypeRecord });
+        }
     }
 
     // Get inspection types from cache
@@ -210,6 +226,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             name: '',
             crNumber: '',
             id: '',
+            carColor: '', // NEW: Reset car color
+            vehicleBrand: '', // NEW: Reset vehicle brand
             error: null,
             accountTypeRecord: null,
         });
@@ -231,12 +249,12 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
         if (!selectedInspectionType) return [];
 
-        // Type 1 (Vehicle) => ID only
+        // Type 1 (Vehicle) => ID, car color, and vehicle brand
         if (selectedInspectionType === 1) {
-            requiredFields.push('id');
+            requiredFields.push('id', 'carColor', 'vehicleBrand');
         }
-        // Type 2 (Individual) or 3 (Cabin) => Qatary ID and Name
-        else if (selectedInspectionType === 2 || selectedInspectionType === 3) {
+        // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Qatary ID and Name
+        else if (selectedInspectionType === 2 || selectedInspectionType === 3 || selectedInspectionType === 6) {
             requiredFields.push('qataryId', 'name');
         }
         // Type 5 (Company) => CR Number
@@ -281,8 +299,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         if (selectedInspectionType === 1) {
             return id;
         }
-        // Type 2 (Individual) or 3 (Cabin) => Qatary ID
-        else if (selectedInspectionType === 2 || selectedInspectionType === 3) {
+        // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Qatary ID
+        else if (selectedInspectionType === 2 || selectedInspectionType === 3 || selectedInspectionType === 6) {
             return qataryId;
         }
         // Type 5 (Company) => CR Number
@@ -295,11 +313,11 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
     };
 
     private getAccountName = (): string => {
-        const { selectedInspectionType, name, qataryId, crNumber, id } = this.state;
+        const { selectedInspectionType, name, qataryId, crNumber, id, carColor, vehicleBrand } = this.state;
 
-        // Type 1 (Vehicle) => "Vehicle + ID"
+        // Type 1 (Vehicle) => "Vehicle + ID + Color + Brand"
         if (selectedInspectionType === 1) {
-            return `Vehicle ${id}`;
+            return `Vehicle ${id} ${carColor} ${vehicleBrand}`;
         }
         // Type 2 (Individual) => "Individual + Qatary ID + Name"
         else if (selectedInspectionType === 2) {
@@ -308,6 +326,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         // Type 3 (Cabin) => Use provided name
         else if (selectedInspectionType === 3) {
             return name || `Cabin ${qataryId}`;
+        }
+        // Type 6 (Wilderness camps) => Use provided name (similar to cabin)
+        else if (selectedInspectionType === 6) {
+            return name || `Wilderness Camp ${qataryId}`;
         }
         // Type 5 (Company) => "Company + CR Number"
         else if (selectedInspectionType === 5) {
@@ -398,10 +420,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
             const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
             const identifierValue = this.getIdentifierValue();
-            const { accountTypeRecord } = this.state;
+            const { accountTypeRecord, selectedInspectionType, carColor, vehicleBrand } = this.state;
 
             // For Anonymous type (4), ONLY use the unknown account from props
-            if (this.state.selectedInspectionType === 4) {
+            if (selectedInspectionType === 4) {
                 if (this.props.unknownAccountId) {
                     console.log('Using unknown account for anonymous inspection:', this.props.unknownAccountId);
                     // Create address information for the unknown account
@@ -441,6 +463,23 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 const accountName = searchResults.entities[0].name;
                 console.log('Account found:', accountId);
 
+                // For vehicles (type 1), update the existing account with color and brand
+                if (selectedInspectionType === 1) {
+                    const updateData: any = {};
+                    
+                    if (carColor) {
+                        updateData.duc_VehicleColor = carColor;
+                    }
+                    if (vehicleBrand) {
+                        updateData.duc_VehicleType = vehicleBrand;
+                    }
+
+                    if (Object.keys(updateData).length > 0) {
+                        await xrm.WebApi.updateRecord('account', accountId, updateData);
+                        console.log('Vehicle account updated with color and brand');
+                    }
+                }
+
                 // Create address information for the existing account
                 await this.createAddressInformation(accountId, accountName);
 
@@ -452,12 +491,22 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             const newAccount: any = {
                 name: accountName,
                 duc_accountidentifier: identifierValue,
-                duc_accountinspectiontype: this.state.selectedInspectionType
+                duc_accountinspectiontype: selectedInspectionType
             };
 
             // Set account type lookup if found
             if (accountTypeRecord?.duc_accounttypeid) {
                 newAccount['duc_NewAccountType@odata.bind'] = `/duc_accounttypes(${accountTypeRecord.duc_accounttypeid})`;
+            }
+
+            // NEW: For vehicles (type 1), add color and brand to the account
+            if (selectedInspectionType === 1) {
+                if (carColor) {
+                    newAccount.duc_VehicleColor = carColor;
+                }
+                if (vehicleBrand) {
+                    newAccount.duc_VehicleType = vehicleBrand;
+                }
             }
 
             const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
@@ -586,19 +635,19 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
     };
 
-    private shouldShowField = (field: 'qataryId' | 'name' | 'crNumber' | 'id'): boolean => {
+    private shouldShowField = (field: 'qataryId' | 'name' | 'crNumber' | 'id' | 'carColor' | 'vehicleBrand'): boolean => {
         const { selectedInspectionType } = this.state;
 
         if (!selectedInspectionType) return false;
 
-        // Type 1 (Vehicle) => Show ID only
-        if (field === 'id') {
+        // Type 1 (Vehicle) => Show ID, car color, and vehicle brand
+        if (field === 'id' || field === 'carColor' || field === 'vehicleBrand') {
             return selectedInspectionType === 1;
         }
 
-        // Type 2 (Individual) or 3 (Cabin) => Show Qatary ID and Name
+        // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Show Qatary ID and Name
         if (field === 'qataryId' || field === 'name') {
-            return selectedInspectionType === 2 || selectedInspectionType === 3;
+            return selectedInspectionType === 2 || selectedInspectionType === 3 || selectedInspectionType === 6;
         }
 
         // Type 5 (Company) => Show CR Number
@@ -616,7 +665,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
 
         const {
-            isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id, loading, error,
+            isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id, carColor, vehicleBrand, loading, error,
         } = this.state;
 
         const containerStyle: React.CSSProperties = {
@@ -639,6 +688,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             padding: 24,
             maxWidth: 500,
             width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             boxShadow: '0 0 10px rgba(0, 0, 0, 0.3)',
         };
 
@@ -718,6 +769,9 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             fontFamily: '"Segoe UI", "Segoe UI Web (West European)", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
         };
 
+        // NEW: Determine if inspection type field should be disabled
+        const isInspectionTypeDisabled = this.props.lockInspectionType || loading;
+
         return React.createElement(
             'div',
             { style: containerStyle },
@@ -737,8 +791,12 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                         {
                             value: selectedInspectionType || '',
                             onChange: this.handleInspectionTypeChange,
-                            disabled: loading,
-                            style: inputStyle,
+                            disabled: isInspectionTypeDisabled,
+                            style: {
+                                ...inputStyle,
+                                backgroundColor: isInspectionTypeDisabled ? '#f3f2f1' : 'white',
+                                cursor: isInspectionTypeDisabled ? 'not-allowed' : 'pointer'
+                            },
                         },
                         React.createElement('option', { value: '' }, this.strings.chooseInspectionType),
                         inspectionTypes.map((type) =>
@@ -759,6 +817,32 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                         type: 'text',
                         value: id,
                         onChange: (e) => this.handleInputChange('id', e.target.value),
+                        disabled: loading,
+                        style: inputStyle,
+                    })
+                ),
+
+                this.shouldShowField('carColor') && React.createElement(
+                    'div',
+                    { style: fieldStyle },
+                    React.createElement('label', { style: labelStyle }, this.strings.CarColor),
+                    React.createElement('input', {
+                        type: 'text',
+                        value: carColor,
+                        onChange: (e) => this.handleInputChange('carColor', e.target.value),
+                        disabled: loading,
+                        style: inputStyle,
+                    })
+                ),
+
+                this.shouldShowField('vehicleBrand') && React.createElement(
+                    'div',
+                    { style: fieldStyle },
+                    React.createElement('label', { style: labelStyle }, this.strings.VehicleBrand),
+                    React.createElement('input', {
+                        type: 'text',
+                        value: vehicleBrand,
+                        onChange: (e) => this.handleInputChange('vehicleBrand', e.target.value),
                         disabled: loading,
                         style: inputStyle,
                     })
