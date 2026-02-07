@@ -1,0 +1,21 @@
+// Default field names extracted from the original Timeline component
+
+export const TimelineDefaults = {
+    step_en: "duc_servicerequesttypestep",
+    step_ar: "a_522a5431785048208de3f7c47fb69f05.duc_arabicname",
+
+    action_en: "duc_action",
+    action_ar: "a_67b49ea5156c465ca4d1e7958fea9e85.duc_arabicname",
+
+    user_en: "duc_user",
+    user_ar: "a_fa9c2efe8f9442feb20a99ba6f6f5e21.duc_usernamearabic",
+
+    comments: "duc_comments",
+    actionDate: "duc_actiondate",
+
+    image: "photourl",
+    imageFallback: "domainname",
+
+    surveyResponse: "duc_surveyresponse",
+    colorCode: "a_4089bd8092014040b5550b510c12ee58.duc_color"
+};

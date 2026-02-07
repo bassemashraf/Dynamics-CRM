@@ -54,7 +54,7 @@
 </data>
 
 <data name="VehicleBrand" xml:space="preserve">
-  <value>Vehicle Brand</value>
+  <value>Car Type</value>
 </data>
 <data name="AreaNumber" xml:space="preserve">
   <value>Area Number:</value>
@@ -126,12 +126,16 @@
   <value>Cancel</value>
   <comment>Cancel button text</comment>
 </data>
+    <data name="MonourNumber" xml:space="preserve">
+    <value>Monor Number:</value>
+    <comment>Label for Monour Number field</comment>
+  </data>
 <data name="Processing" xml:space="preserve">
   <value>Processing...</value>
   <comment>Processing message</comment>
 </data>
   <data name="chooseInspectionType" xml:space="preserve">
-    <value>...choose...</value>
+    <value>...Select...</value>
     <comment>Label for choosing inspection type</comment>
   </data>
 </root>

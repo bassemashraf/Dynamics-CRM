@@ -75,7 +75,7 @@
 </data>
 
 <data name="VehicleBrand" xml:space="preserve">
-  <value>ماركة السيارة</value>
+  <value>نوع السيارة</value>
 </data>
   <data name="StreetName" xml:space="preserve">
     <value>اسم الشارع:</value>
@@ -123,6 +123,10 @@
   <data name="Start" xml:space="preserve">
     <value>ابدأ</value>
     <comment>Start button text</comment>
+  </data>
+    <data name="MonourNumber" xml:space="preserve">
+    <value>رقم العزبة:</value>
+    <comment>Label for Monour Number field</comment>
   </data>
   <data name="Cancel" xml:space="preserve">
     <value>إلغاء</value>

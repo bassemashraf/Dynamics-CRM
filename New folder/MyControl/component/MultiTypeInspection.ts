@@ -26,7 +26,8 @@ interface IMultiTypeInspectionState {
     crNumber: string;
     id: string;
     carColor: string; // NEW: Car color field for vehicles
-    vehicleBrand: string; // NEW: Vehicle brand field for vehicles
+    vehicleBrand: number | null; // NEW: Vehicle brand option value
+    vehicleBrands: Array<{ value: number; label: string }>; // NEW: Available vehicle brand options
     loading: boolean;
     error: string | null;
     accountTypeRecord: any | null; // Store the retrieved account type record
@@ -38,6 +39,7 @@ interface LocalizedStrings {
     QataryID: string;
     Name: string;
     CRNumber: string;
+    MonourNumber: string; // NEW: Label for monour number (inspection type 7)
     ID: string;
     CarColor: string; // NEW
     VehicleBrand: string; // NEW
@@ -57,6 +59,7 @@ interface LocalizedStrings {
 // Cache constants
 const INSPECTION_TYPES_CACHE_KEY = 'MOCI_InspectionTypes_Cache';
 const CACHE_DURATION = 0; // 1min
+const VEHICLE_TYPES_CACHE_KEY = 'MOCI_VehicleTypes_Cache';
 
 interface InspectionTypesCache {
     types: Array<{ value: number; label: string }>;
@@ -80,6 +83,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             QataryID: props.context.resources.getString("QataryID"),
             Name: props.context.resources.getString("Name"),
             CRNumber: props.context.resources.getString("CRNumber"),
+            MonourNumber: props.context.resources.getString("MonourNumber") || "Monour Number", // NEW
             ID: props.context.resources.getString("ID"),
             CarColor: props.context.resources.getString("CarColor") || "Car Color", // NEW
             VehicleBrand: props.context.resources.getString("VehicleBrand") || "Vehicle Brand", // NEW
@@ -105,7 +109,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             crNumber: '',
             id: '',
             carColor: '', // NEW
-            vehicleBrand: '', // NEW
+            vehicleBrand: null, // NEW
+            vehicleBrands: [], // NEW
             loading: false,
             error: null,
             accountTypeRecord: null,
@@ -114,6 +119,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
     async componentDidMount(): Promise<void> {
         await this.loadInspectionTypes();
+        await this.loadVehicleTypes();
 
         // NEW: If default inspection type is provided, retrieve account type
         if (this.props.defaultInspectionType) {
@@ -191,6 +197,69 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
     };
 
+    // Vehicle types (duc_vehicletype) cache handlers and loader
+    private getVehicleTypesFromCache = (): Array<{ value: number; label: string }> | null => {
+        try {
+            const cached = localStorage.getItem(VEHICLE_TYPES_CACHE_KEY);
+            if (!cached) return null;
+
+            const cacheData: InspectionTypesCache = JSON.parse(cached);
+            const now = Date.now();
+
+            if (now - cacheData.timestamp > CACHE_DURATION) {
+                localStorage.removeItem(VEHICLE_TYPES_CACHE_KEY);
+                return null;
+            }
+
+            console.log("Using cached vehicle types");
+            return cacheData.types;
+        } catch (error) {
+            console.error("Error reading vehicle types cache:", error);
+            return null;
+        }
+    };
+
+    private saveVehicleTypesToCache = (types: Array<{ value: number; label: string }>): void => {
+        try {
+            const cacheData: InspectionTypesCache = {
+                types,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(VEHICLE_TYPES_CACHE_KEY, JSON.stringify(cacheData));
+            console.log("Vehicle types cached successfully");
+        } catch (error) {
+            console.error("Error saving vehicle types cache:", error);
+        }
+    };
+
+    private loadVehicleTypes = async (): Promise<void> => {
+        try {
+            const cachedTypes = this.getVehicleTypesFromCache();
+            if (cachedTypes) {
+                this.setState({ vehicleBrands: cachedTypes });
+                return;
+            }
+
+            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
+            const entityMetadata = await xrm.Utility.getEntityMetadata('account', ['duc_vehicletype']);
+            const attribute = (entityMetadata as any).Attributes.get('duc_vehicletype');
+
+            if (attribute && attribute.OptionSet) {
+                const types = Object.values(attribute.OptionSet).map((opt: any) => ({
+                    value: opt.value,
+                    label: opt.text,
+                }));
+
+                this.saveVehicleTypesToCache(types);
+
+                this.setState({ vehicleBrands: types });
+            }
+        } catch (error) {
+            console.error('Error loading vehicle types:', error);
+        }
+    };
+
     /**
      * Retrieve account type record based on the selected inspection type option set value
      */
@@ -227,7 +296,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             crNumber: '',
             id: '',
             carColor: '', // NEW: Reset car color
-            vehicleBrand: '', // NEW: Reset vehicle brand
+            vehicleBrand: null, // NEW: Reset vehicle brand
             error: null,
             accountTypeRecord: null,
         });
@@ -258,7 +327,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             requiredFields.push('qataryId', 'name');
         }
         // Type 5 (Company) => CR Number
-        else if (selectedInspectionType === 5) {
+        else if (selectedInspectionType === 5  || selectedInspectionType === 7) {
             requiredFields.push('crNumber');
         }
         // Type 4 (Anonymous) => No required fields (uses unknown account from props)
@@ -283,7 +352,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         // All other types require identifier fields
         const requiredFields = this.getRequiredFields();
         for (const field of requiredFields) {
-            if (!this.state[field]) {
+            const val: any = this.state[field];
+            if (val === null || val === undefined || val === '') {
                 this.setState({ error: this.strings.PleaseEnterRequiredFields });
                 return false;
             }
@@ -304,7 +374,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             return qataryId;
         }
         // Type 5 (Company) => CR Number
-        else if (selectedInspectionType === 5) {
+        else if (selectedInspectionType === 5 || selectedInspectionType === 7) {
             return crNumber;
         }
         // Type 4 (Anonymous) => Empty (uses unknown account from props)
@@ -317,7 +387,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
         // Type 1 (Vehicle) => "Vehicle + ID + Color + Brand"
         if (selectedInspectionType === 1) {
-            return `Vehicle ${id} ${carColor} ${vehicleBrand}`;
+            const brandLabel = vehicleBrand !== null
+                ? (this.state.vehicleBrands.find(v => v.value === vehicleBrand)?.label || vehicleBrand)
+                : '';
+            return `Vehicle ${id} ${carColor} ${brandLabel}`;
         }
         // Type 2 (Individual) => "Individual + Qatary ID + Name"
         else if (selectedInspectionType === 2) {
@@ -334,6 +407,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         // Type 5 (Company) => "Company + CR Number"
         else if (selectedInspectionType === 5) {
             return `Company ${crNumber}`;
+        }
+        // Type 7 (Manor) => "Manor + CR Number"
+        else if (selectedInspectionType === 7) {
+            return `Manor ${crNumber}`;
         }
         // Type 4 (Anonymous) => "Anonymous Account" (uses unknown account from props)
         else if (selectedInspectionType === 4) {
@@ -455,12 +532,16 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
             const searchResults = await xrm.WebApi.retrieveMultipleRecords(
                 'account',
-                `?$select=accountid,name&$filter=${filterQuery}`
+                `?$select=accountid,name,duc_vehicletype&$filter=${filterQuery}`
             );
 
             if (searchResults?.entities && searchResults.entities.length > 0) {
                 const accountId = searchResults.entities[0].accountid;
                 const accountName = searchResults.entities[0].name;
+                const existingVehicleType = searchResults.entities[0].duc_vehicletype;
+                if (existingVehicleType !== undefined && existingVehicleType !== null) {
+                    this.setState({ vehicleBrand: existingVehicleType });
+                }
                 console.log('Account found:', accountId);
 
                 // For vehicles (type 1), update the existing account with color and brand
@@ -468,10 +549,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     const updateData: any = {};
                     
                     if (carColor) {
-                        updateData.duc_VehicleColor = carColor;
+                        updateData.duc_vehiclecolor = carColor;
                     }
-                    if (vehicleBrand) {
-                        updateData.duc_VehicleType = vehicleBrand;
+                    if (vehicleBrand !== null && vehicleBrand !== undefined) {
+                        updateData.duc_vehicletype = vehicleBrand;
                     }
 
                     if (Object.keys(updateData).length > 0) {
@@ -502,10 +583,10 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             // NEW: For vehicles (type 1), add color and brand to the account
             if (selectedInspectionType === 1) {
                 if (carColor) {
-                    newAccount.duc_VehicleColor = carColor;
+                    newAccount.duc_vehiclecolor = carColor;
                 }
-                if (vehicleBrand) {
-                    newAccount.duc_VehicleType = vehicleBrand;
+                if (vehicleBrand !== null && vehicleBrand !== undefined) {
+                    newAccount.duc_vehicletype = vehicleBrand;
                 }
             }
 
@@ -652,7 +733,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
         // Type 5 (Company) => Show CR Number
         if (field === 'crNumber') {
-            return selectedInspectionType === 5;
+            return selectedInspectionType === 5 || selectedInspectionType === 7;
         }
 
         // Type 4 (Anonymous) => Show nothing (uses unknown account from props)
@@ -665,7 +746,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
 
         const {
-            isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id, carColor, vehicleBrand, loading, error,
+            isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id, carColor, vehicleBrand, vehicleBrands, loading, error,
         } = this.state;
 
         const containerStyle: React.CSSProperties = {
@@ -839,13 +920,26 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     'div',
                     { style: fieldStyle },
                     React.createElement('label', { style: labelStyle }, this.strings.VehicleBrand),
-                    React.createElement('input', {
-                        type: 'text',
-                        value: vehicleBrand,
-                        onChange: (e) => this.handleInputChange('vehicleBrand', e.target.value),
-                        disabled: loading,
-                        style: inputStyle,
-                    })
+                    React.createElement(
+                        'select',
+                        {
+                            value: vehicleBrand ?? '',
+                            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                                const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                                this.setState({ vehicleBrand: val });
+                            },
+                            disabled: loading,
+                            style: {
+                                ...inputStyle,
+                                backgroundColor: loading ? '#f3f2f1' : 'white',
+                                cursor: loading ? 'not-allowed' : 'pointer'
+                            },
+                        },
+                        React.createElement('option', { value: '' }, '--'),
+                        vehicleBrands.map((vb) =>
+                            React.createElement('option', { key: vb.value, value: vb.value }, vb.label)
+                        )
+                    )
                 ),
 
                 this.shouldShowField('qataryId') && React.createElement(
@@ -877,7 +971,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 this.shouldShowField('crNumber') && React.createElement(
                     'div',
                     { style: fieldStyle },
-                    React.createElement('label', { style: labelStyle }, this.strings.CRNumber),
+                    React.createElement('label', { style: labelStyle }, (selectedInspectionType === 7 ? this.strings.MonourNumber : this.strings.CRNumber)),
                     React.createElement('input', {
                         type: 'text',
                         value: crNumber,

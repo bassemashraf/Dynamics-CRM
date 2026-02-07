@@ -338,7 +338,7 @@ export const Main = (props: IProps) => {
             let incidentTypeName: string | undefined = undefined;
 
             // If Natural Reserve, get the incident type for this org unit
-            if (isNaturalReserve) {
+            if ((inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) ) {
                 try {
                     const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$top=1`;
                     const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
