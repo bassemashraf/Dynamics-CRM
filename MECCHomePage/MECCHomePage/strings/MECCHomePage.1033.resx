@@ -135,7 +135,7 @@
   <comment>Processing message</comment>
 </data>
   <data name="chooseInspectionType" xml:space="preserve">
-    <value>...Select...</value>
+    <value>---Select---</value>
     <comment>Label for choosing inspection type</comment>
   </data>
 
@@ -144,4 +144,12 @@
     <value>Anonymous</value>
     <comment>Label for anonymous inspection checkbox</comment>
   </data>
+  <data name="SelectCampaign" xml:space="preserve"><value>Select Campaign</value></data>
+<data name="SelectIncidentType" xml:space="preserve"><value>Select Incident Type</value></data>
+<data name="Campaign" xml:space="preserve"><value>Campaign</value></data>
+<data name="IncidentType" xml:space="preserve"><value>Incident Type</value></data>
+<data name="Continue" xml:space="preserve"><value>Continue</value></data>
+<data name="Anonymous" xml:space="preserve"><value>Anonymous</value></data>
+<data name="PleaseSelectInspectionType" xml:space="preserve"><value>Please select an inspection type</value></data>
+<data name="Error" xml:space="preserve"><value>Error</value></data>
 </root>

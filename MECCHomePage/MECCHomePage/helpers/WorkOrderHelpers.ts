@@ -477,12 +477,12 @@ export class WorkOrderHelpers {
                 'duc_subaccount@odata.bind': `/accounts(${data.subAccount.id})`,
                 'msdyn_serviceaccount@odata.bind': `/accounts(${data.serviceAccount.id})`,
                 'msdyn_primaryincidenttype@odata.bind': `/msdyn_incidenttypes(${data.incidentType.id})`,
-                'duc_department@odata.bind': `/msdyn_organizationalunits(${data.department.id})`
+                'duc_Department@odata.bind': `/msdyn_organizationalunits(${data.department.id})`
             };
 
             // Optional fields
             if (data.campaign) {
-                workOrderData['new_campaign@odata.bind'] = `/new_inspectioncampaigns(${data.campaign.id})`;
+                workOrderData['new_Campaign@odata.bind'] = `/new_inspectioncampaigns(${data.campaign.id})`;
             }
 
             if (data.workOrderType) {
@@ -490,7 +490,7 @@ export class WorkOrderHelpers {
             }
 
             if (data.parentCampaign) {
-                workOrderData['duc_parentcampaign@odata.bind'] = `/new_inspectioncampaigns(${data.parentCampaign.id})`;
+                workOrderData['duc_ParentCampaign@odata.bind'] = `/new_inspectioncampaigns(${data.parentCampaign.id})`;
             }
 
             if (data.address) {

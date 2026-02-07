@@ -23,7 +23,8 @@ interface OrgUnitCache {
     unknownAccountName?: string;
     incidentTypeId?: string;
     incidentTypeName?: string;
-    inspectionCustomerClassification?: number; // NEW: Store the classification value
+    // COMMENTED OUT: inspectionCustomerClassification field no longer used
+    // inspectionCustomerClassification?: number;
     timestamp: number;
 }
 
@@ -51,7 +52,8 @@ interface State {
     orgUnitId?: string; // Store organization unit ID
     organizationUnitName?: string; // Store organization unit name
     showMultiTypeInspection: boolean; // Track if MultiTypeInspection modal is open
-    inspectionCustomerClassification?: number; // NEW: Store the classification value (100000000=Company, 100000001=Individuals, 100000002=Mixed)
+    // COMMENTED OUT: inspectionCustomerClassification field no longer used
+    // inspectionCustomerClassification?: number;
     defaultInspectionType?: number; // NEW: Store default inspection type for MultiTypeInspection
     lockInspectionType?: boolean; // NEW: Flag to lock inspection type field
 }
@@ -214,7 +216,8 @@ export const Main = (props: IProps) => {
         orgUnitId: undefined,
         organizationUnitName: undefined,
         showMultiTypeInspection: false,
-        inspectionCustomerClassification: undefined,
+        // COMMENTED OUT: inspectionCustomerClassification field no longer used
+        // inspectionCustomerClassification: undefined,
         defaultInspectionType: undefined,
         lockInspectionType: false,
     });
@@ -295,7 +298,8 @@ export const Main = (props: IProps) => {
                     incidentTypeName: cachedData.incidentTypeName,
                     orgUnitId: cachedData.orgUnitId,
                     organizationUnitName: cachedData.orgUnitName,
-                    inspectionCustomerClassification: cachedData.inspectionCustomerClassification
+                    // COMMENTED OUT: inspectionCustomerClassification field no longer used
+                    // inspectionCustomerClassification: cachedData.inspectionCustomerClassification
                 }));
                 return;
             }
@@ -314,17 +318,19 @@ export const Main = (props: IProps) => {
 
             const orgUnitId = userResult._duc_organizationalunitid_value;
 
-            // Retrieve the organizational unit details INCLUDING the new classification field
+            // COMMENTED OUT: duc_inspectioncustomerclassification field removed from query
+            // Retrieve the organizational unit details WITHOUT the classification field
             const orgUnitResult = await ctx.webAPI.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname,duc_inspectioncustomerclassification&$expand=duc_unknownaccount($select=name)"
+                "?$select=_duc_unknownaccount_value,duc_englishname&$expand=duc_unknownaccount($select=name)"
             );
 
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
             const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
-            const inspectionCustomerClassification = orgUnitResult.duc_inspectioncustomerclassification; // NEW: Get the classification
+            // COMMENTED OUT: inspectionCustomerClassification field no longer retrieved
+            // const inspectionCustomerClassification = orgUnitResult.duc_inspectioncustomerclassification;
 
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
@@ -337,27 +343,29 @@ export const Main = (props: IProps) => {
             let incidentTypeId: string | undefined = undefined;
             let incidentTypeName: string | undefined = undefined;
 
+            // COMMENTED OUT: Incident type logic based on classification removed
+            // Always fetch incident type for all org units (if needed)
             // If Natural Reserve, get the incident type for this org unit
-            if ((inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) ) {
-                try {
-                    const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$top=1`;
-                    const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
-                        "msdyn_incidenttype",
-                        incidentTypeQuery
-                    );
+            // if ((inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) ) {
+            try {
+                const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$top=1`;
+                const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
+                    "msdyn_incidenttype",
+                    incidentTypeQuery
+                );
 
-                    if (incidentTypeResults.entities.length > 0) {
-                        incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
-                        incidentTypeName = incidentTypeResults.entities[0].msdyn_name;
-                        //console.log("Incident Type ID found:", incidentTypeId);
-                        //console.log("Incident Type Name found:", incidentTypeName);
-                    } else {
-                        console.warn("No incident type found for Natural Reserve org unit");
-                    }
-                } catch (error) {
-                    console.error("Error fetching incident type:", error);
+                if (incidentTypeResults.entities.length > 0) {
+                    incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
+                    incidentTypeName = incidentTypeResults.entities[0].msdyn_name;
+                    //console.log("Incident Type ID found:", incidentTypeId);
+                    //console.log("Incident Type Name found:", incidentTypeName);
+                } else {
+                    console.warn("No incident type found for org unit");
                 }
+            } catch (error) {
+                console.error("Error fetching incident type:", error);
             }
+            // }
 
             // Save to cache
             saveOrgUnitToCache(userId, {
@@ -369,7 +377,8 @@ export const Main = (props: IProps) => {
                 unknownAccountName,
                 incidentTypeId,
                 incidentTypeName,
-                inspectionCustomerClassification // NEW: Cache the classification
+                // COMMENTED OUT: inspectionCustomerClassification field no longer cached
+                // inspectionCustomerClassification
             });
 
             setState(prev => ({
@@ -382,7 +391,8 @@ export const Main = (props: IProps) => {
                 incidentTypeName: incidentTypeName,
                 orgUnitId: orgUnitId,
                 organizationUnitName: orgUnitName,
-                inspectionCustomerClassification: inspectionCustomerClassification // NEW: Set the classification
+                // COMMENTED OUT: inspectionCustomerClassification field no longer set
+                // inspectionCustomerClassification: inspectionCustomerClassification
             }));
 
             //console.log("Organization Unit:", orgUnitName);
@@ -393,6 +403,7 @@ export const Main = (props: IProps) => {
             //console.log("Unknown Account Name:", unknownAccountName);
             //console.log("Incident Type ID:", incidentTypeId);
             //console.log("Incident Type Name:", incidentTypeName);
+            // COMMENTED OUT: inspectionCustomerClassification logging removed
             //console.log("Inspection Customer Classification:", inspectionCustomerClassification);
 
         } catch (error) {
@@ -407,7 +418,8 @@ export const Main = (props: IProps) => {
                 incidentTypeName: undefined,
                 orgUnitId: undefined,
                 organizationUnitName: undefined,
-                inspectionCustomerClassification: undefined
+                // COMMENTED OUT: inspectionCustomerClassification field no longer reset
+                // inspectionCustomerClassification: undefined
             }));
         }
     }, []);
@@ -776,32 +788,33 @@ export const Main = (props: IProps) => {
         });
     };
 
-    const startInspection = (): void => {
-        const ctx: any = props.context;
-        if (isOffline()) {
-            setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
-            return;
-        }
+    // COMMENTED OUT: Original startInspection function kept but commented
+    // const startInspection = (): void => {
+    //     const ctx: any = props.context;
+    //     if (isOffline()) {
+    //         setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
+    //         return;
+    //     }
 
-        // Prepare default values
-        const defaultValues: any = {};
+    //     // Prepare default values
+    //     const defaultValues: any = {};
 
-        // If we have an active patrol campaign, set it as default
-        if (state.activePatrolId && state.activePatrolName) {
-            defaultValues.new_campaign = [
-                {
-                    id: state.activePatrolId,
-                    name: state.activePatrolName,
-                    entityType: "new_inspectioncampaign"
-                }
-            ];
-        }
+    //     // If we have an active patrol campaign, set it as default
+    //     if (state.activePatrolId && state.activePatrolName) {
+    //         defaultValues.new_campaign = [
+    //             {
+    //                 id: state.activePatrolId,
+    //                 name: state.activePatrolName,
+    //                 entityType: "new_inspectioncampaign"
+    //             }
+    //         ];
+    //     }
 
-        void ctx.navigation.openForm(
-            { entityName: "msdyn_workorder", useQuickCreateForm: true },
-            defaultValues
-        );
-    };
+    //     void ctx.navigation.openForm(
+    //         { entityName: "msdyn_workorder", useQuickCreateForm: true },
+    //         defaultValues
+    //     );
+    // };
 
     const startPatrol = async (): Promise<void> => {
         const ctx: any = props.context;
@@ -924,45 +937,31 @@ export const Main = (props: IProps) => {
         }
     };
 
-    // NEW: Handle opening MultiTypeInspection with appropriate defaults
+    // MODIFIED: Handle opening MultiTypeInspection without classification-based defaults
     const handleOpenMultiTypeInspection = (): void => {
-        const { inspectionCustomerClassification } = state;
-
-        let defaultType: number | undefined = undefined;
-        let lockType = false;
-
-        // Based on classification value:
-        // 100000000 (Company) - should not reach here, uses Start Inspection instead
-        // 100000001 (Individuals) - default to Individual (2) and lock
-        // 100000002 (Mixed) - no default, no lock
-        if (inspectionCustomerClassification === 100000001) {
-            defaultType = 2; // Individual
-            lockType = true;
-        }
-
+        // No longer using inspectionCustomerClassification for defaults
+        // Users can choose inspection type freely
         setState(prev => ({
             ...prev,
             showMultiTypeInspection: true,
-            defaultInspectionType: defaultType,
-            lockInspectionType: lockType
+            defaultInspectionType: undefined, // No default
+            lockInspectionType: false // Never lock
         }));
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, inspectionCustomerClassification } = state;
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
     const isActionDisabled = isLoading;
 
-    // NEW BUTTON VISIBILITY LOGIC based on duc_InspectionCustomerClassification
+    // MODIFIED BUTTON VISIBILITY LOGIC - Always show Multi Type Inspection button
     // Always show Scheduled Inspections
     const showScheduledInspections = true;
 
+    // COMMENTED OUT: Start Inspection button logic - kept for reference
     // Start Inspection button: Show ONLY when classification is 100000000 (Company)
-    const showStartInspection = inspectionCustomerClassification === 100000000;
+    // const showStartInspection = inspectionCustomerClassification === 100000000;
 
-    // Multi Type Inspection button: Show when classification is 100000001 (Individuals) or 100000002 (Mixed)
-    // Also respect patrol status: when patrol status is 'start', don't show (user needs to start patrol first)
-    const showMultiTypeInspection = 
-        (inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) &&
-        (patrolStatus === 'end' || patrolStatus === 'none');
+    // MODIFIED: Multi Type Inspection button - ALWAYS SHOW (except when patrol needs to be started)
+    const showMultiTypeInspection = (patrolStatus === 'end' || patrolStatus === 'none');
 
     // Start/End Patrol buttons - show for all org units based on patrol status
     const showStartPatrol = patrolStatus === 'start';
@@ -1141,30 +1140,31 @@ export const Main = (props: IProps) => {
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
 
+                // COMMENTED OUT: Start Inspection button - kept for reference
                 // Start Inspection button - ONLY for Company classification (100000000)
-                showStartInspection && React.createElement(
-                    "button",
-                    {
-                        onClick: startInspection,
-                        disabled: isActionDisabled,
-                        style: getButtonStyle({
-                            ...STYLES.btnRedDark,
-                            ...STYLES.textWhite,
-                            ...STYLES.rounded4,
-                            ...STYLES.p3,
-                            ...STYLES.dFlex,
-                            ...STYLES.alignItemsCenter,
-                            ...STYLES.justifyContentCenter,
-                            ...STYLES.gap3
-                        })
-                    },
-                    [
-                        React.createElement("img", { src: startDataUri, key: "icon" }),
-                        React.createElement("span", { key: "text" }, strings.StartInspection)
-                    ]
-                ),
+                // showStartInspection && React.createElement(
+                //     "button",
+                //     {
+                //         onClick: startInspection,
+                //         disabled: isActionDisabled,
+                //         style: getButtonStyle({
+                //             ...STYLES.btnRedDark,
+                //             ...STYLES.textWhite,
+                //             ...STYLES.rounded4,
+                //             ...STYLES.p3,
+                //             ...STYLES.dFlex,
+                //             ...STYLES.alignItemsCenter,
+                //             ...STYLES.justifyContentCenter,
+                //             ...STYLES.gap3
+                //         })
+                //     },
+                //     [
+                //         React.createElement("img", { src: startDataUri, key: "icon" }),
+                //         React.createElement("span", { key: "text" }, strings.StartInspection)
+                //     ]
+                // ),
 
-                // Multi Type Inspection button - for Individuals (100000001) or Mixed (100000002)
+                // MODIFIED: Multi Type Inspection button - ALWAYS SHOW (when no patrol needs starting)
                 showMultiTypeInspection && React.createElement(
                     "button",
                     {
