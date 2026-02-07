@@ -13,24 +13,32 @@ interface IMultiTypeInspectionProps {
     unknownAccountName?: string;
     organizationUnitId?: string;
     organizationUnitName?: string;
-    defaultInspectionType?: number; // NEW: Default inspection type to pre-select
-    lockInspectionType?: boolean; // NEW: Whether to lock the inspection type field
+    defaultInspectionType?: number;
+    lockInspectionType?: boolean;
 }
 
 interface IMultiTypeInspectionState {
     isRTL: boolean;
-    inspectionTypes: Array<{ value: number; label: string }>;
+    inspectionTypes: Array<{ value: number; label: string; accountTypeId: string }>;
     selectedInspectionType: number | null;
     qataryId: string;
     name: string;
     crNumber: string;
     id: string;
-    carColor: string; // NEW: Car color field for vehicles
-    vehicleBrand: number | null; // NEW: Vehicle brand option value
-    vehicleBrands: Array<{ value: number; label: string }>; // NEW: Available vehicle brand options
+    carColor: string;
+    vehicleBrand: number | null;
+    vehicleBrands: Array<{ value: number; label: string }>;
     loading: boolean;
     error: string | null;
-    accountTypeRecord: any | null; // Store the retrieved account type record
+    accountTypeRecord: any | null;
+    showCampaignIncidentPopup: boolean;
+    selectedCampaignId?: string;
+    selectedCampaignName?: string;
+    selectedIncidentTypeId?: string;
+    selectedIncidentTypeName?: string;
+    campaigns: Array<{ id: string; name: string }>;
+    incidentTypes: Array<{ id: string; name: string }>;
+    isAnonymous: boolean; // NEW: Anonymous checkbox state
 }
 
 interface LocalizedStrings {
@@ -39,35 +47,40 @@ interface LocalizedStrings {
     QataryID: string;
     Name: string;
     CRNumber: string;
-    MonourNumber: string; // NEW: Label for monour number (inspection type 7)
+    MonourNumber: string;
     ID: string;
-    CarColor: string; // NEW
-    VehicleBrand: string; // NEW
+    CarColor: string;
+    VehicleBrand: string;
     Start: string;
     Close: string;
     Loading: string;
     PleaseSelectInspectionType: string;
     PleaseEnterRequiredFields: string;
-    SearchingAccount: string;
-    CreatingAccount: string;
     Error: string;
-    AccountNotFound: string;
-    AccountCreated: string;
     chooseInspectionType: string;
+    SelectCampaign: string;
+    SelectIncidentType: string;
+    Campaign: string;
+    IncidentType: string;
+    Continue: string;
+    Anonymous: string; // NEW: Anonymous checkbox label
 }
 
 // Cache constants
-const INSPECTION_TYPES_CACHE_KEY = 'MOCI_InspectionTypes_Cache';
-const CACHE_DURATION = 0; // 1min
+const INSPECTION_TYPES_CACHE_KEY = 'MOCI_OrgUnit_InspectionTypes_Cache';
 const VEHICLE_TYPES_CACHE_KEY = 'MOCI_VehicleTypes_Cache';
+const CAMPAIGNS_CACHE_KEY = 'MOCI_Campaigns_Cache';
+const INCIDENT_TYPES_CACHE_KEY = 'MOCI_IncidentTypes_Cache';
+const CACHE_DURATION = 300000; // 5 minutes
 
-interface InspectionTypesCache {
-    types: Array<{ value: number; label: string }>;
+interface CacheData<T> {
+    data: T;
     timestamp: number;
 }
 
 export class MultiTypeInspection extends React.Component<IMultiTypeInspectionProps, IMultiTypeInspectionState> {
     private strings: LocalizedStrings;
+    private xrm: Xrm.XrmStatic;
 
     constructor(props: IMultiTypeInspectionProps) {
         super(props);
@@ -76,6 +89,8 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         const rtlLanguages = [1025, 1037, 1054, 1056, 1065, 1068, 1069, 1101, 1114, 1119];
         const isRTL = rtlLanguages.includes(userSettings?.languageId);
 
+        this.xrm = (window.parent as any).Xrm || (window as any).Xrm;
+
         // Load localized strings
         this.strings = {
             StartMultiTypeInspection: props.context.resources.getString("StartMultiTypeInspection"),
@@ -83,176 +98,196 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             QataryID: props.context.resources.getString("QataryID"),
             Name: props.context.resources.getString("Name"),
             CRNumber: props.context.resources.getString("CRNumber"),
-            MonourNumber: props.context.resources.getString("MonourNumber") || "Monour Number", // NEW
+            MonourNumber: props.context.resources.getString("MonourNumber") || "Monour Number",
             ID: props.context.resources.getString("ID"),
-            CarColor: props.context.resources.getString("CarColor") || "Car Color", // NEW
-            VehicleBrand: props.context.resources.getString("VehicleBrand") || "Vehicle Brand", // NEW
+            CarColor: props.context.resources.getString("CarColor") || "Car Color",
+            VehicleBrand: props.context.resources.getString("VehicleBrand") || "Vehicle Brand",
             Start: props.context.resources.getString("Start"),
             Close: props.context.resources.getString("Close"),
             Loading: props.context.resources.getString("Loading"),
             PleaseSelectInspectionType: props.context.resources.getString("PleaseSelectInspectionType"),
             PleaseEnterRequiredFields: props.context.resources.getString("PleaseEnterRequiredFields"),
-            SearchingAccount: props.context.resources.getString("SearchingAccount"),
-            CreatingAccount: props.context.resources.getString("CreatingAccount"),
             Error: props.context.resources.getString("Error"),
-            AccountNotFound: props.context.resources.getString("AccountNotFound"),
-            AccountCreated: props.context.resources.getString("AccountCreated"),
             chooseInspectionType: props.context.resources.getString("chooseInspectionType"),
+            SelectCampaign: props.context.resources.getString("SelectCampaign") || "Select Campaign",
+            SelectIncidentType: props.context.resources.getString("SelectIncidentType") || "Select Incident Type",
+            Campaign: props.context.resources.getString("Campaign") || "Campaign",
+            IncidentType: props.context.resources.getString("IncidentType") || "Incident Type",
+            Continue: props.context.resources.getString("Continue") || "Continue",
+            Anonymous: props.context.resources.getString("Anonymous") || "Anonymous", // NEW
         };
 
         this.state = {
             isRTL: isRTL,
             inspectionTypes: [],
-            selectedInspectionType: props.defaultInspectionType || null, // NEW: Use default if provided
+            selectedInspectionType: props.defaultInspectionType || null,
             qataryId: '',
             name: '',
             crNumber: '',
             id: '',
-            carColor: '', // NEW
-            vehicleBrand: null, // NEW
-            vehicleBrands: [], // NEW
+            carColor: '',
+            vehicleBrand: null,
+            vehicleBrands: [],
             loading: false,
             error: null,
             accountTypeRecord: null,
+            showCampaignIncidentPopup: false,
+            selectedCampaignId: props.activePatrolId,
+            selectedCampaignName: props.activePatrolName,
+            selectedIncidentTypeId: props.incidentTypeId,
+            selectedIncidentTypeName: props.incidentTypeName,
+            campaigns: [],
+            incidentTypes: [],
+            isAnonymous: false, // NEW
         };
     }
 
     async componentDidMount(): Promise<void> {
-        await this.loadInspectionTypes();
-        await this.loadVehicleTypes();
+        // Parallel loading for better performance
+        await Promise.all([
+            this.loadInspectionTypesFromOrgUnit(),
+            this.loadVehicleTypes(),
+            this.preloadCampaignsAndIncidentTypes()
+        ]);
 
-        // NEW: If default inspection type is provided, retrieve account type
+        // If default inspection type is provided, retrieve account type
         if (this.props.defaultInspectionType) {
-            const accountTypeRecord = await this.retrieveAccountTypeByOptionSet(this.props.defaultInspectionType);
+            const accountTypeRecord = await this.getAccountTypeByInspectionType(this.props.defaultInspectionType);
             this.setState({ accountTypeRecord });
         }
     }
 
-    // Get inspection types from cache
-    private getInspectionTypesFromCache = (): Array<{ value: number; label: string }> | null => {
+    // =====================================================================
+    // GENERIC CACHE UTILITIES
+    // =====================================================================
+
+    private getFromCache = <T,>(key: string): T | null => {
         try {
-            const cached = localStorage.getItem(INSPECTION_TYPES_CACHE_KEY);
+            const cached = localStorage.getItem(key);
             if (!cached) return null;
 
-            const cacheData: InspectionTypesCache = JSON.parse(cached);
+            const cacheData: CacheData<T> = JSON.parse(cached);
             const now = Date.now();
 
-            // Check if cache is still valid
             if (now - cacheData.timestamp > CACHE_DURATION) {
-                localStorage.removeItem(INSPECTION_TYPES_CACHE_KEY);
+                localStorage.removeItem(key);
                 return null;
             }
 
-            console.log("Using cached inspection types");
-            return cacheData.types;
+            return cacheData.data;
         } catch (error) {
-            console.error("Error reading inspection types cache:", error);
+            console.error(`Error reading cache for ${key}:`, error);
             return null;
         }
     };
 
-    // Save inspection types to cache
-    private saveInspectionTypesToCache = (types: Array<{ value: number; label: string }>): void => {
+    private saveToCache = <T,>(key: string, data: T): void => {
         try {
-            const cacheData: InspectionTypesCache = {
-                types,
+            const cacheData: CacheData<T> = {
+                data,
                 timestamp: Date.now()
             };
-            localStorage.setItem(INSPECTION_TYPES_CACHE_KEY, JSON.stringify(cacheData));
-            console.log("Inspection types cached successfully");
+            localStorage.setItem(key, JSON.stringify(cacheData));
         } catch (error) {
-            console.error("Error saving inspection types cache:", error);
+            console.error(`Error saving cache for ${key}:`, error);
         }
     };
 
-    private loadInspectionTypes = async (): Promise<void> => {
+    // =====================================================================
+    // INSPECTION TYPES FROM ORGANIZATION UNIT
+    // =====================================================================
+
+    private loadInspectionTypesFromOrgUnit = async (): Promise<void> => {
+        if (!this.props.organizationUnitId) {
+            console.warn("No organization unit ID provided");
+            return;
+        }
+
         try {
-            // Try to get from cache first
-            const cachedTypes = this.getInspectionTypesFromCache();
+            const cacheKey = `${INSPECTION_TYPES_CACHE_KEY}_${this.props.organizationUnitId}`;
+            const cachedTypes = this.getFromCache<Array<{ value: number; label: string; accountTypeId: string }>>(cacheKey);
+
             if (cachedTypes) {
                 this.setState({ inspectionTypes: cachedTypes });
                 return;
             }
 
-            // If not in cache, fetch from metadata
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+            // Fetch from junction entity
+            const query = `?$filter=_duc_organizationunit_value eq '${this.props.organizationUnitId}'` +
+                `&$select=duc_organizationunitaccounttypesid` +
+                `&$expand=duc_accounttype($select=duc_accounttypeid,duc_name,duc_accounttype)`;
 
-            const entityMetadata = await xrm.Utility.getEntityMetadata('account', ['duc_accountinspectiontype']);
-            const attribute = (entityMetadata as any).Attributes.get('duc_accountinspectiontype');
+            const results = await this.xrm.WebApi.retrieveMultipleRecords(
+                'duc_organizationunitaccounttypes',
+                query
+            );
 
-            if (attribute && attribute.OptionSet) {
-                const types = Object.values(attribute.OptionSet).map((opt: any) => ({
-                    value: opt.value,
-                    label: opt.text,
-                }));
-
-                // Save to cache
-                this.saveInspectionTypesToCache(types);
-
-                this.setState({ inspectionTypes: types });
+            if (!results?.entities || results.entities.length === 0) {
+                console.warn("No account types found for organization unit");
+                return;
             }
+
+            // Get option set metadata for labels
+            const entityMetadata = await this.xrm.Utility.getEntityMetadata('account', ['duc_accountinspectiontype']);
+            const attribute = (entityMetadata as any).Attributes.get('duc_accountinspectiontype');
+            const optionSetMap = new Map<number, string>();
+
+            if (attribute?.OptionSet) {
+                Object.values(attribute.OptionSet).forEach((opt: any) => {
+                    optionSetMap.set(opt.value, opt.text);
+                });
+            }
+
+            // Map results to inspection types
+            const types: Array<{ value: number; label: string; accountTypeId: string }> = [];
+            
+            for (const entity of results.entities) {
+                if (entity.duc_accounttype?.duc_accounttype !== undefined) {
+                    const optionValue = entity.duc_accounttype.duc_accounttype;
+                    const label = optionSetMap.get(optionValue) || `Type ${optionValue}`;
+                    
+                    types.push({
+                        value: optionValue,
+                        label: label,
+                        accountTypeId: entity.duc_accounttype.duc_accounttypeid
+                    });
+                }
+            }
+
+            // Sort by value
+            types.sort((a, b) => a.value - b.value);
+
+            this.saveToCache(cacheKey, types);
+            this.setState({ inspectionTypes: types });
+
         } catch (error) {
-            console.error('Error loading inspection types:', error);
+            console.error('Error loading inspection types from org unit:', error);
             this.setState({ error: 'Failed to load inspection types' });
         }
     };
 
-    // Vehicle types (duc_vehicletype) cache handlers and loader
-    private getVehicleTypesFromCache = (): Array<{ value: number; label: string }> | null => {
-        try {
-            const cached = localStorage.getItem(VEHICLE_TYPES_CACHE_KEY);
-            if (!cached) return null;
-
-            const cacheData: InspectionTypesCache = JSON.parse(cached);
-            const now = Date.now();
-
-            if (now - cacheData.timestamp > CACHE_DURATION) {
-                localStorage.removeItem(VEHICLE_TYPES_CACHE_KEY);
-                return null;
-            }
-
-            console.log("Using cached vehicle types");
-            return cacheData.types;
-        } catch (error) {
-            console.error("Error reading vehicle types cache:", error);
-            return null;
-        }
-    };
-
-    private saveVehicleTypesToCache = (types: Array<{ value: number; label: string }>): void => {
-        try {
-            const cacheData: InspectionTypesCache = {
-                types,
-                timestamp: Date.now()
-            };
-            localStorage.setItem(VEHICLE_TYPES_CACHE_KEY, JSON.stringify(cacheData));
-            console.log("Vehicle types cached successfully");
-        } catch (error) {
-            console.error("Error saving vehicle types cache:", error);
-        }
-    };
+    // =====================================================================
+    // VEHICLE TYPES
+    // =====================================================================
 
     private loadVehicleTypes = async (): Promise<void> => {
         try {
-            const cachedTypes = this.getVehicleTypesFromCache();
+            const cachedTypes = this.getFromCache<Array<{ value: number; label: string }>>(VEHICLE_TYPES_CACHE_KEY);
             if (cachedTypes) {
                 this.setState({ vehicleBrands: cachedTypes });
                 return;
             }
 
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
-
-            const entityMetadata = await xrm.Utility.getEntityMetadata('account', ['duc_vehicletype']);
+            const entityMetadata = await this.xrm.Utility.getEntityMetadata('account', ['duc_vehicletype']);
             const attribute = (entityMetadata as any).Attributes.get('duc_vehicletype');
 
-            if (attribute && attribute.OptionSet) {
+            if (attribute?.OptionSet) {
                 const types = Object.values(attribute.OptionSet).map((opt: any) => ({
                     value: opt.value,
                     label: opt.text,
                 }));
 
-                this.saveVehicleTypesToCache(types);
-
+                this.saveToCache(VEHICLE_TYPES_CACHE_KEY, types);
                 this.setState({ vehicleBrands: types });
             }
         } catch (error) {
@@ -260,57 +295,148 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
     };
 
-    /**
-     * Retrieve account type record based on the selected inspection type option set value
-     */
-    private retrieveAccountTypeByOptionSet = async (optionSetValue: number): Promise<any | null> => {
-        try {
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+    // =====================================================================
+    // CAMPAIGNS AND INCIDENT TYPES (PRELOAD)
+    // =====================================================================
 
-            // Query duc_AccountType entity where duc_accounttype equals the option set value
-            const result = await xrm.WebApi.retrieveMultipleRecords(
+    private preloadCampaignsAndIncidentTypes = async (): Promise<void> => {
+        // Only preload if we don't already have both defaults
+        if (this.props.activePatrolId && this.props.incidentTypeId) {
+            return;
+        }
+
+        try {
+            const [campaigns, incidentTypes] = await Promise.all([
+                this.loadCampaigns(),
+                this.loadIncidentTypes()
+            ]);
+
+            this.setState({ campaigns, incidentTypes });
+        } catch (error) {
+            console.error('Error preloading campaigns/incident types:', error);
+        }
+    };
+
+    private loadCampaigns = async (): Promise<Array<{ id: string; name: string }>> => {
+        const cacheKey = `${CAMPAIGNS_CACHE_KEY}_${this.props.organizationUnitId}`;
+        const cached = this.getFromCache<Array<{ id: string; name: string }>>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' ` +
+                `and duc_campaignstatus ne 100000004 ` +
+                `and duc_fromdate le ${today} and duc_todate ge ${today}` +
+                `&$select=new_inspectioncampaignid,new_name` +
+                `&$orderby=new_name`;
+
+            const results = await this.xrm.WebApi.retrieveMultipleRecords('new_inspectioncampaign', query);
+
+            const campaigns = (results?.entities || []).map((e: any) => ({
+                id: e.new_inspectioncampaignid,
+                name: e.new_name
+            }));
+
+            this.saveToCache(cacheKey, campaigns);
+            return campaigns;
+        } catch (error) {
+            console.error('Error loading campaigns:', error);
+            return [];
+        }
+    };
+
+    private loadIncidentTypes = async (): Promise<Array<{ id: string; name: string }>> => {
+        const cacheKey = `${INCIDENT_TYPES_CACHE_KEY}_${this.props.organizationUnitId}`;
+        const cached = this.getFromCache<Array<{ id: string; name: string }>>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}'` +
+                `&$select=msdyn_incidenttypeid,msdyn_name` +
+                `&$orderby=msdyn_name`;
+
+            const results = await this.xrm.WebApi.retrieveMultipleRecords('msdyn_incidenttype', query);
+
+            const incidentTypes = (results?.entities || []).map((e: any) => ({
+                id: e.msdyn_incidenttypeid,
+                name: e.msdyn_name
+            }));
+
+            this.saveToCache(cacheKey, incidentTypes);
+            return incidentTypes;
+        } catch (error) {
+            console.error('Error loading incident types:', error);
+            return [];
+        }
+    };
+
+    // =====================================================================
+    // ACCOUNT TYPE RETRIEVAL
+    // =====================================================================
+
+    private getAccountTypeByInspectionType = async (optionSetValue: number): Promise<any | null> => {
+        // First check if we already have it from inspectionTypes
+        const inspectionType = this.state.inspectionTypes.find(t => t.value === optionSetValue);
+        if (inspectionType?.accountTypeId) {
+            try {
+                const result = await this.xrm.WebApi.retrieveRecord(
+                    'duc_accounttype',
+                    inspectionType.accountTypeId,
+                    '?$select=duc_accounttypeid,duc_name,duc_accounttype'
+                );
+                return result;
+            } catch (error) {
+                console.error('Error retrieving account type by ID:', error);
+            }
+        }
+
+        // Fallback to query
+        try {
+            const result = await this.xrm.WebApi.retrieveMultipleRecords(
                 'duc_accounttype',
                 `?$select=duc_accounttypeid,duc_name,duc_accounttype&$filter=duc_accounttype eq ${optionSetValue}&$top=1`
             );
 
-            if (result?.entities && result.entities.length > 0) {
-                console.log('Account type record found:', result.entities[0]);
-                return result.entities[0];
-            } else {
-                console.warn('No account type record found for option set value:', optionSetValue);
-                return null;
-            }
+            return result?.entities?.[0] || null;
         } catch (error) {
             console.error('Error retrieving account type:', error);
             return null;
         }
     };
 
+    // =====================================================================
+    // HANDLERS
+    // =====================================================================
+
     private handleInspectionTypeChange = async (e: React.ChangeEvent<HTMLSelectElement>): Promise<void> => {
         const value = e.target.value ? parseInt(e.target.value, 10) : null;
-        
+
         this.setState({
             selectedInspectionType: value,
             qataryId: '',
             name: '',
             crNumber: '',
             id: '',
-            carColor: '', // NEW: Reset car color
-            vehicleBrand: null, // NEW: Reset vehicle brand
+            carColor: '',
+            vehicleBrand: null,
             error: null,
             accountTypeRecord: null,
+            isAnonymous: false, // NEW: Reset anonymous checkbox
         });
 
-        // Retrieve account type record when inspection type is selected
         if (value !== null) {
-            const accountTypeRecord = await this.retrieveAccountTypeByOptionSet(value);
+            const accountTypeRecord = await this.getAccountTypeByInspectionType(value);
             this.setState({ accountTypeRecord });
         }
     };
 
-    private handleInputChange = (field: keyof IMultiTypeInspectionState, value: string): void => {
+    private handleInputChange = (field: keyof IMultiTypeInspectionState, value: any): void => {
         this.setState({ [field]: value } as any);
     };
+
+    // =====================================================================
+    // VALIDATION
+    // =====================================================================
 
     private getRequiredFields = (): Array<keyof IMultiTypeInspectionState> => {
         const { selectedInspectionType } = this.state;
@@ -323,33 +449,35 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             requiredFields.push('id', 'carColor', 'vehicleBrand');
         }
         // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Qatary ID and Name
-        else if (selectedInspectionType === 2 || selectedInspectionType === 3 || selectedInspectionType === 6) {
+        else if ([2, 3, 6].includes(selectedInspectionType)) {
             requiredFields.push('qataryId', 'name');
         }
-        // Type 5 (Company) => CR Number
-        else if (selectedInspectionType === 5  || selectedInspectionType === 7) {
+        // Type 5 (Company) or 7 (Manor) => CR Number
+        else if ([5, 7].includes(selectedInspectionType)) {
             requiredFields.push('crNumber');
         }
-        // Type 4 (Anonymous) => No required fields (uses unknown account from props)
 
         return requiredFields;
     };
 
     private validateFields = (): boolean => {
-        const { selectedInspectionType } = this.state;
+        const { selectedInspectionType, isAnonymous } = this.state;
 
         if (!selectedInspectionType) {
             this.setState({ error: this.strings.PleaseSelectInspectionType });
             return false;
         }
 
-        // Type 4 (Anonymous) doesn't need field validation (uses unknown account from props)
-        // The account availability check happens in searchOrCreateAccount
+        // Type 4 (Anonymous) doesn't need field validation
         if (selectedInspectionType === 4) {
             return true;
         }
 
-        // All other types require identifier fields
+        // NEW: If anonymous checkbox is checked for types 3, 6, or 7, skip field validation
+        if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
+            return true;
+        }
+
         const requiredFields = this.getRequiredFields();
         for (const field of requiredFields) {
             const val: any = this.state[field];
@@ -362,212 +490,142 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         return true;
     };
 
+    // =====================================================================
+    // ACCOUNT SEARCH/CREATE
+    // =====================================================================
+
     private getIdentifierValue = (): string => {
         const { selectedInspectionType, qataryId, crNumber, id } = this.state;
 
-        // Type 1 (Vehicle) => ID
-        if (selectedInspectionType === 1) {
-            return id;
-        }
-        // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Qatary ID
-        else if (selectedInspectionType === 2 || selectedInspectionType === 3 || selectedInspectionType === 6) {
-            return qataryId;
-        }
-        // Type 5 (Company) => CR Number
-        else if (selectedInspectionType === 5 || selectedInspectionType === 7) {
-            return crNumber;
-        }
-        // Type 4 (Anonymous) => Empty (uses unknown account from props)
+        if (selectedInspectionType === 1) return id;
+        if ([2, 3, 6].includes(selectedInspectionType!)) return qataryId;
+        if ([5, 7].includes(selectedInspectionType!)) return crNumber;
         
         return '';
     };
 
     private getAccountName = (): string => {
-        const { selectedInspectionType, name, qataryId, crNumber, id, carColor, vehicleBrand } = this.state;
+        const { selectedInspectionType, name, qataryId, crNumber, id, carColor, vehicleBrand, vehicleBrands } = this.state;
 
-        // Type 1 (Vehicle) => "Vehicle + ID + Color + Brand"
         if (selectedInspectionType === 1) {
             const brandLabel = vehicleBrand !== null
-                ? (this.state.vehicleBrands.find(v => v.value === vehicleBrand)?.label || vehicleBrand)
+                ? (vehicleBrands.find(v => v.value === vehicleBrand)?.label || vehicleBrand)
                 : '';
-            return `Vehicle ${id} ${carColor} ${brandLabel}`;
+            return `Vehicle ${id} ${carColor} ${brandLabel}`.trim();
         }
-        // Type 2 (Individual) => "Individual + Qatary ID + Name"
-        else if (selectedInspectionType === 2) {
-            return `Individual ${qataryId} ${name}`;
-        }
-        // Type 3 (Cabin) => Use provided name
-        else if (selectedInspectionType === 3) {
-            return name || `Cabin ${qataryId}`;
-        }
-        // Type 6 (Wilderness camps) => Use provided name (similar to cabin)
-        else if (selectedInspectionType === 6) {
-            return name || `Wilderness Camp ${qataryId}`;
-        }
-        // Type 5 (Company) => "Company + CR Number"
-        else if (selectedInspectionType === 5) {
-            return `Company ${crNumber}`;
-        }
-        // Type 7 (Manor) => "Manor + CR Number"
-        else if (selectedInspectionType === 7) {
-            return `Manor ${crNumber}`;
-        }
-        // Type 4 (Anonymous) => "Anonymous Account" (uses unknown account from props)
-        else if (selectedInspectionType === 4) {
-            return 'Anonymous Account';
-        }
+        if (selectedInspectionType === 2) return `Individual ${qataryId} ${name}`.trim();
+        if (selectedInspectionType === 3) return name || `Cabin ${qataryId}`;
+        if (selectedInspectionType === 6) return name || `Wilderness Camp ${qataryId}`;
+        if (selectedInspectionType === 5) return `Company ${crNumber}`.trim();
+        if (selectedInspectionType === 7) return `Manor ${crNumber}`.trim();
+        if (selectedInspectionType === 4) return 'Anonymous Account';
 
         return 'Account';
     };
 
-    private getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> => {
-        return new Promise((resolve, reject) => {
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
-
-            // Try to use Xrm.Device API first (works in Field Service Mobile app)
-            if (xrm && xrm.Device && xrm.Device.getCurrentPosition) {
-                console.log('Using Xrm.Device.getCurrentPosition (Field Service Mobile)');
-                xrm.Device.getCurrentPosition().then(
-                    (location: any) => {
-                        resolve({
-                            latitude: location.coords.latitude,
-                            longitude: location.coords.longitude
-                        });
-                    },
-                    (error: any) => {
-                        console.error('Xrm.Device.getCurrentPosition failed, falling back to navigator.geolocation:', error);
-                        return;
-                        // Fallback to navigator.geolocation
-                        // this.getLocationViaNavigator(resolve, reject);
-                    }
-                );
-            } else {
-                console.log('Using navigator.geolocation (Web/PWA)');
-                return;
+    private getCurrentLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
+        try {
+            if (this.xrm?.Device?.getCurrentPosition) {
+                const location: any = await this.xrm.Device.getCurrentPosition();
+                return {
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude
+                };
             }
-        });
+        } catch (error) {
+            console.error('Error getting location:', error);
+        }
+        return null;
     };
-
 
     private createAddressInformation = async (accountId: string, accountName: string): Promise<void> => {
         try {
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
-
-            // Get current location
             const location = await this.getCurrentLocation();
-            if (location) {
-                // Format today's date (YYYY-MM-DD)
-                const today = new Date();
-                const formattedDate = today.toISOString().split('T')[0].replace(/\//g, '-');
+            if (!location) return;
 
-                // Create address name: AccountName + Date
-                const addressName = `${accountName} ${formattedDate}`;
+            const today = new Date().toISOString().split('T')[0];
+            const addressName = `${accountName} ${today}`;
 
-                // Create address information record
-                const addressData: any = {
-                    duc_name: addressName,
-                    duc_latitude: location.latitude,
-                    duc_longitude: location.longitude,
-                    'duc_Account@odata.bind': `/accounts(${accountId})`
-                };
+            const addressData: any = {
+                duc_name: addressName,
+                duc_latitude: location.latitude,
+                duc_longitude: location.longitude,
+                'duc_Account@odata.bind': `/accounts(${accountId})`
+            };
 
-                const createdAddress = await xrm.WebApi.createRecord('duc_addressinformation', addressData);
-                // console.log('Address information created:', createdAddress.id);
-                // console.log('Address details:', {
-                //     name: addressName,
-                //     latitude: location.latitude,
-                //     longitude: location.longitude,
-                //     accountId: accountId
-                // });
-            }
-
-        } catch (error: any) {
+            await this.xrm.WebApi.createRecord('duc_addressinformation', addressData);
+        } catch (error) {
             console.error('Error creating address information:', error);
-            // alert('Failed to create address information: ' + (error.message || error));
-            return;
-
-            // Don't throw error - we don't want to block the inspection if address creation fails
-            // Just log it for troubleshooting
         }
     };
 
     private searchOrCreateAccount = async (): Promise<string | null> => {
         try {
-            this.setState({ loading: true, error: null });
-
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+            const { accountTypeRecord, selectedInspectionType, carColor, vehicleBrand, isAnonymous } = this.state;
             const identifierValue = this.getIdentifierValue();
-            const { accountTypeRecord, selectedInspectionType, carColor, vehicleBrand } = this.state;
 
-            // For Anonymous type (4), ONLY use the unknown account from props
+            // Anonymous type (4) uses unknown account
             if (selectedInspectionType === 4) {
                 if (this.props.unknownAccountId) {
-                    console.log('Using unknown account for anonymous inspection:', this.props.unknownAccountId);
-                    // Create address information for the unknown account
-                    await this.createAddressInformation(this.props.unknownAccountId, this.props.unknownAccountName || 'Unknown Account');
+                    await this.createAddressInformation(
+                        this.props.unknownAccountId,
+                        this.props.unknownAccountName || 'Unknown Account'
+                    );
                     return this.props.unknownAccountId;
                 } else {
-                    // No unknown account available - show error
-                    this.setState({ 
-                        error: 'No anonymous account',
-                        loading: false 
-                    });
-                    return null;
+                    throw new Error('No anonymous account available');
                 }
             }
 
-            // Identifier is mandatory for all other types
-            if (!identifierValue) {
-                this.setState({ error: this.strings.PleaseEnterRequiredFields, loading: false });
-                return null;
+            // NEW: If anonymous checkbox is checked for types 3, 6, or 7, use unknown account
+            if (isAnonymous && [3, 6, 7].includes(selectedInspectionType!)) {
+                if (this.props.unknownAccountId) {
+                    await this.createAddressInformation(
+                        this.props.unknownAccountId,
+                        this.props.unknownAccountName || 'Unknown Account'
+                    );
+                    return this.props.unknownAccountId;
+                } else {
+                    throw new Error('No anonymous account available');
+                }
             }
 
-            // Search for existing account by duc_accountidentifier AND account type
+            if (!identifierValue) {
+                throw new Error(this.strings.PleaseEnterRequiredFields);
+            }
+
+            // Search for existing account
             let filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
-            
-            // Add account type filter if we have the account type record
             if (accountTypeRecord?.duc_accounttypeid) {
                 filterQuery += ` and _duc_newaccounttype_value eq ${accountTypeRecord.duc_accounttypeid}`;
             }
 
-            const searchResults = await xrm.WebApi.retrieveMultipleRecords(
+            const searchResults = await this.xrm.WebApi.retrieveMultipleRecords(
                 'account',
                 `?$select=accountid,name,duc_vehicletype&$filter=${filterQuery}`
             );
 
-            if (searchResults?.entities && searchResults.entities.length > 0) {
+            // Update or create account
+            if (searchResults?.entities?.length > 0) {
                 const accountId = searchResults.entities[0].accountid;
                 const accountName = searchResults.entities[0].name;
-                const existingVehicleType = searchResults.entities[0].duc_vehicletype;
-                if (existingVehicleType !== undefined && existingVehicleType !== null) {
-                    this.setState({ vehicleBrand: existingVehicleType });
-                }
-                console.log('Account found:', accountId);
 
-                // For vehicles (type 1), update the existing account with color and brand
+                // Update vehicle info if type is vehicle
                 if (selectedInspectionType === 1) {
                     const updateData: any = {};
-                    
-                    if (carColor) {
-                        updateData.duc_vehiclecolor = carColor;
-                    }
-                    if (vehicleBrand !== null && vehicleBrand !== undefined) {
-                        updateData.duc_vehicletype = vehicleBrand;
-                    }
+                    if (carColor) updateData.duc_vehiclecolor = carColor;
+                    if (vehicleBrand !== null) updateData.duc_vehicletype = vehicleBrand;
 
                     if (Object.keys(updateData).length > 0) {
-                        await xrm.WebApi.updateRecord('account', accountId, updateData);
-                        console.log('Vehicle account updated with color and brand');
+                        await this.xrm.WebApi.updateRecord('account', accountId, updateData);
                     }
                 }
 
-                // Create address information for the existing account
                 await this.createAddressInformation(accountId, accountName);
-
                 return accountId;
             }
 
-            // Account doesn't exist, create new one
+            // Create new account
             const accountName = this.getAccountName();
             const newAccount: any = {
                 name: accountName,
@@ -575,36 +633,91 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                 duc_accountinspectiontype: selectedInspectionType
             };
 
-            // Set account type lookup if found
             if (accountTypeRecord?.duc_accounttypeid) {
                 newAccount['duc_NewAccountType@odata.bind'] = `/duc_accounttypes(${accountTypeRecord.duc_accounttypeid})`;
             }
 
-            // NEW: For vehicles (type 1), add color and brand to the account
             if (selectedInspectionType === 1) {
-                if (carColor) {
-                    newAccount.duc_vehiclecolor = carColor;
-                }
-                if (vehicleBrand !== null && vehicleBrand !== undefined) {
-                    newAccount.duc_vehicletype = vehicleBrand;
-                }
+                if (carColor) newAccount.duc_vehiclecolor = carColor;
+                if (vehicleBrand !== null) newAccount.duc_vehicletype = vehicleBrand;
             }
 
-            const createdAccount = await xrm.WebApi.createRecord('account', newAccount);
+            const createdAccount = await this.xrm.WebApi.createRecord('account', newAccount);
             const newAccountId = createdAccount?.id;
 
-            console.log('Account created:', newAccountId);
-
-            // Create address information for the new account
             await this.createAddressInformation(newAccountId, accountName);
 
             return newAccountId;
         } catch (error: any) {
             console.error('Error searching/creating account:', error);
-            this.setState({ error: error.message || 'Error processing account', loading: false });
-            return null;
+            throw error;
         }
     };
+
+    // =====================================================================
+    // WORK ORDER CREATION
+    // =====================================================================
+
+    private createWorkOrder = async (accountId: string): Promise<void> => {
+        try {
+            // Get account name
+            const accountRecord = await this.xrm.WebApi.retrieveRecord('account', accountId, '?$select=name');
+            const accountName = accountRecord?.name || '';
+
+            // Build work order data
+            const workOrderData: any = {
+                'duc_subaccount@odata.bind': `/accounts(${accountId})`,
+                'msdyn_serviceaccount@odata.bind': `/accounts(${accountId})`,
+                duc_accountinspectiontype: this.state.selectedInspectionType
+            };
+
+            // Anonymous customer flag
+            // Set to true if: Type 4 OR (types 3,6,7 AND anonymous checkbox is checked)
+            if (this.state.selectedInspectionType === 4 || 
+                (this.state.isAnonymous && [3, 6, 7].includes(this.state.selectedInspectionType!))) {
+                workOrderData.duc_anonymouscustomer = true;
+            }
+
+            // Campaign
+            if (this.state.selectedCampaignId) {
+                workOrderData['new_campaign@odata.bind'] = `/new_inspectioncampaigns(${this.state.selectedCampaignId})`;
+            }
+
+            // Incident Type
+            if (this.state.selectedIncidentTypeId) {
+                workOrderData['msdyn_primaryincidenttype@odata.bind'] = `/msdyn_incidenttypes(${this.state.selectedIncidentTypeId})`;
+            }
+
+            // Organization Unit
+            if (this.props.organizationUnitId) {
+                workOrderData['duc_department@odata.bind'] = `/msdyn_organizationalunits(${this.props.organizationUnitId})`;
+            }
+
+            // Create work order
+            const createdWorkOrder = await this.xrm.WebApi.createRecord('msdyn_workorder', workOrderData);
+
+            console.log('Work order created:', createdWorkOrder.id);
+
+            // Navigate to the created work order
+            await this.xrm.Navigation.openForm({
+                entityName: "msdyn_workorder",
+                entityId: createdWorkOrder.id
+            });
+
+            // Close the modal
+            if (this.props.onClose) {
+                this.props.onClose();
+            }
+
+        } catch (error: any) {
+            console.error('Error creating work order:', error);
+            throw error;
+        }
+    };
+
+    // =====================================================================
+    // MAIN START HANDLER
+    // =====================================================================
 
     private handleStart = async (): Promise<void> => {
         if (!this.validateFields()) {
@@ -614,131 +727,96 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         try {
             this.setState({ loading: true, error: null });
 
+            // Get or create account
             const accountId = await this.searchOrCreateAccount();
-
-            if (accountId) {
-                console.log('Processing with account ID:', accountId);
-                // Open work order quick create form with the account and inspection type as default values
-                await this.openWorkOrderForm(accountId);
-
-                // Close the modal after successfully opening the work order form
-                if (this.props.onClose) {
-                    this.props.onClose();
-                }
+            if (!accountId) {
+                throw new Error('Failed to get account');
             }
+
+            // Check if we need to show campaign/incident selection
+            const needsCampaign = !this.state.selectedCampaignId;
+            const needsIncidentType = !this.state.selectedIncidentTypeId;
+
+            if (needsCampaign || needsIncidentType) {
+                // Show selection popup
+                this.setState({
+                    showCampaignIncidentPopup: true,
+                    loading: false
+                });
+            } else {
+                // Create work order directly
+                await this.createWorkOrder(accountId);
+                this.setState({ loading: false });
+            }
+
         } catch (error: any) {
             console.error('Error in handleStart:', error);
-            this.setState({ error: error.message || 'Error starting inspection', loading: false });
-        } finally {
-            this.setState({ loading: false });
+            this.setState({
+                error: error.message || 'Error starting inspection',
+                loading: false
+            });
         }
     };
 
-    private openWorkOrderForm = async (accountId: string): Promise<void> => {
+    private handleContinueWithSelections = async (): Promise<void> => {
         try {
-            const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+            this.setState({ loading: true, error: null, showCampaignIncidentPopup: false });
 
-            // Get account name
-            const accountRecord = await xrm.WebApi.retrieveRecord('account', accountId, '?$select=name');
-            const accountName = accountRecord?.name || '';
-
-            // Prepare default values for the work order quick create form
-            const defaultValues: any = {
-                // Set the sub-account (duc_subaccount)
-                duc_subaccount: [
-                    {
-                        id: accountId,
-                        name: accountName,
-                        entityType: "account"
-                    }
-                ],
-                // Set the service account (msdyn_serviceaccount)
-                msdyn_serviceaccount: [
-                    {
-                        id: accountId,
-                        name: accountName,
-                        entityType: "account"
-                    }
-                ],
-                // Set the inspection type (duc_accountinspectiontype) - this is an option set value
-                duc_accountinspectiontype: this.state.selectedInspectionType
-            };
-
-            // For Anonymous type (4), set the anonymous customer field
-            if (this.state.selectedInspectionType === 4) {
-                defaultValues.duc_anonymouscustomer = true;
+            // Re-run account search/create to get accountId
+            const accountId = await this.searchOrCreateAccount();
+            if (!accountId) {
+                throw new Error('Failed to get account');
             }
 
-            // If we have an active patrol campaign, set it as default
-            if (this.props.activePatrolId && this.props.activePatrolName) {
-                defaultValues.new_campaign = [
-                    {
-                        id: this.props.activePatrolId,
-                        name: this.props.activePatrolName,
-                        entityType: "new_inspectioncampaign"
-                    }
-                ];
-            }
-
-            // If we have incident type ID (from organization unit like Natural Reserve), set it as default
-            if (this.props.incidentTypeId && this.props.incidentTypeName) {
-                defaultValues.msdyn_primaryincidenttype = [
-                    {
-                        id: this.props.incidentTypeId,
-                        name: this.props.incidentTypeName,
-                        entityType: "msdyn_incidenttype"
-                    }
-                ];
-            }
-
-            // If we have organization unit (department), set it as default
-            if (this.props.organizationUnitId && this.props.organizationUnitName) {
-                defaultValues.duc_department = [
-                    {
-                        id: this.props.organizationUnitId,
-                        name: this.props.organizationUnitName,
-                        entityType: "msdyn_organizationalunit"
-                    }
-                ];
-            }
-
-            console.log('Opening work order form with default values:', defaultValues);
-
-            // Open the work order quick create form
-            await xrm.Navigation.openForm(
-                { entityName: "msdyn_workorder", useQuickCreateForm: true },
-                defaultValues
-            );
+            await this.createWorkOrder(accountId);
+            this.setState({ loading: false });
 
         } catch (error: any) {
-            console.error('Error opening work order form:', error);
-            throw error; // Re-throw to be caught by handleStart
+            console.error('Error creating work order:', error);
+            this.setState({
+                error: error.message || 'Error creating work order',
+                loading: false
+            });
         }
     };
 
-    private shouldShowField = (field: 'qataryId' | 'name' | 'crNumber' | 'id' | 'carColor' | 'vehicleBrand'): boolean => {
-        const { selectedInspectionType } = this.state;
+    // =====================================================================
+    // FIELD VISIBILITY
+    // =====================================================================
 
+    private shouldShowField = (field: 'qataryId' | 'name' | 'crNumber' | 'id' | 'carColor' | 'vehicleBrand'): boolean => {
+        const { selectedInspectionType, isAnonymous } = this.state;
         if (!selectedInspectionType) return false;
 
-        // Type 1 (Vehicle) => Show ID, car color, and vehicle brand
-        if (field === 'id' || field === 'carColor' || field === 'vehicleBrand') {
+        // NEW: If anonymous is checked for types 3, 6, or 7, hide all fields
+        if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
+            return false;
+        }
+
+        if (['id', 'carColor', 'vehicleBrand'].includes(field)) {
             return selectedInspectionType === 1;
         }
 
-        // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Show Qatary ID and Name
-        if (field === 'qataryId' || field === 'name') {
-            return selectedInspectionType === 2 || selectedInspectionType === 3 || selectedInspectionType === 6;
+        if (['qataryId', 'name'].includes(field)) {
+            return [2, 3, 6].includes(selectedInspectionType);
         }
 
-        // Type 5 (Company) => Show CR Number
         if (field === 'crNumber') {
-            return selectedInspectionType === 5 || selectedInspectionType === 7;
+            return [5, 7].includes(selectedInspectionType);
         }
 
-        // Type 4 (Anonymous) => Show nothing (uses unknown account from props)
         return false;
     };
+
+    // NEW: Helper to determine if anonymous checkbox should be shown
+    private shouldShowAnonymousCheckbox = (): boolean => {
+        const { selectedInspectionType } = this.state;
+        return selectedInspectionType !== null && [3, 6, 7].includes(selectedInspectionType);
+    };
+
+    // =====================================================================
+    // RENDER
+    // =====================================================================
 
     render() {
         if (!this.props.isOpen) {
@@ -746,9 +824,12 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
         }
 
         const {
-            isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id, carColor, vehicleBrand, vehicleBrands, loading, error,
+            isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id,
+            carColor, vehicleBrand, vehicleBrands, loading, error, showCampaignIncidentPopup,
+            campaigns, incidentTypes, selectedCampaignId, selectedIncidentTypeId, isAnonymous
         } = this.state;
 
+        // Styles
         const containerStyle: React.CSSProperties = {
             position: 'fixed',
             top: 0,
@@ -779,7 +860,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             fontWeight: 600,
             marginBottom: 20,
             color: '#333333',
-            fontFamily: '"Segoe UI", "Segoe UI Web (West European)", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
+            fontFamily: '"Segoe UI", sans-serif',
         };
 
         const fieldStyle: React.CSSProperties = {
@@ -792,7 +873,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             fontWeight: 600,
             marginBottom: 4,
             color: '#323130',
-            fontFamily: '"Segoe UI", "Segoe UI Web (West European)", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
+            fontFamily: '"Segoe UI", sans-serif',
         };
 
         const inputStyle: React.CSSProperties = {
@@ -801,7 +882,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             border: '1px solid #605e5c',
             borderRadius: 2,
             fontSize: 14,
-            fontFamily: '"Segoe UI", "Segoe UI Web (West European)", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
+            fontFamily: '"Segoe UI", sans-serif',
             boxSizing: 'border-box',
             outline: 'none',
         };
@@ -820,7 +901,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             fontSize: 14,
             fontWeight: 600,
             cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: '"Segoe UI", "Segoe UI Web (West European)", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
+            fontFamily: '"Segoe UI", sans-serif',
             transition: 'background-color 0.1s ease',
             minWidth: 80,
         };
@@ -829,7 +910,6 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             ...buttonStyle,
             backgroundColor: loading ? '#d3d3d3' : '#0078d4',
             color: 'white',
-            border: '1px solid transparent',
         };
 
         const closeButtonStyle: React.CSSProperties = {
@@ -847,12 +927,109 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             backgroundColor: '#fde7e9',
             border: '1px solid #a4262c',
             borderRadius: 2,
-            fontFamily: '"Segoe UI", "Segoe UI Web (West European)", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
+            fontFamily: '"Segoe UI", sans-serif',
         };
 
-        // NEW: Determine if inspection type field should be disabled
+        const checkboxContainerStyle: React.CSSProperties = {
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+        };
+
+        const checkboxStyle: React.CSSProperties = {
+            width: 16,
+            height: 16,
+            cursor: loading ? 'not-allowed' : 'pointer',
+        };
+
         const isInspectionTypeDisabled = this.props.lockInspectionType || loading;
 
+        // Campaign/Incident Popup
+        if (showCampaignIncidentPopup) {
+            return React.createElement(
+                'div',
+                { style: containerStyle },
+                React.createElement(
+                    'div',
+                    { style: modalStyle },
+                    React.createElement('h2', { style: titleStyle }, this.strings.SelectCampaign + ' / ' + this.strings.SelectIncidentType),
+
+                    error && React.createElement('div', { style: errorStyle }, error),
+
+                    // Campaign Selection
+                    !this.state.selectedCampaignId && React.createElement(
+                        'div',
+                        { style: fieldStyle },
+                        React.createElement('label', { style: labelStyle }, this.strings.Campaign),
+                        React.createElement(
+                            'select',
+                            {
+                                value: selectedCampaignId || '',
+                                onChange: (e) => this.setState({
+                                    selectedCampaignId: e.target.value,
+                                    selectedCampaignName: campaigns.find(c => c.id === e.target.value)?.name
+                                }),
+                                disabled: loading,
+                                style: inputStyle,
+                            },
+                            React.createElement('option', { value: '' }, '--'),
+                            campaigns.map((c) =>
+                                React.createElement('option', { key: c.id, value: c.id }, c.name)
+                            )
+                        )
+                    ),
+
+                    // Incident Type Selection
+                    !this.state.selectedIncidentTypeId && React.createElement(
+                        'div',
+                        { style: fieldStyle },
+                        React.createElement('label', { style: labelStyle }, this.strings.IncidentType),
+                        React.createElement(
+                            'select',
+                            {
+                                value: selectedIncidentTypeId || '',
+                                onChange: (e) => this.setState({
+                                    selectedIncidentTypeId: e.target.value,
+                                    selectedIncidentTypeName: incidentTypes.find(it => it.id === e.target.value)?.name
+                                }),
+                                disabled: loading,
+                                style: inputStyle,
+                            },
+                            React.createElement('option', { value: '' }, '--'),
+                            incidentTypes.map((it) =>
+                                React.createElement('option', { key: it.id, value: it.id }, it.name)
+                            )
+                        )
+                    ),
+
+                    React.createElement(
+                        'div',
+                        { style: buttonContainerStyle },
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: this.handleContinueWithSelections,
+                                disabled: loading,
+                                style: startButtonStyle,
+                            },
+                            loading ? this.strings.Loading : this.strings.Continue
+                        ),
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: () => this.setState({ showCampaignIncidentPopup: false }),
+                                disabled: loading,
+                                style: closeButtonStyle,
+                            },
+                            this.strings.Close
+                        )
+                    )
+                )
+            );
+        }
+
+        // Main Form
         return React.createElement(
             'div',
             { style: containerStyle },
@@ -863,6 +1040,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
 
                 error && React.createElement('div', { style: errorStyle }, error),
 
+                // Inspection Type
                 React.createElement(
                     'div',
                     { style: fieldStyle },
@@ -881,15 +1059,29 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                         },
                         React.createElement('option', { value: '' }, this.strings.chooseInspectionType),
                         inspectionTypes.map((type) =>
-                            React.createElement(
-                                'option',
-                                { key: type.value, value: type.value },
-                                type.label
-                            )
+                            React.createElement('option', { key: type.value, value: type.value }, type.label)
                         )
                     )
                 ),
 
+                // Anonymous Checkbox (for types 3, 6, 7)
+                this.shouldShowAnonymousCheckbox() && React.createElement(
+                    'div',
+                    { style: checkboxContainerStyle },
+                    React.createElement('input', {
+                        type: 'checkbox',
+                        checked: isAnonymous,
+                        onChange: (e) => this.setState({ isAnonymous: e.target.checked }),
+                        disabled: loading,
+                        style: checkboxStyle,
+                    }),
+                    React.createElement('label', { 
+                        style: { ...labelStyle, marginBottom: 0, cursor: loading ? 'not-allowed' : 'pointer' },
+                        onClick: () => !loading && this.setState({ isAnonymous: !isAnonymous })
+                    }, this.strings.Anonymous)
+                ),
+
+                // ID (Vehicle)
                 this.shouldShowField('id') && React.createElement(
                     'div',
                     { style: fieldStyle },
@@ -903,6 +1095,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     })
                 ),
 
+                // Car Color
                 this.shouldShowField('carColor') && React.createElement(
                     'div',
                     { style: fieldStyle },
@@ -916,6 +1109,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     })
                 ),
 
+                // Vehicle Brand
                 this.shouldShowField('vehicleBrand') && React.createElement(
                     'div',
                     { style: fieldStyle },
@@ -924,16 +1118,12 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                         'select',
                         {
                             value: vehicleBrand ?? '',
-                            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                            onChange: (e) => {
                                 const val = e.target.value ? parseInt(e.target.value, 10) : null;
                                 this.setState({ vehicleBrand: val });
                             },
                             disabled: loading,
-                            style: {
-                                ...inputStyle,
-                                backgroundColor: loading ? '#f3f2f1' : 'white',
-                                cursor: loading ? 'not-allowed' : 'pointer'
-                            },
+                            style: inputStyle,
                         },
                         React.createElement('option', { value: '' }, '--'),
                         vehicleBrands.map((vb) =>
@@ -942,6 +1132,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     )
                 ),
 
+                // Qatary ID
                 this.shouldShowField('qataryId') && React.createElement(
                     'div',
                     { style: fieldStyle },
@@ -955,6 +1146,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     })
                 ),
 
+                // Name
                 this.shouldShowField('name') && React.createElement(
                     'div',
                     { style: fieldStyle },
@@ -968,10 +1160,13 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     })
                 ),
 
+                // CR Number
                 this.shouldShowField('crNumber') && React.createElement(
                     'div',
                     { style: fieldStyle },
-                    React.createElement('label', { style: labelStyle }, (selectedInspectionType === 7 ? this.strings.MonourNumber : this.strings.CRNumber)),
+                    React.createElement('label', { style: labelStyle },
+                        selectedInspectionType === 7 ? this.strings.MonourNumber : this.strings.CRNumber
+                    ),
                     React.createElement('input', {
                         type: 'text',
                         value: crNumber,
@@ -981,6 +1176,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                     })
                 ),
 
+                // Buttons
                 React.createElement(
                     'div',
                     { style: buttonContainerStyle },
@@ -990,16 +1186,6 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                             onClick: this.handleStart,
                             disabled: loading,
                             style: startButtonStyle,
-                            onMouseEnter: (e: { target: HTMLButtonElement; }) => {
-                                if (!loading) {
-                                    (e.target as HTMLButtonElement).style.backgroundColor = '#106ebe';
-                                }
-                            },
-                            onMouseLeave: (e: { target: HTMLButtonElement; }) => {
-                                if (!loading) {
-                                    (e.target as HTMLButtonElement).style.backgroundColor = '#0078d4';
-                                }
-                            },
                         },
                         loading ? this.strings.Loading : this.strings.Start
                     ),
@@ -1009,16 +1195,6 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                             onClick: this.props.onClose,
                             disabled: loading,
                             style: closeButtonStyle,
-                            onMouseEnter: (e: { target: HTMLButtonElement; }) => {
-                                if (!loading) {
-                                    (e.target as HTMLButtonElement).style.backgroundColor = '#f3f2f1';
-                                }
-                            },
-                            onMouseLeave: (e: { target: HTMLButtonElement; }) => {
-                                if (!loading) {
-                                    (e.target as HTMLButtonElement).style.backgroundColor = 'white';
-                                }
-                            },
                         },
                         this.strings.Close
                     )
