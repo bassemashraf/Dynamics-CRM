@@ -1,102 +1,6 @@
 /* eslint-disable */
 import * as React from 'react';
 
-// =============================================================================
-// HELPER FUNCTIONS FOR OFFLINE/ONLINE SUPPORT
-// =============================================================================
-
-/**
- * Check if the app is running in offline mode
- */
-const isOffline = (context: any): boolean => {
-    try {
-        if (context?.client?.isOffline) {
-            return context.client.isOffline() === true;
-        }
-        if (context?.mode?.isInOfflineMode !== undefined) {
-            return context.mode.isInOfflineMode === true;
-        }
-        return !navigator.onLine;
-    } catch (error) {
-        console.warn("Error checking offline status:", error);
-        return !navigator.onLine;
-    }
-};
-
-/**
- * Execute a query with offline/online support
- * Works with both OData queries and FetchXML
- */
-const executeQuery = async (
-    context: any,
-    entityName: string,
-    query: string
-): Promise<any> => {
-    const offline = isOffline(context);
-    const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
-
-    try {
-        if (offline) {
-            console.log("Executing query in OFFLINE mode");
-            return await xrm.WebApi.retrieveMultipleRecords(entityName, query);
-        } else {
-            console.log("Executing query in ONLINE mode");
-            return await xrm.WebApi.retrieveMultipleRecords(entityName, query);
-        }
-    } catch (error) {
-        console.error(`Query failed for ${entityName} (${offline ? 'OFFLINE' : 'ONLINE'}):`, error);
-        throw error;
-    }
-};
-
-/**
- * Navigate with offline/online support
- */
-const navigateTo = async (
-    context: any,
-    navigationOptions: any
-): Promise<boolean> => {
-    try {
-        await context.navigation.navigateTo(navigationOptions);
-        return true;
-    } catch (error) {
-        console.error("Navigation error:", error);
-        throw error;
-    }
-};
-
-/**
- * Centralized error handler
- */
-const handleError = (
-    error: unknown,
-    title: string = "Error"
-): string => {
-    let message: string;
-    
-    if (error instanceof Error) {
-        message = `${error.name}: ${error.message}`;
-        if (error.stack) {
-            message += `\n\nStack Trace:\n${error.stack}`;
-        }
-    } else if (typeof error === "string") {
-        message = error;
-    } else {
-        try {
-            message = JSON.stringify(error, null, 2);
-        } catch {
-            message = String(error);
-        }
-    }
-
-    console.error(`[${title}]`, error);
-    return message;
-};
-
-// =============================================================================
-// COMPONENT
-// =============================================================================
-
 interface ISearchResult {
     accountid: string;
     name: string;
@@ -146,7 +50,6 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
 
     constructor(props: IAdvancedSearchProps) {
         super(props);
-
         const userSettings = (props.context as any).userSettings;
         const rtlLanguages = [1025, 1037, 1054, 1056, 1065, 1068, 1069, 1101, 1114, 1119];
         const isRTL = rtlLanguages.includes(userSettings?.languageId);
@@ -199,9 +102,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
         fetch += "<entity name='account'>";
         fetch += "<attribute name='name' />";
         fetch += "<attribute name='accountid' />";
-        fetch += "<attribute name='emailaddress1' />";
-        fetch += "<attribute name='telephone1' />";
-        // fetch += "<attribute name='new_businessregistrationnumber' />";
+        fetch += "<attribute name='new_businessregistrationnumber' />";
         fetch += "<order attribute='name' descending='false' />";
         fetch += "<filter type='and'>";
 
@@ -231,9 +132,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
         fetch += "</fetch>";
 
         try {
-            // Use the new executeQuery helper that works both online and offline
-            const result = await executeQuery(
-                this.props.context,
+            const result = await (this.props.context.webAPI as any).retrieveMultipleRecords(
                 'account',
                 `?fetchXml=${encodeURIComponent(fetch)}`
             );
@@ -241,42 +140,29 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
             if (result.entities.length === 0) {
                 alert(this.strings.NoResultsFound);
             } else if (result.entities.length === 1) {
-                await this.openRecord(result.entities[0].accountid);
+                this.openRecord(result.entities[0].accountid);
             } else {
                 this.setState({ results: result.entities, showResults: true });
             }
         } catch (error: any) {
             console.error('Search error:', error);
-            const message = handleError(error, 'Search Error');
-            
-            // Check if it's an offline data availability issue
-            if (message.includes("Not in local store") || message.includes("not supported by the offline client")) {
-                alert(`${this.strings.SearchError}: Data not available offline. Please sync or go online.`);
-            } else {
-                alert(`${this.strings.SearchError}: ${message}`);
-            }
+            const message = `${this.strings.SearchError}: ${error?.message || JSON.stringify(error)}`;
+            alert(message);
         }
     };
 
-    private openRecord = async (accountId: string): Promise<void> => {
+    private openRecord = (accountId: string): void => {
         const navigationOptions = {
             pageType: 'entityrecord' as any,
             entityName: 'account',
             entityId: accountId,
             target: 1
         };
-        
-        try {
-            await navigateTo(this.props.context, navigationOptions);
-        } catch (error) {
-            console.error("Navigation failed:", error);
-            const message = handleError(error, 'Navigation Error');
-            alert(`Navigation failed: ${message}`);
-        }
+        (this.props.context.navigation as any).navigateTo(navigationOptions);
     };
 
     private handleRecordClick = (accountId: string): void => {
-        void this.openRecord(accountId);
+        this.openRecord(accountId);
     };
 
     private handleCloseResults = (): void => {
@@ -688,7 +574,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
                                             whiteSpace: 'nowrap',
                                         }
                                     },
-                                    record.emailaddress1 || '-'
+                                    record.emailaddress1
                                 ),
                                 React.createElement(
                                     'div',
@@ -703,7 +589,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
                                             whiteSpace: 'nowrap',
                                         }
                                     },
-                                    record.telephone1 || '-'
+                                    record.telephone1
                                 )
                             )
                         )

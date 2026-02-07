@@ -10,208 +10,24 @@ import { clock } from "../images/clock";
 import { check } from "../images/check";
 import { filters } from "../images/filters";
 import { AdvancedSearch } from './AdvancedSearch';
+import { MultiTypeInspection } from './MultiTypeInspection';
 import { close } from '../images/close';
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
+// Cache interface for organization unit data
+interface OrgUnitCache {
+    orgUnitId: string;
+    orgUnitName: string;
+    isNaturalReserve: boolean;
+    isWildlifeSection: boolean;
+    unknownAccountId?: string;
+    unknownAccountName?: string;
+    incidentTypeId?: string;
+    incidentTypeName?: string;
+    inspectionCustomerClassification?: number; // NEW: Store the classification value
+    timestamp: number;
+}
 
-/**
- * Centralized error handler
- * Always shows alert dialog for errors
- */
-const handleError = async (
-    context: any,
-    error: unknown,
-    title: string = "Error"
-): Promise<string> => {
-    let message: string;
-
-    if (error instanceof Error) {
-        // Show full error details: message, name, and stack if available
-        message = `${error.name}: ${error.message}`;
-        if (error.stack) {
-            message += `\n\nStack Trace:\n${error.stack}`;
-        }
-    } else if (typeof error === "string") {
-        message = error;
-    } else {
-        // Try to stringify the error object
-        try {
-            message = JSON.stringify(error, null, 2);
-        } catch {
-            message = String(error);
-        }
-    }
-
-    console.error(`[${title}]`, error);
-
-    // Always show error dialog
-    if (context?.navigation?.openAlertDialog) {
-        try {
-            await context.navigation.openAlertDialog({
-                title,
-                text: message
-            });
-        } catch (dialogError) {
-            console.error("Failed to show error dialog:", dialogError);
-        }
-    }
-
-    return message;
-};
-/**
- * Check if the app is running in offline mode
- */
-const isOffline = (context: any): boolean => {
-    try {
-        // Check multiple possible offline indicators
-        if (context?.client?.isOffline) {
-            return context.client.isOffline() === true;
-        }
-        if (context?.mode?.isInOfflineMode !== undefined) {
-            return context.mode.isInOfflineMode === true;
-        }
-        // Fallback to network status
-        return !navigator.onLine;
-    } catch (error) {
-        console.warn("Error checking offline status:", error);
-        return !navigator.onLine;
-    }
-};
-
-/**
- * Execute a Dataverse query with offline/online support
- */
-const executeQuery = async (
-    context: any,
-    entityName: string,
-    query: string,
-    operationType: 'retrieve' | 'retrieveMultiple' = 'retrieveMultiple'
-): Promise<any> => {
-    const offline = isOffline(context);
-    const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
-
-    try {
-        if (offline) {
-            console.log("Executing in OFFLINE mode");
-
-            // Xrm.WebApi works offline automatically in latest versions
-            if (operationType === 'retrieveMultiple') {
-                return await xrm.WebApi.retrieveMultipleRecords(entityName, query);
-            } else {
-                throw new Error("Single record retrieve not supported in this helper");
-            }
-        } else {
-            console.log("Executing in ONLINE mode");
-
-            // Same Xrm.WebApi call works online
-            if (operationType === 'retrieveMultiple') {
-                return await xrm.WebApi.retrieveMultipleRecords(entityName, query);
-            } else {
-                throw new Error("Single record retrieve not supported in this helper");
-            }
-        }
-    } catch (error) {
-        console.error(`Query failed for ${entityName} (${offline ? 'OFFLINE' : 'ONLINE'}):`, error);
-        throw error;
-    }
-};
-
-/**
- * Update a record with offline/online support
- */
-const updateRecord = async (
-    context: any,
-    entityName: string,
-    recordId: string,
-    data: any
-): Promise<void> => {
-    const offline = isOffline(context);
-    const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
-
-    try {
-        if (offline) {
-            console.log("Updating record in OFFLINE mode");
-            await xrm.WebApi.updateRecord(entityName, recordId, data);
-        } else {
-            console.log("Updating record in ONLINE mode");
-            await context.webAPI.updateRecord(entityName, recordId, data);
-        }
-    } catch (error) {
-        console.error(`Update failed for ${entityName}:`, error);
-        throw error;
-    }
-};
-
-/**
- * Navigate - works in both online and offline
- */
-const navigateTo = async (
-    context: any,
-    navigationOptions: any
-): Promise<boolean> => {
-    try {
-        await context.navigation.navigateTo(navigationOptions);
-        return true;
-    } catch (error) {
-        await handleError(context, error, "Navigation Error");
-        return false;
-    }
-};
-
-/**
- * Open form - works in both online and offline
- */
-const openForm = async (
-    context: any,
-    formOptions: any,
-    defaultValues: any = {}
-): Promise<boolean> => {
-    try {
-        await context.navigation.openForm(formOptions, defaultValues);
-        return true;
-    } catch (error) {
-        await handleError(context, error, "Form Open Error");
-        return false;
-    }
-};
-
-/**
- * Cache helper functions
- */
-const CacheManager = {
-    set: (key: string, value: any): void => {
-        try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (error) {
-            console.warn("Failed to set cache:", error);
-        }
-    },
-
-    get: <T>(key: string, defaultValue: T | null = null): T | null => {
-        try {
-            const cached = localStorage.getItem(key);
-            return cached ? JSON.parse(cached) : defaultValue;
-        } catch (error) {
-            console.warn("Failed to get cache:", error);
-            return defaultValue;
-        }
-    },
-
-    remove: (key: string): void => {
-        try {
-            localStorage.removeItem(key);
-        } catch (error) {
-            console.warn("Failed to remove cache:", error);
-        }
-    }
-};
-
-// =============================================================================
-// TYPES & INTERFACES
-// =============================================================================
-
+// Define the interface for the component's internal state.
 interface State {
     searchText: string;
     pendingTodayBookings: number | null;
@@ -223,23 +39,33 @@ interface State {
     showResults: boolean;
     searchResults: any[];
     showAdvancedSearch: boolean;
-    patrolStatus: 'none' | 'start' | 'end';
-    activePatrolId?: string;
-    isNaturalReserve: boolean;
-    unknownAccountId?: string;
-    incidentTypeId?: string;
-    orgUnitId?: string;
+    patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
+    activePatrolId?: string; // Store active patrol campaign ID
+    activePatrolName?: string; // Store active patrol campaign name
+    isNaturalReserve: boolean; // Track if org unit is Natural Reserve
+    isWildlifeSection: boolean; // Track if org unit is Wildlife section
+    unknownAccountId?: string; // Store unknown account ID for anonymous inspections
+    unknownAccountName?: string; // Store unknown account name
+    incidentTypeName?: string; // Store incident type name for Natural Reserve
+    incidentTypeId?: string; // Store incident type ID for Natural Reserve
+    orgUnitId?: string; // Store organization unit ID
+    organizationUnitName?: string; // Store organization unit name
+    showMultiTypeInspection: boolean; // Track if MultiTypeInspection modal is open
+    inspectionCustomerClassification?: number; // NEW: Store the classification value (100000000=Company, 100000001=Individuals, 100000002=Mixed)
+    defaultInspectionType?: number; // NEW: Store default inspection type for MultiTypeInspection
+    lockInspectionType?: boolean; // NEW: Flag to lock inspection type field
 }
 
+// Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
 interface IProps {
     context: ComponentFramework.Context<IInputs>;
 }
 
+// Localized strings interface
 interface LocalizedStrings {
     WelcomeBack: string;
     FindFacility: string;
     RemainingInspections: string;
-    PendingInspections: string;
     CompletedInspections: string;
     ScheduledInspections: string;
     TodaysPatrols: string;
@@ -248,15 +74,16 @@ interface LocalizedStrings {
     NoResults: string;
     Loading: string;
     SearchPrompt: string;
+    OfflineNavigationBlocked: string;
+    OfflineQuickCreateBlocked: string;
     StartPatrol: string;
     EndPatrol: string;
     StartAnonymousInspection: string;
+    PendingInspections: string;
+    StartMultiTypeInspection: string;
 }
 
-// =============================================================================
-// STYLES
-// =============================================================================
-
+// --- Custom Styles Derived from main.css & Bootstrap ---
 const STYLES = {
     textBrown: { color: "#A89360" },
     textGreen: { color: "#29A283" },
@@ -330,41 +157,42 @@ const STYLES = {
     width: { width: '90%' }
 };
 
-// =============================================================================
-// MAIN COMPONENT
-// =============================================================================
+// Cache constants
+const ORG_UNIT_CACHE_KEY = 'MOCI_OrgUnit_Cache';
+const CACHE_DURATION = 60_000; // 1 minute
 
 export const Main = (props: IProps) => {
-    const { context } = props;
-
     // Load localized strings
     const strings: LocalizedStrings = React.useMemo(() => {
+        const ctx = props.context;
         return {
-            WelcomeBack: context.resources.getString("WelcomeBack"),
-            FindFacility: context.resources.getString("FindFacility"),
-            RemainingInspections: context.resources.getString("RemainingInspections"),
-            CompletedInspections: context.resources.getString("CompletedInspections"),
-            ScheduledInspections: context.resources.getString("ScheduledInspections"),
-            StartInspection: context.resources.getString("StartInspection"),
-            PendingInspections: context.resources.getString("PendingInspections"),
-            SearchPlaceholder: context.resources.getString("SearchPlaceholder"),
-            NoResults: context.resources.getString("NoResults"),
-            Loading: context.resources.getString("Loading"),
-            TodaysPatrols: context.resources.getString("TodaysPatrols"),
-            SearchPrompt: context.resources.getString("SearchPrompt"),
-            StartPatrol: context.resources.getString("StartPatrol"),
-            EndPatrol: context.resources.getString("EndPatrol"),
-            StartAnonymousInspection: context.resources.getString("StartAnonymousInspection"),
+            WelcomeBack: ctx.resources.getString("WelcomeBack"),
+            FindFacility: ctx.resources.getString("FindFacility"),
+            RemainingInspections: ctx.resources.getString("RemainingInspections"),
+            CompletedInspections: ctx.resources.getString("CompletedInspections"),
+            ScheduledInspections: ctx.resources.getString("ScheduledInspections"),
+            StartInspection: ctx.resources.getString("StartInspection"),
+            SearchPlaceholder: ctx.resources.getString("SearchPlaceholder"),
+            NoResults: ctx.resources.getString("NoResults"),
+            Loading: ctx.resources.getString("Loading"),
+            TodaysPatrols: ctx.resources.getString("TodaysPatrols"),
+            SearchPrompt: ctx.resources.getString("SearchPrompt"),
+            OfflineNavigationBlocked: ctx.resources.getString("OfflineNavigationBlocked"),
+            OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked"),
+            StartPatrol: ctx.resources.getString("StartPatrol"),
+            EndPatrol: ctx.resources.getString("EndPatrol"),
+            StartAnonymousInspection: ctx.resources.getString("StartAnonymousInspection"),
+            PendingInspections: ctx.resources.getString("PendingInspections"),
+            StartMultiTypeInspection: ctx.resources.getString("StartMultiTypeInspection"),
         };
-    }, [context]);
+    }, [props.context]);
 
     // Detect RTL
     const isRTL = React.useMemo(() => {
         const rtlLanguages = [1025, 1037, 1054, 1056, 1065, 1068, 1069, 1101, 1114, 1119];
-        return rtlLanguages.includes(context.userSettings.languageId);
-    }, [context.userSettings.languageId]);
+        return rtlLanguages.includes(props.context.userSettings.languageId);
+    }, [props.context.userSettings.languageId]);
 
-    // State
     const [state, setState] = React.useState<State>({
         searchText: "",
         pendingTodayBookings: null,
@@ -378,13 +206,19 @@ export const Main = (props: IProps) => {
         showAdvancedSearch: false,
         patrolStatus: 'none',
         activePatrolId: undefined,
+        activePatrolName: undefined,
         isNaturalReserve: false,
+        isWildlifeSection: false,
         unknownAccountId: undefined,
         incidentTypeId: undefined,
         orgUnitId: undefined,
+        organizationUnitName: undefined,
+        showMultiTypeInspection: false,
+        inspectionCustomerClassification: undefined,
+        defaultInspectionType: undefined,
+        lockInspectionType: false,
     });
 
-    // Image data URIs
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
     const magnifyDataUri = "data:image/svg+xml;base64," + btoa(magnify);
     const calenderDataUri = "data:image/svg+xml;base64," + btoa(calender);
@@ -393,285 +227,10 @@ export const Main = (props: IProps) => {
     const filtersDataUri = "data:image/svg+xml;base64," + btoa(filters);
     const closeDataUri = "data:image/svg+xml;base64," + btoa(close);
 
-    // =============================================================================
-    // DATA LOADING FUNCTIONS
-    // =============================================================================
-
-    /**
-     * Load today's counts (completed, remaining, campaigns)
-     */
-    const loadTodaysCounts = React.useCallback(async (
-        userId: string
-    ): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
-        const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
-        let completedToday = 0;
-        let remainingToday = 0;
-        let campaignsToday = 0;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStart = today.toISOString();
-        today.setHours(23, 59, 59, 999);
-        const todayEnd = today.toISOString();
-        try {
-            let resourceId: string | null = CacheManager.get(CACHE_KEY);
-
-            // STEP 1: Get Bookable Resource ID
-            if (!resourceId) {
-                try {
-                    const userQuery = `?$select=_duc_bookableresourceid_value&$filter=systemuserid eq '${userId}'`;
-                    const userResults = await executeQuery(context, "systemuser", userQuery);
-
-                    const retrievedResourceId =
-                        userResults?.entities?.length > 0
-                            ? userResults.entities[0]["_duc_bookableresourceid_value"]
-                            : null;
-
-                    if (!retrievedResourceId) {
-                        console.warn(`User ${userId} is not linked to a Bookable Resource.`);
-                        return { completedToday, remainingToday, campaignsToday };
-                    }
-
-                    resourceId = retrievedResourceId;
-                    CacheManager.set(CACHE_KEY, resourceId);
-                } catch (error) {
-                    await handleError(context, error, "Failed to Get Bookable Resource");
-                    return { completedToday, remainingToday, campaignsToday };
-                }
-            }
-
-            // STEP 2: Completed Work Orders (Today)
-            try {
-                const completedQuery =
-                    `?$select=msdyn_workorderid` +
-                    `&$filter=_duc_assignedresource_value eq '${resourceId}' `+
-                    `and duc_completiondate ge ${todayStart} and duc_completiondate le ${todayEnd}`;
-
-                //  +
-                // `and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
-
-                const completedResults = await executeQuery(context, "msdyn_workorder", completedQuery);
-                completedToday = completedResults?.entities?.length ?? 0;
-            } catch (error) {
-                console.warn("Failed to load completed work orders:", error);
-                await handleError(context, error, "Failed to Load Completed Work Orders");
-            }
-
-            // STEP 3: Remaining Bookings (Today)
-            try {
-                const bookingStatusGuid = "f16d80d1-fd07-4237-8b69-187a11eb75f9";
-                const remainingQuery =
-                    `?$select=bookableresourcebookingid` +
-                    `&$filter=_resource_value eq '${resourceId}' ` +
-                    `and _bookingstatus_value eq '${bookingStatusGuid}' ` +
-                    `and starttime ge ${todayStart} and starttime le ${todayEnd}`;
-
-                //  +
-                // `and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
-
-                const remainingResults = await executeQuery(context, "bookableresourcebooking", remainingQuery);
-                remainingToday = remainingResults?.entities?.length ?? 0;
-            } catch (error) {
-                console.warn("Failed to load remaining bookings:", error);
-                await handleError(context, error, "Failed to Load Remaining Bookings");
-            }
-
-            return { completedToday, remainingToday, campaignsToday };
-
-        } catch (error) {
-            await handleError(context, error, "Failed to Load Today's Counts");
-            return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
-        }
-    }, [context]);
-
-    /**
-     * Check organization unit and get unknown account
-     */
-    const checkOrganizationUnit = React.useCallback(async (userId: string): Promise<void> => {
-        try {
-            // Get user's organizational unit
-            const userQuery = `?$select=_duc_organizationalunitid_value&$filter=systemuserid eq '${userId}'`;
-            const userResults = await executeQuery(context, "systemuser", userQuery);
-
-            const userResult = userResults?.entities?.[0];
-            if (!userResult?._duc_organizationalunitid_value) {
-                console.log("No organizational unit found for the user.");
-                return;
-            }
-
-            const orgUnitId = userResult._duc_organizationalunitid_value;
-
-            // Retrieve the organizational unit details
-            const orgUnitQuery = `?$select=_duc_unknownaccount_value,duc_englishname&$filter=msdyn_organizationalunitid eq '${orgUnitId}'`;
-            const orgUnitResults = await executeQuery(context, "msdyn_organizationalunit", orgUnitQuery);
-
-            const orgUnitResult = orgUnitResults?.entities?.[0];
-            if (!orgUnitResult) {
-                console.warn("Organization unit not found");
-                return;
-            }
-
-            const orgUnitName = orgUnitResult.duc_englishname || "";
-            const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
-
-            // Check if organization unit name contains "Natural Reserve"
-            const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
-
-            let incidentTypeId: string | undefined = undefined;
-
-            // If Natural Reserve, get the incident type for this org unit
-            if (isNaturalReserve) {
-                try {
-                    const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$top=1`;
-                    const incidentTypeResults = await executeQuery(context, "msdyn_incidenttype", incidentTypeQuery);
-
-                    if (incidentTypeResults?.entities?.length > 0) {
-                        incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
-                        console.log("Incident Type ID found:", incidentTypeId);
-                    }
-                } catch (error) {
-                    console.warn("Error fetching incident type:", error);
-                    await handleError(context, error, "Failed to Fetch Incident Type");
-                }
-            }
-
-            setState(prev => ({
-                ...prev,
-                isNaturalReserve: isNaturalReserve,
-                unknownAccountId: unknownAccountId,
-                incidentTypeId: incidentTypeId,
-                orgUnitId: orgUnitId
-            }));
-
-            console.log("Organization Unit:", orgUnitName);
-            console.log("Is Natural Reserve:", isNaturalReserve);
-
-        } catch (error) {
-            await handleError(context, error, "Failed to Check Organization Unit");
-            setState(prev => ({
-                ...prev,
-                isNaturalReserve: false,
-                unknownAccountId: undefined,
-                incidentTypeId: undefined,
-                orgUnitId: undefined
-            }));
-        }
-    }, [context]);
-
-    /**
-     * Check patrol status
-     */
-    const checkPatrolStatus = React.useCallback(async (): Promise<void> => {
-        try {
-            const userSettings = context.userSettings;
-            const userId = (userSettings.userId ?? "").replace(/[{}]/g, "");
-            const today = new Date().toISOString().split('T')[0];
-
-            // Check for active patrol (status = 2)
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-
-            const activePatrolResults = await executeQuery(context, "new_inspectioncampaign", activePatrolQuery);
-
-            if (activePatrolResults?.entities?.length > 0) {
-                setState(prev => ({
-                    ...prev,
-                    patrolStatus: 'end',
-                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid
-                }));
-                return;
-            }
-
-            // Check for available patrol to start (status = 1 or 100000004)
-            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
-
-            const availablePatrolResults = await executeQuery(context, "new_inspectioncampaign", availablePatrolQuery);
-
-            if (availablePatrolResults?.entities?.length > 0) {
-                setState(prev => ({
-                    ...prev,
-                    patrolStatus: 'start',
-                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid
-                }));
-            } else {
-                setState(prev => ({
-                    ...prev,
-                    patrolStatus: 'none',
-                    activePatrolId: undefined
-                }));
-            }
-
-        } catch (error) {
-            await handleError(context, error, "Failed to Check Patrol Status");
-            setState(prev => ({
-                ...prev,
-                patrolStatus: 'none',
-                activePatrolId: undefined
-            }));
-        }
-    }, [context]);
-
-    /**
-     * Load user data
-     */
-    const loadUserData = React.useCallback(async (): Promise<void> => {
-        try {
-            const userSettings = context.userSettings;
-            const userId = (userSettings.userId ?? "").replace(/[{}]/g, "");
-
-            // Load user name
-            let username = strings.Loading;
-            try {
-                const userQuery = `?$filter=systemuserid eq '${userId}'&$select=duc_usernamearabic`;
-                const results = await executeQuery(context, "systemuser", userQuery);
-                const res = results?.entities?.[0];
-                username = res?.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
-            } catch (error) {
-                console.warn("Failed to load username:", error);
-                await handleError(context, error, "Failed to Load Username");
-                username = userSettings?.userName ?? "Inspector";
-            }
-
-            // Load today's counts
-            const { completedToday, remainingToday, campaignsToday } = await loadTodaysCounts(userId);
-
-            setState(prev => ({
-                ...prev,
-                pendingTodayBookings: remainingToday,
-                completedTodayWorkorders: completedToday,
-                TodayCampaigns: campaignsToday,
-                userName: username,
-            }));
-
-            // Cache the data
-            CacheManager.set("MOCI_userCounts", {
-                userName: username,
-                remainingToday,
-                completedToday,
-                campaignsToday
-            });
-
-            // Check organization unit (works in both online and offline)
-            await checkOrganizationUnit(userId);
-
-        } catch (error) {
-            await handleError(context, error, "Failed to Load User Data");
-
-            // Try to restore from cache
-            const cached = CacheManager.get<any>("MOCI_userCounts");
-            if (cached) {
-                setState(prev => ({
-                    ...prev,
-                    userName: cached.userName ?? "Inspector",
-                    pendingTodayBookings: cached.remainingToday ?? null,
-                    completedTodayWorkorders: cached.completedToday ?? null,
-                    TodayCampaigns: cached.campaignsToday ?? null,
-                }));
-            }
-        }
-    }, [context, strings.Loading, loadTodaysCounts, checkOrganizationUnit]);
-
-    // =============================================================================
-    // EVENT HANDLERS
-    // =============================================================================
+    const isOffline = (): boolean => {
+        const ctx: any = props.context;
+        return ctx.mode?.isInOfflineMode === true;
+    };
 
     const handleAdvancedSearchResults = (results: any[]): void => {
         setState(prev => ({
@@ -681,6 +240,379 @@ export const Main = (props: IProps) => {
         }));
     };
 
+    // Get organization unit data from cache
+    const getOrgUnitFromCache = (userId: string): OrgUnitCache | null => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cached = localStorage.getItem(cacheKey);
+            if (!cached) return null;
+
+            const cacheData: OrgUnitCache = JSON.parse(cached);
+            const now = Date.now();
+
+            // Check if cache is still valid
+            if (now - cacheData.timestamp > CACHE_DURATION) {
+                localStorage.removeItem(cacheKey);
+                return null;
+            }
+
+            return cacheData;
+        } catch (error) {
+            console.error("Error reading org unit cache:", error);
+            return null;
+        }
+    };
+
+    // Save organization unit data to cache
+    const saveOrgUnitToCache = (userId: string, data: Omit<OrgUnitCache, 'timestamp'>): void => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cacheData: OrgUnitCache = {
+                ...data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            //console.log("Organization unit data cached successfully");
+        } catch (error) {
+            console.error("Error saving org unit cache:", error);
+        }
+    };
+
+    // Check organization unit and get unknown account
+    const checkOrganizationUnit = React.useCallback(async (ctx: any, userId: string): Promise<void> => {
+        try {
+            // Try to get from cache first
+            const cachedData = getOrgUnitFromCache(userId);
+            if (cachedData) {
+                //console.log("Using cached organization unit data");
+                setState(prev => ({
+                    ...prev,
+                    isNaturalReserve: cachedData.isNaturalReserve,
+                    isWildlifeSection: cachedData.isWildlifeSection,
+                    unknownAccountId: cachedData.unknownAccountId,
+                    unknownAccountName: cachedData.unknownAccountName,
+                    incidentTypeId: cachedData.incidentTypeId,
+                    incidentTypeName: cachedData.incidentTypeName,
+                    orgUnitId: cachedData.orgUnitId,
+                    organizationUnitName: cachedData.orgUnitName,
+                    inspectionCustomerClassification: cachedData.inspectionCustomerClassification
+                }));
+                return;
+            }
+
+            // Get user's organizational unit
+            const userResult = await ctx.webAPI.retrieveRecord(
+                "systemuser",
+                userId,
+                "?$select=_duc_organizationalunitid_value"
+            );
+
+            if (!userResult._duc_organizationalunitid_value) {
+                //console.log("No organizational unit found for the user.");
+                return;
+            }
+
+            const orgUnitId = userResult._duc_organizationalunitid_value;
+
+            // Retrieve the organizational unit details INCLUDING the new classification field
+            const orgUnitResult = await ctx.webAPI.retrieveRecord(
+                "msdyn_organizationalunit",
+                orgUnitId,
+                "?$select=_duc_unknownaccount_value,duc_englishname,duc_inspectioncustomerclassification&$expand=duc_unknownaccount($select=name)"
+            );
+
+            const orgUnitName = orgUnitResult.duc_englishname || "";
+            const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
+            const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
+            const inspectionCustomerClassification = orgUnitResult.duc_inspectioncustomerclassification; // NEW: Get the classification
+
+            // Check if organization unit name is "Natural Reserve" (case insensitive)
+            const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
+
+            // Check if organization unit is Wildlife section
+            const isWildlifePlantLife = orgUnitName.includes("Wildlife - Plant Life Section");
+            const isWildlifeNaturalResources = orgUnitName.includes("Wildlife - Natural Resources Section");
+            const isWildlifeSection = isWildlifePlantLife || isWildlifeNaturalResources;
+
+            let incidentTypeId: string | undefined = undefined;
+            let incidentTypeName: string | undefined = undefined;
+
+            // If Natural Reserve, get the incident type for this org unit
+            if ((inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) ) {
+                try {
+                    const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$top=1`;
+                    const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
+                        "msdyn_incidenttype",
+                        incidentTypeQuery
+                    );
+
+                    if (incidentTypeResults.entities.length > 0) {
+                        incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
+                        incidentTypeName = incidentTypeResults.entities[0].msdyn_name;
+                        //console.log("Incident Type ID found:", incidentTypeId);
+                        //console.log("Incident Type Name found:", incidentTypeName);
+                    } else {
+                        console.warn("No incident type found for Natural Reserve org unit");
+                    }
+                } catch (error) {
+                    console.error("Error fetching incident type:", error);
+                }
+            }
+
+            // Save to cache
+            saveOrgUnitToCache(userId, {
+                orgUnitId,
+                orgUnitName,
+                isNaturalReserve,
+                isWildlifeSection,
+                unknownAccountId,
+                unknownAccountName,
+                incidentTypeId,
+                incidentTypeName,
+                inspectionCustomerClassification // NEW: Cache the classification
+            });
+
+            setState(prev => ({
+                ...prev,
+                isNaturalReserve: isNaturalReserve,
+                isWildlifeSection: isWildlifeSection,
+                unknownAccountId: unknownAccountId,
+                unknownAccountName: unknownAccountName,
+                incidentTypeId: incidentTypeId,
+                incidentTypeName: incidentTypeName,
+                orgUnitId: orgUnitId,
+                organizationUnitName: orgUnitName,
+                inspectionCustomerClassification: inspectionCustomerClassification // NEW: Set the classification
+            }));
+
+            //console.log("Organization Unit:", orgUnitName);
+            //console.log("Organization Unit ID:", orgUnitId);
+            //console.log("Is Natural Reserve:", isNaturalReserve);
+            //console.log("Is Wildlife Section:", isWildlifeSection);
+            //console.log("Unknown Account ID:", unknownAccountId);
+            //console.log("Unknown Account Name:", unknownAccountName);
+            //console.log("Incident Type ID:", incidentTypeId);
+            //console.log("Incident Type Name:", incidentTypeName);
+            //console.log("Inspection Customer Classification:", inspectionCustomerClassification);
+
+        } catch (error) {
+            console.error("Error checking organization unit:", error);
+            setState(prev => ({
+                ...prev,
+                isNaturalReserve: false,
+                isWildlifeSection: false,
+                unknownAccountId: undefined,
+                unknownAccountName: undefined,
+                incidentTypeId: undefined,
+                incidentTypeName: undefined,
+                orgUnitId: undefined,
+                organizationUnitName: undefined,
+                inspectionCustomerClassification: undefined
+            }));
+        }
+    }, []);
+
+    // Check patrol status on load
+    const checkPatrolStatus = React.useCallback(async (orgUnitIdParam?: string): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+            
+            // Try to get orgUnitId from parameter, state, or cache
+            let orgUnitId = orgUnitIdParam || state.orgUnitId;
+            
+            if (!orgUnitId) {
+                const cachedData = getOrgUnitFromCache(userId);
+                orgUnitId = cachedData?.orgUnitId;
+            }
+            
+            // If still no orgUnitId, we can't check patrol status
+            if (!orgUnitId) {
+                //console.log("No organization unit ID available for patrol status check");
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'none',
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
+                }));
+                return;
+            }
+            
+            // Get today's date in ISO format
+            const today = new Date().toISOString().split('T')[0];
+
+            // Check for active patrol (status = 2)
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+
+            const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                activePatrolQuery
+            );
+
+            if (activePatrolResults.entities.length > 0) {
+                // Found active patrol, show End Patrol button
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'end',
+                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: activePatrolResults.entities[0].new_name
+                }));
+                return;
+            }
+
+            // Check for available patrol to start (status = 1 or 100000004)
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+
+            const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                availablePatrolQuery
+            );
+
+            if (availablePatrolResults.entities.length > 0) {
+                // Found available patrol, show Start Patrol button
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'start',
+                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: availablePatrolResults.entities[0].new_name
+                }));
+            } else {
+                // No patrol available
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'none',
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
+                }));
+            }
+
+        } catch (error) {
+            console.error("Error checking patrol status:", error);
+            setState(prev => ({
+                ...prev,
+                patrolStatus: 'none',
+                activePatrolId: undefined,
+                activePatrolName: undefined
+            }));
+        }
+    }, [props.context, state.orgUnitId]);
+
+    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
+        const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
+
+        try {
+            let completedToday = 0;
+            let remainingToday = 0;
+            let campaignsToday = 0;
+
+            try {
+                
+                let resourceId: string | null = localStorage.getItem(CACHE_KEY);
+
+                if (!resourceId) {
+                    const userQuery = `?$select=_duc_bookableresourceid_value&$filter=systemuserid eq '${userId}'`;
+                    const userResults = await ctx.webAPI.retrieveMultipleRecords("systemuser", userQuery);
+
+                    const retrievedResourceId = userResults.entities.length > 0
+                        ? userResults.entities[0]["_duc_bookableresourceid_value"]
+                        : null;
+
+                    if (retrievedResourceId) {
+                        resourceId = retrievedResourceId;
+                        localStorage.setItem(CACHE_KEY, resourceId?.toString() ?? "");
+                        //console.log("Resource ID fetched and cached:", resourceId);
+                    } else {
+                        console.warn(`User ${userId} is not linked to a Bookable Resource.`);
+                        return { completedToday, remainingToday, campaignsToday };
+                    }
+                } else {
+                    //console.log("Resource ID retrieved from cache:", resourceId);
+                }
+
+                if (!resourceId) {
+                    return { completedToday, remainingToday, campaignsToday };
+                }
+
+                const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
+                const completedResults = await ctx.webAPI.retrieveMultipleRecords("msdyn_workorder", completedQuery);
+                completedToday = completedResults.entities.length;
+                //console.log("Completed Work Orders Count:", completedToday);
+
+                const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
+                const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and _bookingstatus_value eq '${bookingStatusGuid}' and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
+                const remainingResults = await ctx.webAPI.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
+                remainingToday = remainingResults.entities.length;
+                //console.log("Remaining Bookings Count:", remainingToday);
+
+                return { completedToday, remainingToday, campaignsToday };
+
+            } catch (error) {
+                console.error("Error retrieving counts:", error);
+                return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+            }
+
+        } catch (e) {
+            //console.log("Failed to load today's counts:", e);
+            return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+        }
+    };
+
+    const loadUserData = React.useCallback(async (): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            if (!ctx) return;
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+            let res: any = null;
+
+            if (isOffline()) {
+                const results = await ctx.utils.executeOffline(
+                    "systemuser",
+                    `?$filter=systemuserid eq ${userId}&$select=duc_usernamearabic`
+                );
+                res = results?.entities?.[0] ?? null;
+            } else {
+                res = await ctx.webAPI.retrieveRecord(
+                    "systemuser",
+                    userId,
+                    "?$select=duc_usernamearabic"
+                );
+            }
+
+            if (res) {
+                const username = res.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
+                const { completedToday, remainingToday, campaignsToday } = await loadTodaysCounts(ctx, userId);
+
+                setState(prev => ({
+                    ...prev,
+                    pendingTodayBookings: remainingToday,
+                    completedTodayWorkorders: completedToday,
+                    TodayCampaigns: campaignsToday,
+                    userName: username,
+                }));
+
+                localStorage.setItem(
+                    "MOCI_userCounts",
+                    JSON.stringify({ userName: username })
+                );
+
+                // Check organization unit after loading user data
+                if (!isOffline()) {
+                    await checkOrganizationUnit(ctx, userId);
+                    // After checkOrganizationUnit completes, get the orgUnitId and check patrol status
+                    const cachedData = getOrgUnitFromCache(userId);
+                    if (cachedData?.orgUnitId) {
+                        await checkPatrolStatus(cachedData.orgUnitId);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("User data load failed, using cache.", e);
+            restoreCache();
+        }
+    }, [props.context, checkOrganizationUnit, checkPatrolStatus]);
+
     const handleOpenAdvancedSearch = (): void => {
         setState(prev => ({ ...prev, showAdvancedSearch: true }));
     };
@@ -688,6 +620,29 @@ export const Main = (props: IProps) => {
     const handleCloseAdvancedSearch = (): void => {
         setState(prev => ({ ...prev, showAdvancedSearch: false }));
     };
+
+    const restoreCache = (): void => {
+        const cached = localStorage.getItem("MOCI_userCounts");
+        if (cached) {
+            try {
+                const obj = JSON.parse(cached);
+                setState(prev => ({
+                    ...prev,
+                    remainingToday: obj.remainingToday,
+                    completedTodayWorkorders: obj.completedTodayWorkorders,
+                    TodayCampaigns: obj.TodayCampaigns,
+                    userName: obj.userName ?? "Inspector"
+                }));
+            } catch {
+                // ignore corrupted cache
+            }
+        }
+    };
+
+    React.useEffect(() => {
+        void loadUserData();
+        restoreCache();
+    }, [loadUserData]);
 
     const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>): void => {
         if (e.key === "Enter") void onSearchClick();
@@ -699,69 +654,74 @@ export const Main = (props: IProps) => {
             setState(prev => ({ ...prev, message: strings.SearchPrompt }));
             return;
         }
-
         setState(prev => ({ ...prev, isLoading: true, message: undefined }));
+        const ctx: any = props.context;
         const searchKey = `MOCI_lastSearch_${text.toLowerCase()}`;
 
         try {
-            const query = `?$top=100`;
-            const results = await executeQuery(context, "account", query);
+            let results: any = null;
 
-            let entities = results?.entities ?? [];
-
-            // Filter by search text
-            if (text) {
-                const lowerText = text.toLowerCase();
-                entities = entities.filter((entity: any) => {
-                    const entityName = entity.name as string | undefined;
-                    return entityName?.toLowerCase().startsWith(lowerText) ?? false;
-                });
+            if (isOffline()) {
+                results = await ctx.utils.executeOffline("account", `?$top=100`);
+                if (text) {
+                    const lowerText = text.toLowerCase();
+                    results.entities = results.entities.filter((entity: any) => {
+                        const entityName = entity.name as string | undefined;
+                        return entityName?.toLowerCase().startsWith(lowerText) ?? false;
+                    });
+                }
+            } else {
+                results = await ctx.webAPI.retrieveMultipleRecords("account", `?$top=100`);
+                if (text) {
+                    const lowerText = text.toLowerCase();
+                    results.entities = results.entities.filter((entity: any) => {
+                        const entityName = entity.name as string | undefined;
+                        return entityName?.toLowerCase().startsWith(lowerText) ?? false;
+                    });
+                }
             }
 
+            const entities = results?.entities ?? [];
+
             if (entities.length === 0) {
-                setState(prev => ({ ...prev, message: strings.NoResults, isLoading: false }));
-            } else if (entities.length === 1) {
-                // Navigate directly to single result (works in offline too)
-                await navigateTo(context, {
+                setState(prev => ({ ...prev, message: strings.NoResults }));
+            } else if (entities.length === 1 && !isOffline()) {
+                void ctx.navigation.navigateTo({
                     pageType: "entityrecord",
                     entityName: "account",
                     entityId: entities[0].accountid
                 });
-                setState(prev => ({ ...prev, isLoading: false }));
             } else {
                 setState(prev => ({
                     ...prev,
                     showResults: true,
                     searchResults: entities,
-                    message: undefined,
-                    isLoading: false
+                    message: undefined
                 }));
             }
 
-            // Cache results
-            CacheManager.set(searchKey, { entities });
-
-        } catch (error) {
-            await handleError(context, error, "Search Failed");
-
-            // Try to load from cache
-            const cached = CacheManager.get<any>(searchKey);
-            if (cached?.entities) {
+            localStorage.setItem(searchKey, JSON.stringify(results));
+        } catch (err: any) {
+            console.error(err);
+            const cached = localStorage.getItem(searchKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+            } else {
                 setState(prev => ({
                     ...prev,
-                    showResults: true,
-                    searchResults: cached.entities,
-                    isLoading: false
+                    message: `${err?.message ?? err}`
                 }));
-            } else {
-                setState(prev => ({ ...prev, isLoading: false }));
             }
+        } finally {
+            setState(prev => ({ ...prev, isLoading: false }));
         }
     };
 
     const onRecordClick = (accountId: string): void => {
+        const ctx: any = props.context;
         setState(prev => ({ ...prev, showResults: false }));
-        void navigateTo(context, {
+
+        void ctx.navigation.navigateTo({
             pageType: "entityrecord",
             entityName: "account",
             entityId: accountId
@@ -772,92 +732,105 @@ export const Main = (props: IProps) => {
         setState(prev => ({ ...prev, showResults: false }));
     };
 
-    // =============================================================================
-    // NAVIGATION HANDLERS
-    // =============================================================================
-
     const openScheduled = (): void => {
-        void navigateTo(context, {
+        const ctx: any = props.context;
+        void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "bookableresourcebooking",
             viewId: "4073baca-cc5f-e611-8109-000d3a146973"
         });
     };
 
+    const openAllScheduled = (): void => {
+        const ctx: any = props.context;
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "bookableresourcebooking",
+            viewId: "f52b7a9b-cae8-f011-8406-6045bd9c20cb"
+        });
+    };
+
     const openPendingWorkorders = (): void => {
-        void navigateTo(context, {
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+        void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "msdyn_workorder",
             viewId: "bee0efc7-40e4-f011-8406-6045bd9c224c"
         });
     };
 
-    const openScheduledCampaigns = (): void => {
-        void navigateTo(context, {
-            pageType: "entitylist",
-            entityName: "new_inspectioncampaign",
-            viewId: "0628a5aa-88d7-f011-8406-7c1e524df347"
-        });
-    };
-
     const closedWorkorders = (): void => {
-        void navigateTo(context, {
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+        void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "msdyn_workorder",
             viewId: "aad92cc9-00c6-f011-8544-000d3a2274a5"
         });
     };
 
-    // =============================================================================
-    // FORM HANDLERS
-    // =============================================================================
-
     const startInspection = (): void => {
-        void openForm(
-            context,
-            { entityName: "msdyn_workorder", useQuickCreateForm: true },
-            {}
-        );
-    };
-
-    const startAnonymousInspection = (): void => {
-        const defaultValues: any = {
-            duc_anonymouscustomer: true
-        };
-
-        if (state.unknownAccountId) {
-            defaultValues.duc_subaccount = state.unknownAccountId;
-            defaultValues.msdyn_serviceaccount = state.unknownAccountId;
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
+            return;
         }
 
-        if (state.incidentTypeId) {
-            defaultValues.msdyn_primaryincidenttype = state.incidentTypeId;
+        // Prepare default values
+        const defaultValues: any = {};
+
+        // If we have an active patrol campaign, set it as default
+        if (state.activePatrolId && state.activePatrolName) {
+            defaultValues.new_campaign = [
+                {
+                    id: state.activePatrolId,
+                    name: state.activePatrolName,
+                    entityType: "new_inspectioncampaign"
+                }
+            ];
         }
 
-        void openForm(
-            context,
+        void ctx.navigation.openForm(
             { entityName: "msdyn_workorder", useQuickCreateForm: true },
             defaultValues
         );
     };
 
-    // =============================================================================
-    // PATROL HANDLERS
-    // =============================================================================
-
     const startPatrol = async (): Promise<void> => {
+        const ctx: any = props.context;
+
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+
         if (!state.activePatrolId) {
-            await handleError(context, "No patrol campaign found", "Patrol Error");
+            setState(prev => ({ ...prev, message: "No patrol campaign found" }));
             return;
         }
 
         try {
             setState(prev => ({ ...prev, isLoading: true }));
 
-            await updateRecord(context, "new_inspectioncampaign", state.activePatrolId, {
+            // Update campaign status to 2 (In Progress)
+            const updateData = {
                 duc_campaignstatus: 2
-            });
+            };
 
+            await ctx.webAPI.updateRecord(
+                "new_inspectioncampaign",
+                state.activePatrolId,
+                updateData
+            );
+
+            // Update state to show End Patrol button
             setState(prev => ({
                 ...prev,
                 patrolStatus: 'end',
@@ -865,44 +838,70 @@ export const Main = (props: IProps) => {
                 message: "Patrol started successfully"
             }));
 
+            // Clear message after 3 seconds
             setTimeout(() => {
                 setState(prev => ({ ...prev, message: undefined }));
             }, 3000);
 
         } catch (error) {
-            await handleError(context, error, "Failed to Start Patrol");
-            setState(prev => ({ ...prev, isLoading: false }));
+            console.error("Error starting patrol:", error);
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Failed to start patrol"
+            }));
         }
     };
 
     const endPatrol = async (): Promise<void> => {
+        const ctx: any = props.context;
+
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+
         try {
             setState(prev => ({ ...prev, isLoading: true }));
 
-            const userSettings = context.userSettings;
-            const userId = (userSettings.userId ?? "").replace(/[{}]/g, "");
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
             const today = new Date().toISOString().split('T')[0];
 
+            // Query for active patrol
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
 
-            const activePatrolResults = await executeQuery(context, "new_inspectioncampaign", activePatrolQuery);
+            const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                activePatrolQuery
+            );
 
-            if (!activePatrolResults?.entities?.length) {
+            if (activePatrolResults.entities.length === 0) {
                 setState(prev => ({
                     ...prev,
-                    isLoading: false
+                    isLoading: false,
+                    message: "No active patrol found"
                 }));
-                await handleError(context, "No active patrol found", "Patrol Error");
                 return;
             }
 
             const patrolId = activePatrolResults.entities[0].new_inspectioncampaignid;
 
-            await updateRecord(context, "new_inspectioncampaign", patrolId, {
+            // Update campaign status to 100000004 (Completed)
+            const updateData = {
                 duc_campaignstatus: 100000004
-            });
+            };
 
-            await checkPatrolStatus();
+            await ctx.webAPI.updateRecord(
+                "new_inspectioncampaign",
+                patrolId,
+                updateData
+            );
+
+            // Check if there's another patrol available
+            if (state.orgUnitId) {
+                await checkPatrolStatus(state.orgUnitId);
+            }
 
             setState(prev => ({
                 ...prev,
@@ -910,49 +909,62 @@ export const Main = (props: IProps) => {
                 message: "Patrol ended successfully"
             }));
 
+            // Clear message after 3 seconds
             setTimeout(() => {
                 setState(prev => ({ ...prev, message: undefined }));
             }, 3000);
 
         } catch (error) {
-            await handleError(context, error, "Failed to End Patrol");
-            setState(prev => ({ ...prev, isLoading: false }));
+            console.error("Error ending patrol:", error);
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Failed to end patrol"
+            }));
         }
     };
 
-    // =============================================================================
-    // EFFECTS
-    // =============================================================================
+    // NEW: Handle opening MultiTypeInspection with appropriate defaults
+    const handleOpenMultiTypeInspection = (): void => {
+        const { inspectionCustomerClassification } = state;
 
-    React.useEffect(() => {
-        void loadUserData();
-        void checkPatrolStatus();
-    }, [loadUserData, checkPatrolStatus]);
+        let defaultType: number | undefined = undefined;
+        let lockType = false;
 
-    // =============================================================================
-    // RENDER HELPERS
-    // =============================================================================
+        // Based on classification value:
+        // 100000000 (Company) - should not reach here, uses Start Inspection instead
+        // 100000001 (Individuals) - default to Individual (2) and lock
+        // 100000002 (Mixed) - no default, no lock
+        if (inspectionCustomerClassification === 100000001) {
+            defaultType = 2; // Individual
+            lockType = true;
+        }
 
-    const {
-        searchText,
-        pendingTodayBookings,
-        completedTodayWorkorders,
-        TodayCampaigns,
-        userName,
-        message,
-        isLoading,
-        showResults,
-        searchResults,
-        patrolStatus,
-        isNaturalReserve
-    } = state;
+        setState(prev => ({
+            ...prev,
+            showMultiTypeInspection: true,
+            defaultInspectionType: defaultType,
+            lockInspectionType: lockType
+        }));
+    };
 
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus, inspectionCustomerClassification } = state;
     const isActionDisabled = isLoading;
 
-    // Determine which buttons to show
-    const showScheduledInspections = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'none');
-    const showStartInspection = !isNaturalReserve || (isNaturalReserve && patrolStatus === 'end') || (isNaturalReserve && patrolStatus === 'none');
-    const showStartAnonymousInspection = isNaturalReserve && patrolStatus === 'end';
+    // NEW BUTTON VISIBILITY LOGIC based on duc_InspectionCustomerClassification
+    // Always show Scheduled Inspections
+    const showScheduledInspections = true;
+
+    // Start Inspection button: Show ONLY when classification is 100000000 (Company)
+    const showStartInspection = inspectionCustomerClassification === 100000000;
+
+    // Multi Type Inspection button: Show when classification is 100000001 (Individuals) or 100000002 (Mixed)
+    // Also respect patrol status: when patrol status is 'start', don't show (user needs to start patrol first)
+    const showMultiTypeInspection = 
+        (inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) &&
+        (patrolStatus === 'end' || patrolStatus === 'none');
+
+    // Start/End Patrol buttons - show for all org units based on patrol status
     const showStartPatrol = patrolStatus === 'start';
     const showEndPatrol = patrolStatus === 'end';
 
@@ -970,7 +982,7 @@ export const Main = (props: IProps) => {
         height: '100%',
         maxHeight: '100%',
         direction: isRTL ? 'rtl' as const : 'ltr' as const,
-        position: 'fixed' as const,
+        position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
@@ -983,10 +995,6 @@ export const Main = (props: IProps) => {
         margin: 'auto',
     };
 
-    // =============================================================================
-    // RENDER
-    // =============================================================================
-
     return React.createElement(
         React.Fragment,
         null,
@@ -994,7 +1002,6 @@ export const Main = (props: IProps) => {
         React.createElement(
             "div",
             { style: containerStyle },
-
             // Header
             React.createElement(
                 "header",
@@ -1005,19 +1012,16 @@ export const Main = (props: IProps) => {
                     React.createElement("img", { alt: "", src: logoBase64 })
                 )
             ),
-
             // Welcome Banner
             React.createElement(
                 "div",
                 { style: STYLES.welcomeBanner },
                 `${strings.WelcomeBack}, ${userName}`
             ),
-
             // Main Content
             React.createElement(
                 "div",
                 { style: { ...STYLES.flexGrow1, ...STYLES.p3, ...STYLES.width, marginleft: '0.5%' } },
-
                 // Search Bar
                 React.createElement(
                     "div",
@@ -1036,13 +1040,7 @@ export const Main = (props: IProps) => {
                                 onChange: (e) => setState(prev => ({ ...prev, searchText: e.target.value })),
                                 onKeyUp: onKeyUp,
                                 disabled: isLoading,
-                                style: {
-                                    border: 'none',
-                                    width: '90%',
-                                    outline: 'none',
-                                    direction: isRTL ? 'rtl' : 'ltr',
-                                    background: 'none'
-                                }
+                                style: { border: 'none', width: '90%', outline: 'none', direction: isRTL ? 'rtl' : 'ltr', background: 'none' }
                             })
                         )
                     ),
@@ -1062,12 +1060,10 @@ export const Main = (props: IProps) => {
                         React.createElement("img", { src: filtersDataUri })
                     )
                 ),
-
                 // Inspection Cards
                 React.createElement(
                     "div",
                     { style: { display: "flex", flexDirection: "column" as const, gap: 12 } },
-
                     // Pending Card
                     React.createElement(
                         "div",
@@ -1098,7 +1094,6 @@ export const Main = (props: IProps) => {
                         ),
                         React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
                     ),
-
                     // Completed Card
                     React.createElement(
                         "div",
@@ -1126,68 +1121,27 @@ export const Main = (props: IProps) => {
                             React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
-                    ),
-
-                    // Pending Workorders Card
-                    React.createElement(
-                        "div",
-                        {
-                            onClick: openPendingWorkorders,
-                            style: {
-                                ...STYLES.border,
-                                ...STYLES.rounded4,
-                                ...STYLES.dFlex,
-                                ...STYLES.alignItemsCenter,
-                                ...STYLES.justifyContentBetween,
-                                ...STYLES.p3,
-                                ...STYLES.gap3,
-                                cursor: isActionDisabled ? 'not-allowed' : 'pointer',
-                                opacity: isActionDisabled ? 0.5 : 1,
-                                pointerEvents: isActionDisabled ? 'none' : 'auto'
-                            }
-                        },
-                        React.createElement(
-                            "div",
-                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
-                            React.createElement(
-                                "div",
-                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
-                                React.createElement("img", { src: clockDataUri })
-                            ),
-                            React.createElement("h6", { style: STYLES.h6 }, strings.PendingInspections)
-                        ),
-                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
                     )
                 )
             ),
-
             // Action Buttons
             React.createElement(
                 "div",
                 { style: STYLES.actions },
 
-                // Scheduled Inspections
+                // Scheduled Inspections button - always show
                 showScheduledInspections && React.createElement(
                     "button",
                     {
-                        onClick: openScheduled,
+                        onClick: openAllScheduled,
                         disabled: isActionDisabled,
-                        style: getButtonStyle({
-                            ...STYLES.btnBlueDark,
-                            ...STYLES.textWhite,
-                            ...STYLES.rounded4,
-                            ...STYLES.p3,
-                            ...STYLES.dFlex,
-                            ...STYLES.alignItemsCenter,
-                            ...STYLES.justifyContentCenter,
-                            ...STYLES.gap3
-                        })
+                        style: getButtonStyle({ ...STYLES.btnBlueDark, ...STYLES.textWhite, ...STYLES.rounded4, ...STYLES.p3, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.justifyContentCenter, ...STYLES.gap3 })
                     },
                     React.createElement("img", { src: calenderDataUri }),
                     React.createElement("span", null, strings.ScheduledInspections)
                 ),
 
-                // Start Inspection
+                // Start Inspection button - ONLY for Company classification (100000000)
                 showStartInspection && React.createElement(
                     "button",
                     {
@@ -1210,14 +1164,14 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // Start Anonymous Inspection
-                showStartAnonymousInspection && React.createElement(
+                // Multi Type Inspection button - for Individuals (100000001) or Mixed (100000002)
+                showMultiTypeInspection && React.createElement(
                     "button",
                     {
-                        onClick: startAnonymousInspection,
+                        onClick: handleOpenMultiTypeInspection,
                         disabled: isActionDisabled,
                         style: getButtonStyle({
-                            ...STYLES.btnOrangeDark,
+                            ...STYLES.btnRedDark,
                             ...STYLES.textWhite,
                             ...STYLES.rounded4,
                             ...STYLES.p3,
@@ -1229,11 +1183,11 @@ export const Main = (props: IProps) => {
                     },
                     [
                         React.createElement("img", { src: startDataUri, key: "icon" }),
-                        React.createElement("span", { key: "text" }, strings.StartAnonymousInspection)
+                        React.createElement("span", { key: "text" }, strings.StartMultiTypeInspection)
                     ]
                 ),
 
-                // Start Patrol
+                // Start Patrol button - show for all org units when patrol is available
                 showStartPatrol && React.createElement(
                     "button",
                     {
@@ -1256,7 +1210,7 @@ export const Main = (props: IProps) => {
                     ]
                 ),
 
-                // End Patrol
+                // End Patrol button - show for all org units when patrol is active
                 showEndPatrol && React.createElement(
                     "button",
                     {
@@ -1280,21 +1234,34 @@ export const Main = (props: IProps) => {
                 )
             )
         ),
-
-        // Advanced Search Modal
         React.createElement(AdvancedSearch, {
-            context: context,
+            context: props.context,
             isOpen: state.showAdvancedSearch,
             onClose: handleCloseAdvancedSearch,
             onSearchResults: handleAdvancedSearchResults
         }),
-
+        // MultiTypeInspection Modal
+        state.showMultiTypeInspection && React.createElement(MultiTypeInspection, {
+            context: props.context,
+            isOpen: true,
+            onClose: () => setState(prev => ({ ...prev, showMultiTypeInspection: false })),
+            activePatrolId: state.activePatrolId,
+            activePatrolName: state.activePatrolName,
+            incidentTypeId: state.incidentTypeId,
+            incidentTypeName: state.incidentTypeName,
+            unknownAccountId: state.unknownAccountId,
+            unknownAccountName: state.unknownAccountName,
+            organizationUnitId: state.orgUnitId,
+            organizationUnitName: state.organizationUnitName,
+            defaultInspectionType: state.defaultInspectionType,
+            lockInspectionType: state.lockInspectionType
+        } as any),
         // Search Results Modal
         showResults && React.createElement(SearchResults, {
             results: searchResults,
             onRecordClick: onRecordClick,
             onClose: onCloseResults,
-            context: context
+            context: props.context
         })
     );
 };
