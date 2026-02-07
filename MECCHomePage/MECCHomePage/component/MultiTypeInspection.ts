@@ -1,5 +1,6 @@
 /* eslint-disable */
 import * as React from 'react';
+import { WorkOrderHelpers, CampaignHelpers, IncidentTypeHelpers } from '../helpers';
 
 interface IMultiTypeInspectionProps {
     context: ComponentFramework.Context<any>;
@@ -318,24 +319,15 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
     };
 
     private loadCampaigns = async (): Promise<Array<{ id: string; name: string }>> => {
+        if (!this.props.organizationUnitId) return [];
+
         const cacheKey = `${CAMPAIGNS_CACHE_KEY}_${this.props.organizationUnitId}`;
         const cached = this.getFromCache<Array<{ id: string; name: string }>>(cacheKey);
         if (cached) return cached;
 
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' ` +
-                `and duc_campaignstatus ne 100000004 ` +
-                `and duc_fromdate le ${today} and duc_todate ge ${today}` +
-                `&$select=new_inspectioncampaignid,new_name` +
-                `&$orderby=new_name`;
-
-            const results = await this.xrm.WebApi.retrieveMultipleRecords('new_inspectioncampaign', query);
-
-            const campaigns = (results?.entities || []).map((e: any) => ({
-                id: e.new_inspectioncampaignid,
-                name: e.new_name
-            }));
+            // Get active inspection campaigns (status = 2, type = 100000000)
+            const campaigns = await CampaignHelpers.getActiveInspectionCampaigns(this.props.organizationUnitId);
 
             this.saveToCache(cacheKey, campaigns);
             return campaigns;
@@ -346,21 +338,15 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
     };
 
     private loadIncidentTypes = async (): Promise<Array<{ id: string; name: string }>> => {
+        if (!this.props.organizationUnitId) return [];
+
         const cacheKey = `${INCIDENT_TYPES_CACHE_KEY}_${this.props.organizationUnitId}`;
         const cached = this.getFromCache<Array<{ id: string; name: string }>>(cacheKey);
         if (cached) return cached;
 
         try {
-            const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}'` +
-                `&$select=msdyn_incidenttypeid,msdyn_name` +
-                `&$orderby=msdyn_name`;
-
-            const results = await this.xrm.WebApi.retrieveMultipleRecords('msdyn_incidenttype', query);
-
-            const incidentTypes = (results?.entities || []).map((e: any) => ({
-                id: e.msdyn_incidenttypeid,
-                name: e.msdyn_name
-            }));
+            // Get incident types for organization unit
+            const incidentTypes = await IncidentTypeHelpers.getIncidentTypesByOrgUnit(this.props.organizationUnitId);
 
             this.saveToCache(cacheKey, incidentTypes);
             return incidentTypes;
@@ -655,53 +641,174 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
     };
 
     // =====================================================================
-    // WORK ORDER CREATION
+    // WORK ORDER CREATION WITH FULL BUSINESS LOGIC
     // =====================================================================
 
     private createWorkOrder = async (accountId: string): Promise<void> => {
         try {
-            // Get account name
+            const userId = this.xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+
+            // Get account name and data
             const accountRecord = await this.xrm.WebApi.retrieveRecord('account', accountId, '?$select=name');
             const accountName = accountRecord?.name || '';
 
-            // Build work order data
-            const workOrderData: any = {
-                'duc_subaccount@odata.bind': `/accounts(${accountId})`,
-                'msdyn_serviceaccount@odata.bind': `/accounts(${accountId})`,
-                duc_accountinspectiontype: this.state.selectedInspectionType
+            // Prepare base data
+            let serviceAccountData = {
+                id: accountId,
+                name: accountName,
+                entityType: 'account'
             };
 
-            // Anonymous customer flag
-            // Set to true if: Type 4 OR (types 3,6,7 AND anonymous checkbox is checked)
-            if (this.state.selectedInspectionType === 4 || 
-                (this.state.isAnonymous && [3, 6, 7].includes(this.state.selectedInspectionType!))) {
-                workOrderData.duc_anonymouscustomer = true;
+            let addressData: any = null;
+            let latitude: number | undefined = undefined;
+            let longitude: number | undefined = undefined;
+
+            // STEP 1: Handle sub-account change logic (onSubaccountChange)
+            // Get service account, address, and coordinates
+            const subAccountResult = await WorkOrderHelpers.handleSubAccountChange(accountId);
+            if (subAccountResult) {
+                serviceAccountData = subAccountResult.serviceAccount;
+                addressData = subAccountResult.address;
+                latitude = subAccountResult.latitude;
+                longitude = subAccountResult.longitude;
             }
 
-            // Campaign
-            if (this.state.selectedCampaignId) {
-                workOrderData['new_campaign@odata.bind'] = `/new_inspectioncampaigns(${this.state.selectedCampaignId})`;
+            // STEP 2: Determine incident type
+            let incidentTypeData: { id: string; name: string; entityType: string } | undefined;
+            
+            if (this.state.selectedIncidentTypeId && this.state.selectedIncidentTypeName) {
+                // User selected from popup
+                incidentTypeData = {
+                    id: this.state.selectedIncidentTypeId,
+                    name: this.state.selectedIncidentTypeName,
+                    entityType: 'msdyn_incidenttype'
+                };
+            } else if (this.state.selectedCampaignId) {
+                // Get incident type from campaign (SetParentCampaign logic)
+                const campaignData = await WorkOrderHelpers.getCampaignData(this.state.selectedCampaignId);
+                if (campaignData?.incidentType) {
+                    incidentTypeData = campaignData.incidentType;
+                }
+            } else if (this.props.incidentTypeId && this.props.incidentTypeName) {
+                // Use from props
+                incidentTypeData = {
+                    id: this.props.incidentTypeId,
+                    name: this.props.incidentTypeName,
+                    entityType: 'msdyn_incidenttype'
+                };
             }
 
-            // Incident Type
-            if (this.state.selectedIncidentTypeId) {
-                workOrderData['msdyn_primaryincidenttype@odata.bind'] = `/msdyn_incidenttypes(${this.state.selectedIncidentTypeId})`;
+            if (!incidentTypeData) {
+                throw new Error('No incident type available');
             }
 
-            // Organization Unit
-            if (this.props.organizationUnitId) {
-                workOrderData['duc_department@odata.bind'] = `/msdyn_organizationalunits(${this.props.organizationUnitId})`;
+            // STEP 3: Get work order type from incident type (SetWorkOrderType logic)
+            const workOrderTypeData = await WorkOrderHelpers.setWorkOrderTypeFromIncidentType(incidentTypeData.id);
+
+            // STEP 4: Determine department (SetDepartment logic)
+            let departmentData: { id: string; name: string } | null = null;
+
+            // Try to get from incident type first (setDepartmentFromIncidentType)
+            departmentData = await WorkOrderHelpers.setDepartmentFromIncidentType(incidentTypeData.id);
+
+            // If not found, get from user (SetDepartment)
+            if (!departmentData) {
+                departmentData = await WorkOrderHelpers.setDepartmentFromUser(userId);
             }
 
-            // Create work order
-            const createdWorkOrder = await this.xrm.WebApi.createRecord('msdyn_workorder', workOrderData);
+            // Fallback to props
+            if (!departmentData && this.props.organizationUnitId && this.props.organizationUnitName) {
+                departmentData = {
+                    id: this.props.organizationUnitId,
+                    name: this.props.organizationUnitName
+                };
+            }
 
-            console.log('Work order created:', createdWorkOrder.id);
+            if (!departmentData) {
+                throw new Error('No department available');
+            }
 
-            // Navigate to the created work order
+            // STEP 5: Prepare campaign data
+            let campaignData: { id: string; name: string } | undefined;
+            let parentCampaignData: { id: string; name: string } | undefined;
+
+            if (this.state.selectedCampaignId && this.state.selectedCampaignName) {
+                campaignData = {
+                    id: this.state.selectedCampaignId,
+                    name: this.state.selectedCampaignName
+                };
+
+                // Set parent campaign (SetParentCampaign logic)
+                parentCampaignData = campaignData;
+            } else if (this.props.activePatrolId && this.props.activePatrolName) {
+                campaignData = {
+                    id: this.props.activePatrolId,
+                    name: this.props.activePatrolName
+                };
+                parentCampaignData = campaignData;
+            }
+
+            // STEP 6: Determine anonymous customer flag
+            const anonymousCustomer = 
+                this.state.selectedInspectionType === 4 || 
+                (this.state.isAnonymous && [3, 6, 7].includes(this.state.selectedInspectionType!));
+
+            // STEP 7: Detect if created from mobile (DetectMObileCreation)
+            const createdFromMobile = WorkOrderHelpers.isMobileClient();
+
+            // STEP 8: Validate data
+            const validation = WorkOrderHelpers.validateWorkOrderData({
+                serviceAccount: serviceAccountData,
+                incidentType: incidentTypeData,
+                department: departmentData
+            });
+
+            if (!validation.isValid) {
+                throw new Error(`Missing required fields: ${validation.missingFields.join(', ')}`);
+            }
+
+            // STEP 9: Create work order using helper
+            const workOrderId = await WorkOrderHelpers.createWorkOrder({
+                subAccount: {
+                    id: accountId,
+                    name: accountName
+                },
+                serviceAccount: serviceAccountData,
+                incidentType: incidentTypeData,
+                department: departmentData,
+                campaign: campaignData,
+                workOrderType: workOrderTypeData || undefined,
+                parentCampaign: parentCampaignData,
+                address: addressData || undefined,
+                latitude: latitude,
+                longitude: longitude,
+                anonymousCustomer: anonymousCustomer,
+                accountInspectionType: this.state.selectedInspectionType || undefined,
+                createdFromMobile: createdFromMobile
+            });
+
+            if (!workOrderId) {
+                throw new Error('Failed to create work order');
+            }
+
+            console.log('Work order created successfully:', workOrderId);
+
+            // STEP 10: Create auto booking if from mobile (createAutoBookingOnWorkOrderCreate)
+            if (createdFromMobile) {
+                const isInspector = await WorkOrderHelpers.isUserInspector(userId);
+                if (isInspector) {
+                    const bookingId = await WorkOrderHelpers.createAutoBooking(workOrderId, userId);
+                    if (bookingId) {
+                        console.log('Auto booking created:', bookingId);
+                    }
+                }
+            }
+
+            // STEP 11: Navigate to the created work order
             await this.xrm.Navigation.openForm({
                 entityName: "msdyn_workorder",
-                entityId: createdWorkOrder.id
+                entityId: workOrderId,
+                openInNewWindow: true
             });
 
             // Close the modal
@@ -966,7 +1073,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                             'select',
                             {
                                 value: selectedCampaignId || '',
-                                onChange: (e) => this.setState({
+                                onChange: (e: { target: { value: string; }; }) => this.setState({
                                     selectedCampaignId: e.target.value,
                                     selectedCampaignName: campaigns.find(c => c.id === e.target.value)?.name
                                 }),
@@ -989,7 +1096,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                             'select',
                             {
                                 value: selectedIncidentTypeId || '',
-                                onChange: (e) => this.setState({
+                                onChange: (e: { target: { value: string; }; }) => this.setState({
                                     selectedIncidentTypeId: e.target.value,
                                     selectedIncidentTypeName: incidentTypes.find(it => it.id === e.target.value)?.name
                                 }),
@@ -1118,7 +1225,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
                         'select',
                         {
                             value: vehicleBrand ?? '',
-                            onChange: (e) => {
+                            onChange: (e: { target: { value: string; }; }) => {
                                 const val = e.target.value ? parseInt(e.target.value, 10) : null;
                                 this.setState({ vehicleBrand: val });
                             },

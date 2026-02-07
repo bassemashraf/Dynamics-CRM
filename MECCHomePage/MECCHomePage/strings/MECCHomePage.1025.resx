@@ -70,6 +70,13 @@
   <data name="StreetNumber" xml:space="preserve">
     <value>رقم الشارع:</value>
   </data>
+  <data name="CarColor" xml:space="preserve">
+  <value>لون السيارة</value>
+</data>
+
+<data name="VehicleBrand" xml:space="preserve">
+  <value>نوع السيارة</value>
+</data>
   <data name="StreetName" xml:space="preserve">
     <value>اسم الشارع:</value>
   </data>
@@ -85,4 +92,60 @@
   <data name="SearchError" xml:space="preserve">
     <value>حدث خطأ أثناء البحث</value>
   </data>
+  <data name="StartMultiTypeInspection" xml:space="preserve">
+    <value>بدء تفتيش</value>
+    <comment>Button text for starting a multi-type inspection</comment>
+  </data>
+  <data name="InspectionType" xml:space="preserve">
+    <value>نوع التفتيش:</value>
+    <comment>Label for inspection type field</comment>
+  </data>
+  <data name="PleaseEnterRequiredFields" xml:space="preserve">
+  <value>الرجاء إدخال الحقول المطلوبة</value>
+  <comment>Message when required fields are missing</comment>
+</data>
+  <data name="QataryID" xml:space="preserve">
+    <value>رقم البطاقة القطرية</value>
+    <comment>Label for Qatary ID field</comment>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>الاسم:</value>
+    <comment>Label for name field</comment>
+  </data>
+  <data name="CRNumber" xml:space="preserve">
+    <value>رقم السجل التجاري:</value>
+    <comment>Label for CR Number field</comment>
+  </data>
+  <data name="ID" xml:space="preserve">
+    <value>الرقم:</value>
+    <comment>Label for ID field</comment>
+  </data>
+  <data name="Start" xml:space="preserve">
+    <value>ابدأ</value>
+    <comment>Start button text</comment>
+  </data>
+    <data name="MonourNumber" xml:space="preserve">
+    <value>رقم العزبة:</value>
+    <comment>Label for Monour Number field</comment>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>إلغاء</value>
+    <comment>Cancel button text</comment>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>جاري المعالجة...</value>
+    <comment>Processing message</comment>
+  </data>
+  <data name="chooseInspectionType" xml:space="preserve">
+    <value>...اختر...</value>
+    <comment>Label for choosing inspection type</comment>
+  </data>
+
+
+  <data name="Anonymous" xml:space="preserve">
+    <value>مجهول</value>
+    <comment>Label for anonymous inspection checkbox</comment>
+  </data>
+
+  
 </root>
