@@ -281,7 +281,6 @@ export const Main = (props: IProps) => {
         }
     };
 
-    // Check organization unit and get unknown account
     const checkOrganizationUnit = React.useCallback(async (ctx: any, userId: string): Promise<void> => {
         try {
             // Try to get from cache first
@@ -298,8 +297,6 @@ export const Main = (props: IProps) => {
                     incidentTypeName: cachedData.incidentTypeName,
                     orgUnitId: cachedData.orgUnitId,
                     organizationUnitName: cachedData.orgUnitName,
-                    // COMMENTED OUT: inspectionCustomerClassification field no longer used
-                    // inspectionCustomerClassification: cachedData.inspectionCustomerClassification
                 }));
                 return;
             }
@@ -318,19 +315,16 @@ export const Main = (props: IProps) => {
 
             const orgUnitId = userResult._duc_organizationalunitid_value;
 
-            // COMMENTED OUT: duc_inspectioncustomerclassification field removed from query
-            // Retrieve the organizational unit details WITHOUT the classification field
+            // Retrieve the organizational unit details with default incident type
             const orgUnitResult = await ctx.webAPI.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname&$expand=duc_unknownaccount($select=name)"
+                "?$select=_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name)"
             );
 
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
             const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
-            // COMMENTED OUT: inspectionCustomerClassification field no longer retrieved
-            // const inspectionCustomerClassification = orgUnitResult.duc_inspectioncustomerclassification;
 
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
@@ -343,29 +337,18 @@ export const Main = (props: IProps) => {
             let incidentTypeId: string | undefined = undefined;
             let incidentTypeName: string | undefined = undefined;
 
-            // COMMENTED OUT: Incident type logic based on classification removed
-            // Always fetch incident type for all org units (if needed)
-            // If Natural Reserve, get the incident type for this org unit
-            // if ((inspectionCustomerClassification === 100000001 || inspectionCustomerClassification === 100000002) ) {
-            try {
-                const incidentTypeQuery = `?$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$top=1`;
-                const incidentTypeResults = await ctx.webAPI.retrieveMultipleRecords(
-                    "msdyn_incidenttype",
-                    incidentTypeQuery
-                );
-
-                if (incidentTypeResults.entities.length > 0) {
-                    incidentTypeId = incidentTypeResults.entities[0].msdyn_incidenttypeid;
-                    incidentTypeName = incidentTypeResults.entities[0].msdyn_name;
-                    //console.log("Incident Type ID found:", incidentTypeId);
-                    //console.log("Incident Type Name found:", incidentTypeName);
-                } else {
-                    console.warn("No incident type found for org unit");
-                }
-            } catch (error) {
-                console.error("Error fetching incident type:", error);
+            // Get incident type from default field if available
+            if (orgUnitResult._duc_defaultincidenttype_value && orgUnitResult.duc_defaultincidenttype) {
+                incidentTypeId = orgUnitResult.duc_defaultincidenttype.msdyn_incidenttypeid;
+                incidentTypeName = orgUnitResult.duc_defaultincidenttype.msdyn_name;
+                //console.log("Default Incident Type ID found:", incidentTypeId);
+                //console.log("Default Incident Type Name found:", incidentTypeName);
+            } else {
+                // If no default, pass undefined (will be handled in MultiTypeInspection)
+                incidentTypeId = undefined;
+                incidentTypeName = undefined;
+                console.warn("No default incident type found for org unit");
             }
-            // }
 
             // Save to cache
             saveOrgUnitToCache(userId, {
@@ -377,8 +360,6 @@ export const Main = (props: IProps) => {
                 unknownAccountName,
                 incidentTypeId,
                 incidentTypeName,
-                // COMMENTED OUT: inspectionCustomerClassification field no longer cached
-                // inspectionCustomerClassification
             });
 
             setState(prev => ({
@@ -391,8 +372,6 @@ export const Main = (props: IProps) => {
                 incidentTypeName: incidentTypeName,
                 orgUnitId: orgUnitId,
                 organizationUnitName: orgUnitName,
-                // COMMENTED OUT: inspectionCustomerClassification field no longer set
-                // inspectionCustomerClassification: inspectionCustomerClassification
             }));
 
             //console.log("Organization Unit:", orgUnitName);
@@ -403,8 +382,6 @@ export const Main = (props: IProps) => {
             //console.log("Unknown Account Name:", unknownAccountName);
             //console.log("Incident Type ID:", incidentTypeId);
             //console.log("Incident Type Name:", incidentTypeName);
-            // COMMENTED OUT: inspectionCustomerClassification logging removed
-            //console.log("Inspection Customer Classification:", inspectionCustomerClassification);
 
         } catch (error) {
             console.error("Error checking organization unit:", error);
@@ -418,8 +395,6 @@ export const Main = (props: IProps) => {
                 incidentTypeName: undefined,
                 orgUnitId: undefined,
                 organizationUnitName: undefined,
-                // COMMENTED OUT: inspectionCustomerClassification field no longer reset
-                // inspectionCustomerClassification: undefined
             }));
         }
     }, []);

@@ -1,4 +1,4 @@
-    /* eslint-disable */
+/* eslint-disable */
     import * as React from 'react';
     import { WorkOrderHelpers, CampaignHelpers, IncidentTypeHelpers } from '../helpers';
 
@@ -39,7 +39,7 @@
         selectedIncidentTypeName?: string;
         campaigns: Array<{ id: string; name: string }>;
         incidentTypes: Array<{ id: string; name: string }>;
-        isAnonymous: boolean; // NEW: Anonymous checkbox state
+        isAnonymous: boolean;
     }
 
     interface LocalizedStrings {
@@ -64,7 +64,7 @@
         Campaign: string;
         IncidentType: string;
         Continue: string;
-        Anonymous: string; // NEW: Anonymous checkbox label
+        Anonymous: string;
     }
 
     // Cache constants
@@ -72,7 +72,7 @@
     const VEHICLE_TYPES_CACHE_KEY = 'MOCI_VehicleTypes_Cache';
     const CAMPAIGNS_CACHE_KEY = 'MOCI_Campaigns_Cache';
     const INCIDENT_TYPES_CACHE_KEY = 'MOCI_IncidentTypes_Cache';
-    const CACHE_DURATION = 60_000; // 5 minutes
+    const CACHE_DURATION = 60_000; // 1 minute
 
     interface CacheData<T> {
         data: T;
@@ -115,7 +115,7 @@
                 Campaign: props.context.resources.getString("Campaign") || "Campaign",
                 IncidentType: props.context.resources.getString("IncidentType") || "Incident Type",
                 Continue: props.context.resources.getString("Continue") || "Continue",
-                Anonymous: props.context.resources.getString("Anonymous") || "Anonymous", // NEW
+                Anonymous: props.context.resources.getString("Anonymous") || "Anonymous",
             };
 
             this.state = {
@@ -139,7 +139,7 @@
                 selectedIncidentTypeName: props.incidentTypeName,
                 campaigns: [],
                 incidentTypes: [],
-                isAnonymous: false, // NEW
+                isAnonymous: false,
             };
         }
 
@@ -151,10 +151,17 @@
                 this.preloadCampaignsAndIncidentTypes()
             ]);
 
-            // If default inspection type is provided, retrieve account type
+            // If default inspection type is provided, set account type from loaded data
             if (this.props.defaultInspectionType) {
-                const accountTypeRecord = await this.getAccountTypeByInspectionType(this.props.defaultInspectionType);
-                this.setState({ accountTypeRecord });
+                const inspectionType = this.state.inspectionTypes.find(t => t.value === this.props.defaultInspectionType);
+                if (inspectionType?.accountTypeId) {
+                    const accountTypeRecord = {
+                        duc_accounttypeid: inspectionType.accountTypeId,
+                        duc_accounttype: this.props.defaultInspectionType,
+                        duc_name: inspectionType.label
+                    };
+                    this.setState({ accountTypeRecord });
+                }
             }
         }
 
@@ -301,11 +308,8 @@
         // =====================================================================
 
         private preloadCampaignsAndIncidentTypes = async (): Promise<void> => {
-            // Only preload if we don't already have both defaults
-            if (this.props.activePatrolId && this.props.incidentTypeId) {
-                return;
-            }
-
+            // ALWAYS preload both campaigns and incident types
+            // This ensures they're ready when the popup is shown
             try {
                 const [campaigns, incidentTypes] = await Promise.all([
                     this.loadCampaigns(),
@@ -326,8 +330,18 @@
             if (cached) return cached;
 
             try {
-                // Get active inspection campaigns (status = 2, type = 100000000)
-                const campaigns = await CampaignHelpers.getActiveInspectionCampaigns(this.props.organizationUnitId);
+                // Get inspection campaigns with duc_campaigntype = 100000000 (Inspection Campaign)
+                const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000&$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
+                
+                const results = await this.xrm.WebApi.retrieveMultipleRecords(
+                    'new_inspectioncampaign',
+                    query
+                );
+
+                const campaigns = results.entities.map((entity: any) => ({
+                    id: entity.new_inspectioncampaignid,
+                    name: entity.new_name
+                }));
 
                 this.saveToCache(cacheKey, campaigns);
                 return campaigns;
@@ -345,8 +359,18 @@
             if (cached) return cached;
 
             try {
-                // Get incident types for organization unit
-                const incidentTypes = await IncidentTypeHelpers.getIncidentTypesByOrgUnit(this.props.organizationUnitId);
+                // Get all incident types related to organization unit
+                const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$orderby=msdyn_name asc`;
+                
+                const results = await this.xrm.WebApi.retrieveMultipleRecords(
+                    'msdyn_incidenttype',
+                    query
+                );
+
+                const incidentTypes = results.entities.map((entity: any) => ({
+                    id: entity.msdyn_incidenttypeid,
+                    name: entity.msdyn_name
+                }));
 
                 this.saveToCache(cacheKey, incidentTypes);
                 return incidentTypes;
@@ -357,45 +381,26 @@
         };
 
         // =====================================================================
-        // ACCOUNT TYPE RETRIEVAL
-        // =====================================================================
-
-        private getAccountTypeByInspectionType = async (optionSetValue: number): Promise<any | null> => {
-            // First check if we already have it from inspectionTypes
-            const inspectionType = this.state.inspectionTypes.find(t => t.value === optionSetValue);
-            if (inspectionType?.accountTypeId) {
-                try {
-                    const result = await this.xrm.WebApi.retrieveRecord(
-                        'duc_accounttype',
-                        inspectionType.accountTypeId,
-                        '?$select=duc_accounttypeid,duc_name,duc_accounttype'
-                    );
-                    return result;
-                } catch (error) {
-                    console.error('Error retrieving account type by ID:', error);
-                }
-            }
-
-            // Fallback to query
-            try {
-                const result = await this.xrm.WebApi.retrieveMultipleRecords(
-                    'duc_accounttype',
-                    `?$select=duc_accounttypeid,duc_name,duc_accounttype&$filter=duc_accounttype eq ${optionSetValue}&$top=1`
-                );
-
-                return result?.entities?.[0] || null;
-            } catch (error) {
-                console.error('Error retrieving account type:', error);
-                return null;
-            }
-        };
-
-        // =====================================================================
         // HANDLERS
         // =====================================================================
 
-        private handleInspectionTypeChange = async (e: React.ChangeEvent<HTMLSelectElement>): Promise<void> => {
+        // OPTIMIZED: No API call needed - use already loaded data!
+        private handleInspectionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
             const value = e.target.value ? parseInt(e.target.value, 10) : null;
+
+            let accountTypeRecord: any = null;
+
+            // Get account type from already loaded inspection types (instant, no waiting!)
+            if (value !== null) {
+                const inspectionType = this.state.inspectionTypes.find(t => t.value === value);
+                if (inspectionType?.accountTypeId) {
+                    accountTypeRecord = {
+                        duc_accounttypeid: inspectionType.accountTypeId,
+                        duc_accounttype: value,
+                        duc_name: inspectionType.label
+                    };
+                }
+            }
 
             this.setState({
                 selectedInspectionType: value,
@@ -406,14 +411,9 @@
                 carColor: '',
                 vehicleBrand: null,
                 error: null,
-                accountTypeRecord: null,
-                isAnonymous: false, // NEW: Reset anonymous checkbox
+                accountTypeRecord: accountTypeRecord,
+                isAnonymous: false,
             });
-
-            if (value !== null) {
-                const accountTypeRecord = await this.getAccountTypeByInspectionType(value);
-                this.setState({ accountTypeRecord });
-            }
         };
 
         private handleInputChange = (field: keyof IMultiTypeInspectionState, value: any): void => {
@@ -459,7 +459,7 @@
                 return true;
             }
 
-            // NEW: If anonymous checkbox is checked for types 3, 6, or 7, skip field validation
+            // If anonymous checkbox is checked for types 3, 6, or 7, skip field validation
             if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
                 return true;
             }
@@ -563,7 +563,7 @@
                     }
                 }
 
-                // NEW: If anonymous checkbox is checked for types 3, 6, or 7, use unknown account
+                // If anonymous checkbox is checked for types 3, 6, or 7, use unknown account
                 if (isAnonymous && [3, 6, 7].includes(selectedInspectionType!)) {
                     if (this.props.unknownAccountId) {
                         await this.createAddressInformation(
@@ -840,18 +840,17 @@
                     throw new Error('Failed to get account');
                 }
 
-                // Check if we need to show campaign/incident selection
-                const needsCampaign = !this.state.selectedCampaignId;
+                // Check if incident type is missing (null or undefined)
                 const needsIncidentType = !this.state.selectedIncidentTypeId;
 
-                if (needsCampaign || needsIncidentType) {
-                    // Show selection popup
+                if (needsIncidentType) {
+                    // MUST show selection popup - incident type is required
                     this.setState({
                         showCampaignIncidentPopup: true,
                         loading: false
                     });
                 } else {
-                    // Create work order directly
+                    // Has incident type, can create work order directly
                     await this.createWorkOrder(accountId);
                     this.setState({ loading: false });
                 }
@@ -867,6 +866,15 @@
 
         private handleContinueWithSelections = async (): Promise<void> => {
             try {
+                // Validate that incident type is selected
+                if (!this.state.selectedIncidentTypeId) {
+                    this.setState({ 
+                        error: this.strings.SelectIncidentType || 'Please select an incident type',
+                        loading: false 
+                    });
+                    return;
+                }
+
                 this.setState({ loading: true, error: null, showCampaignIncidentPopup: false });
 
                 // Re-run account search/create to get accountId
@@ -895,7 +903,7 @@
             const { selectedInspectionType, isAnonymous } = this.state;
             if (!selectedInspectionType) return false;
 
-            // NEW: If anonymous is checked for types 3, 6, or 7, hide all fields
+            // If anonymous is checked for types 3, 6, or 7, hide all fields
             if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
                 return false;
             }
@@ -915,7 +923,6 @@
             return false;
         };
 
-        // NEW: Helper to determine if anonymous checkbox should be shown
         private shouldShowAnonymousCheckbox = (): boolean => {
             const { selectedInspectionType } = this.state;
             return selectedInspectionType !== null && [3, 6, 7].includes(selectedInspectionType);
