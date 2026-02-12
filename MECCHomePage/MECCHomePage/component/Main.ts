@@ -338,9 +338,9 @@ export const Main = (props: IProps) => {
             let incidentTypeName: string | undefined = undefined;
 
             // Get incident type from default field if available
-            if (orgUnitResult._duc_defaultincidenttype_value && orgUnitResult.duc_defaultincidenttype) {
-                incidentTypeId = orgUnitResult.duc_defaultincidenttype.msdyn_incidenttypeid;
-                incidentTypeName = orgUnitResult.duc_defaultincidenttype.msdyn_name;
+            if (orgUnitResult._duc_defaultincidenttype_value && orgUnitResult.duc_DefaultIncidenttype) {
+                incidentTypeId = orgUnitResult.duc_DefaultIncidenttype.msdyn_incidenttypeid;
+                incidentTypeName = orgUnitResult.duc_DefaultIncidenttype.msdyn_name;
                 //console.log("Default Incident Type ID found:", incidentTypeId);
                 //console.log("Default Incident Type Name found:", incidentTypeName);
             } else {

@@ -40,6 +40,8 @@
         campaigns: Array<{ id: string; name: string }>;
         incidentTypes: Array<{ id: string; name: string }>;
         isAnonymous: boolean;
+        popupShowCampaign: boolean;
+        popupShowIncidentType: boolean;
     }
 
     interface LocalizedStrings {
@@ -82,6 +84,8 @@
     export class MultiTypeInspection extends React.Component<IMultiTypeInspectionProps, IMultiTypeInspectionState> {
         private strings: LocalizedStrings;
         private xrm: Xrm.XrmStatic;
+        // OPTIMIZATION: Cache account ID to avoid re-searching in handleContinueWithSelections
+        private pendingAccountId: string | null = null;
 
         constructor(props: IMultiTypeInspectionProps) {
             super(props);
@@ -140,6 +144,9 @@
                 campaigns: [],
                 incidentTypes: [],
                 isAnonymous: false,
+                // Track which fields to show in popup (set when popup opens)
+                popupShowCampaign: false,
+                popupShowIncidentType: false,
             };
         }
 
@@ -331,7 +338,7 @@
 
             try {
                 // Get inspection campaigns with duc_campaigntype = 100000000 (Inspection Campaign)
-                const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000&$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
+                const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
                 
                 const results = await this.xrm.WebApi.retrieveMultipleRecords(
                     'new_inspectioncampaign',
@@ -702,16 +709,12 @@
                     throw new Error('No incident type available');
                 }
 
-                // STEP 3: Get work order type from incident type (SetWorkOrderType logic)
-                const workOrderTypeData = await WorkOrderHelpers.setWorkOrderTypeFromIncidentType(incidentTypeData.id);
+                // STEP 3 & 4: OPTIMIZATION - Get work order type AND department in ONE API call
+                const incidentData = await WorkOrderHelpers.getIncidentTypeData(incidentTypeData.id);
+                const workOrderTypeData = incidentData?.workOrderType;
+                let departmentData = incidentData?.department || null;
 
-                // STEP 4: Determine department (SetDepartment logic)
-                let departmentData: { id: string; name: string } | null = null;
-
-                // Try to get from incident type first (setDepartmentFromIncidentType)
-                departmentData = await WorkOrderHelpers.setDepartmentFromIncidentType(incidentTypeData.id);
-
-                // If not found, get from user (SetDepartment)
+                // If not found, get from user (SetDepartment fallback)
                 if (!departmentData) {
                     departmentData = await WorkOrderHelpers.setDepartmentFromUser(userId);
                 }
@@ -794,13 +797,11 @@
                 console.log('Work order created successfully:', workOrderId);
 
                 // STEP 10: Create auto booking if from mobile (createAutoBookingOnWorkOrderCreate)
+                // OPTIMIZATION: createAutoBooking now parallelizes resource/status fetch internally
                 if (createdFromMobile) {
-                    const isInspector = await WorkOrderHelpers.isUserInspector(userId);
-                    if (isInspector) {
-                        const bookingId = await WorkOrderHelpers.createAutoBooking(workOrderId, userId);
-                        if (bookingId) {
-                            console.log('Auto booking created:', bookingId);
-                        }
+                    const bookingId = await WorkOrderHelpers.createAutoBooking(workOrderId, userId);
+                    if (bookingId) {
+                        console.log('Auto booking created:', bookingId);
                     }
                 }
 
@@ -840,17 +841,22 @@
                     throw new Error('Failed to get account');
                 }
 
-                // Check if incident type is missing (null or undefined)
-                const needsIncidentType = !this.state.selectedIncidentTypeId;
+                // Check if campaign or incident type is missing
+                const needsCampaign = !this.state.selectedCampaignId && !this.props.activePatrolId;
+                const needsIncidentType = !this.state.selectedIncidentTypeId && !this.props.incidentTypeId;
 
-                if (needsIncidentType) {
-                    // MUST show selection popup - incident type is required
+                if (needsCampaign || needsIncidentType) {
+                    // Show selection popup with only the missing fields
+                    // OPTIMIZATION: Store accountId for reuse in handleContinueWithSelections
+                    this.pendingAccountId = accountId;
                     this.setState({
                         showCampaignIncidentPopup: true,
+                        popupShowCampaign: needsCampaign,
+                        popupShowIncidentType: needsIncidentType,
                         loading: false
                     });
                 } else {
-                    // Has incident type, can create work order directly
+                    // Has both campaign and incident type, can create work order directly
                     await this.createWorkOrder(accountId);
                     this.setState({ loading: false });
                 }
@@ -877,8 +883,9 @@
 
                 this.setState({ loading: true, error: null, showCampaignIncidentPopup: false });
 
-                // Re-run account search/create to get accountId
-                const accountId = await this.searchOrCreateAccount();
+                // OPTIMIZATION: Reuse account ID from handleStart instead of re-searching
+                const accountId = this.pendingAccountId || await this.searchOrCreateAccount();
+                this.pendingAccountId = null; // Clear after use
                 if (!accountId) {
                     throw new Error('Failed to get account');
                 }
@@ -1059,20 +1066,34 @@
 
             const isInspectionTypeDisabled = this.props.lockInspectionType || loading;
 
-            // Campaign/Incident Popup
+            // Campaign/Incident Popup - show only missing fields
             if (showCampaignIncidentPopup) {
+                // Determine which fields need to be shown based on initial check when popup opened
+                const showCampaignField = this.state.popupShowCampaign;
+                const showIncidentField = this.state.popupShowIncidentType;
+
+                // Dynamic title based on what's missing
+                let popupTitle = '';
+                if (showCampaignField && showIncidentField) {
+                    popupTitle = this.strings.SelectCampaign + ' / ' + this.strings.SelectIncidentType;
+                } else if (showCampaignField) {
+                    popupTitle = this.strings.SelectCampaign;
+                } else if (showIncidentField) {
+                    popupTitle = this.strings.SelectIncidentType;
+                }
+
                 return React.createElement(
                     'div',
                     { style: containerStyle },
                     React.createElement(
                         'div',
                         { style: modalStyle },
-                        React.createElement('h2', { style: titleStyle }, this.strings.SelectCampaign + ' / ' + this.strings.SelectIncidentType),
+                        React.createElement('h2', { style: titleStyle }, popupTitle),
 
                         error && React.createElement('div', { style: errorStyle }, error),
 
-                        // Campaign Selection
-                        !this.state.selectedCampaignId && React.createElement(
+                        // Campaign Selection - show only if missing
+                        showCampaignField && React.createElement(
                             'div',
                             { style: fieldStyle },
                             React.createElement('label', { style: labelStyle }, this.strings.Campaign),
@@ -1094,8 +1115,8 @@
                             )
                         ),
 
-                        // Incident Type Selection
-                        !this.state.selectedIncidentTypeId && React.createElement(
+                        // Incident Type Selection - show only if missing
+                        showIncidentField && React.createElement(
                             'div',
                             { style: fieldStyle },
                             React.createElement('label', { style: labelStyle }, this.strings.IncidentType),

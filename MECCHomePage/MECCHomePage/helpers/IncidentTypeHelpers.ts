@@ -104,6 +104,8 @@ export class IncidentTypeHelpers {
 
     /**
      * Get organization unit from incident type
+     * @deprecated Use WorkOrderHelpers.getIncidentTypeData() for combined queries
+     * that fetch both department and work order type in a single API call.
      */
     static async getOrgUnitFromIncidentType(incidentTypeId: string): Promise<{ id: string; name: string } | null> {
         try {

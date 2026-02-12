@@ -101,6 +101,53 @@ export class WorkOrderHelpers {
         }
     }
 
+    /**
+     * OPTIMIZATION: Get both department and work order type from incident type in a single call
+     * Combines setDepartmentFromIncidentType + setWorkOrderTypeFromIncidentType into one API call
+     */
+    static async getIncidentTypeData(incidentTypeId: string): Promise<{
+        department?: { id: string; name: string };
+        workOrderType?: { id: string; name: string; entityType: string };
+    } | null> {
+        try {
+            const result = await this.xrm.WebApi.retrieveRecord(
+                "msdyn_incidenttype",
+                incidentTypeId,
+                "?$select=_duc_organizationalunitid_value,_msdyn_defaultworkordertype_value" +
+                "&$expand=duc_organizationalunitid($select=msdyn_organizationalunitid,msdyn_name)"
+            );
+
+            const response: {
+                department?: { id: string; name: string };
+                workOrderType?: { id: string; name: string; entityType: string };
+            } = {};
+
+            // Extract department from organizational unit
+            const orgUnitLookup = result["duc_organizationalunitid"];
+            if (orgUnitLookup) {
+                response.department = {
+                    id: orgUnitLookup.msdyn_organizationalunitid,
+                    name: orgUnitLookup.msdyn_name
+                };
+            }
+
+            // Extract work order type
+            const workOrderTypeId = result["_msdyn_defaultworkordertype_value"];
+            if (workOrderTypeId) {
+                response.workOrderType = {
+                    id: workOrderTypeId,
+                    name: result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"],
+                    entityType: result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"]
+                };
+            }
+
+            return Object.keys(response).length > 0 ? response : null;
+        } catch (error) {
+            console.error("Error getting incident type data:", error);
+            return null;
+        }
+    }
+
     // =====================================================================
     // CAMPAIGN OPERATIONS
     // =====================================================================
@@ -165,7 +212,7 @@ export class WorkOrderHelpers {
             const accountResult = await this.xrm.WebApi.retrieveRecord(
                 "account",
                 subAccountId,
-                "?$select=parentaccountid,_duc_address_value"
+                "?$select=name,parentaccountid,_duc_address_value"
             );
 
             let serviceAccountId: string;
@@ -178,9 +225,8 @@ export class WorkOrderHelpers {
             } else {
                 // Use sub-account as service account if no parent
                 serviceAccountId = subAccountId;
-                // Need to get the account name
-                const subAccountData = await this.xrm.WebApi.retrieveRecord("account", subAccountId, "?$select=name");
-                serviceAccountName = subAccountData.name;
+                // OPTIMIZATION: Use name from initial query instead of separate call
+                serviceAccountName = accountResult.name;
             }
 
             const result: any = {
@@ -319,25 +365,37 @@ export class WorkOrderHelpers {
 
     /**
      * Create automatic booking for work order (for mobile creation)
+     * OPTIMIZATION: Accepts options to skip redundant checks and parallelize calls
      */
-    static async createAutoBooking(workOrderId: string, userId: string): Promise<string | null> {
+    static async createAutoBooking(
+        workOrderId: string, 
+        userId: string,
+        options?: {
+            skipInspectorCheck?: boolean;  // Skip if caller already verified
+            resourceId?: string;           // Pre-fetched resource ID
+        }
+    ): Promise<string | null> {
         try {
-            // Check if user is inspector
-            const isInspector = await this.isUserInspector(userId);
-            if (!isInspector) {
-                console.log("User is not an inspector. Booking not created.");
-                return null;
+            // Only check inspector if not already verified by caller
+            if (!options?.skipInspectorCheck) {
+                const isInspector = await this.isUserInspector(userId);
+                if (!isInspector) {
+                    console.log("User is not an inspector. Booking not created.");
+                    return null;
+                }
             }
 
-            // Get bookable resource
-            const resourceId = await this.getBookableResourceForUser(userId);
+            // OPTIMIZATION: Fetch resource and booking status in parallel
+            const [resourceId, bookingStatusId] = await Promise.all([
+                options?.resourceId ? Promise.resolve(options.resourceId) : this.getBookableResourceForUser(userId),
+                this.getScheduledBookingStatusId()
+            ]);
+
             if (!resourceId) {
                 console.error("No bookable resource found for user");
                 return null;
             }
 
-            // Get scheduled booking status
-            const bookingStatusId = await this.getScheduledBookingStatusId();
             if (!bookingStatusId) {
                 console.error("Booking status 'Scheduled' not found");
                 return null;
@@ -507,6 +565,7 @@ export class WorkOrderHelpers {
 
             if (data.anonymousCustomer !== undefined) {
                 workOrderData.duc_anonymouscustomer = data.anonymousCustomer;
+                workOrderData.duc_responsibleemployeeisnotavailable = data.anonymousCustomer; // Set responsible employee not available if anonymous customer is true
             }
 
             if (data.accountInspectionType !== undefined) {

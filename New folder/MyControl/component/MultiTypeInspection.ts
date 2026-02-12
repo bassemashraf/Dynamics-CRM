@@ -667,6 +667,7 @@ export class MultiTypeInspection extends React.Component<IMultiTypeInspectionPro
             // For Anonymous type (4), set the anonymous customer field
             if (this.state.selectedInspectionType === 4) {
                 defaultValues.duc_anonymouscustomer = true;
+                defaultValues.duc_responsibleemployeeisnotavailable = true; 
             }
 
             // If we have an active patrol campaign, set it as default
