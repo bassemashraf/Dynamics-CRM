@@ -89,10 +89,10 @@ async function createAddressInformation(accountId, accountName, caseRecord) {
         
         const addressData = {
             duc_name: addressName,
-            address1_line1: caseRecord.mme_building || null,
-            duc_address1_streetname: caseRecord.mme_street || null,
-            duc_address1_zonename: caseRecord.mme_zone || null,
-            duc_englishname: `${caseRecord.mme_municipalitynameen || ''} ${caseRecord.mme_municipalitynamear || ''}`.trim() || null,
+            duc_buildingnumber: caseRecord.mme_building || null,
+            duc_streetnumber: caseRecord.mme_street || null,
+            duc_zonenamear: caseRecord.mme_zone || null,
+            duc_address: `${caseRecord.mme_municipalitynameen || ''} ${caseRecord.mme_municipalitynamear || ''}`.trim() || null,
             duc_latitude: caseRecord.mme_y || null,
             duc_longitude: caseRecord.mme_x || null,
             'duc_Account@odata.bind': `/accounts(${accountId.replace(/[{}]/g, '')})`

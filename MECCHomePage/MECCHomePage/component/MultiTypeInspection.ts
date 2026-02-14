@@ -1,6 +1,6 @@
 /* eslint-disable */
     import * as React from 'react';
-    import { WorkOrderHelpers, CampaignHelpers, IncidentTypeHelpers } from '../helpers';
+    import { WorkOrderHelpers, CampaignHelpers, IncidentTypeHelpers, InitCache } from '../helpers';
 
     interface IMultiTypeInspectionProps {
         context: ComponentFramework.Context<any>;
@@ -42,6 +42,10 @@
         isAnonymous: boolean;
         popupShowCampaign: boolean;
         popupShowIncidentType: boolean;
+        // NEW: incident type read-only when auto-filled from campaign
+        incidentTypeReadOnly: boolean;
+        // NEW: map campaign ID → incident type to avoid re-retrieves
+        campaignIncidentTypeMap: Record<string, { id: string; name: string }>;
     }
 
     interface LocalizedStrings {
@@ -67,6 +71,9 @@
         IncidentType: string;
         Continue: string;
         Anonymous: string;
+        CreatingAccount: string;
+        CreatingWorkOrder: string;
+        CreatingBooking: string;
     }
 
     // Cache constants
@@ -80,6 +87,30 @@
         data: T;
         timestamp: number;
     }
+
+    // =====================================================================
+    // FLUENT UI STYLE TOKENS
+    // =====================================================================
+
+    const FLUENT = {
+        fontFamily: '"Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
+        colorPrimary: '#0078d4',
+        colorPrimaryHover: '#106ebe',
+        colorNeutralDark: '#201f1e',
+        colorNeutralPrimary: '#323130',
+        colorNeutralSecondary: '#605e5c',
+        colorNeutralLight: '#edebe9',
+        colorNeutralLighter: '#f3f2f1',
+        colorErrorPrimary: '#a4262c',
+        colorErrorBackground: '#fde7e9',
+        colorWhite: '#ffffff',
+        borderRadius: 4,
+        borderRadiusModal: 8,
+        shadowModal: '0 8px 32px rgba(0, 0, 0, 0.14)',
+        overlay: 'rgba(0, 0, 0, 0.4)',
+        focusOutline: '2px solid #0078d4',
+        transitionFast: '0.1s ease',
+    } as const;
 
     export class MultiTypeInspection extends React.Component<IMultiTypeInspectionProps, IMultiTypeInspectionState> {
         private strings: LocalizedStrings;
@@ -120,6 +151,9 @@
                 IncidentType: props.context.resources.getString("IncidentType") || "Incident Type",
                 Continue: props.context.resources.getString("Continue") || "Continue",
                 Anonymous: props.context.resources.getString("Anonymous") || "Anonymous",
+                CreatingAccount: props.context.resources.getString("CreatingAccount") || "Creating Account...",
+                CreatingWorkOrder: props.context.resources.getString("CreatingWorkOrder") || "Creating Work Order...",
+                CreatingBooking: props.context.resources.getString("CreatingBooking") || "Creating Booking...",
             };
 
             this.state = {
@@ -144,18 +178,22 @@
                 campaigns: [],
                 incidentTypes: [],
                 isAnonymous: false,
-                // Track which fields to show in popup (set when popup opens)
                 popupShowCampaign: false,
                 popupShowIncidentType: false,
+                incidentTypeReadOnly: false,
+                campaignIncidentTypeMap: {},
             };
         }
 
         async componentDidMount(): Promise<void> {
-            // Parallel loading for better performance
+            const userId = this.xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+
+            // Parallel loading — includes InitCache
             await Promise.all([
                 this.loadInspectionTypesFromOrgUnit(),
                 this.loadVehicleTypes(),
-                this.preloadCampaignsAndIncidentTypes()
+                this.preloadCampaignsAndIncidentTypes(),
+                InitCache.load(userId)
             ]);
 
             // If default inspection type is provided, set account type from loaded data
@@ -315,15 +353,29 @@
         // =====================================================================
 
         private preloadCampaignsAndIncidentTypes = async (): Promise<void> => {
-            // ALWAYS preload both campaigns and incident types
-            // This ensures they're ready when the popup is shown
             try {
                 const [campaigns, incidentTypes] = await Promise.all([
                     this.loadCampaigns(),
                     this.loadIncidentTypes()
                 ]);
 
-                this.setState({ campaigns, incidentTypes });
+                // Build campaign → incident type map to avoid redundant retrieves
+                const campaignIncidentTypeMap: Record<string, { id: string; name: string }> = {};
+                for (const campaign of campaigns) {
+                    try {
+                        const campaignData = await WorkOrderHelpers.getCampaignData(campaign.id);
+                        if (campaignData?.incidentType) {
+                            campaignIncidentTypeMap[campaign.id] = {
+                                id: campaignData.incidentType.id,
+                                name: campaignData.incidentType.name
+                            };
+                        }
+                    } catch {
+                        // Skip individual campaign failures
+                    }
+                }
+
+                this.setState({ campaigns, incidentTypes, campaignIncidentTypeMap });
             } catch (error) {
                 console.error('Error preloading campaigns/incident types:', error);
             }
@@ -337,7 +389,6 @@
             if (cached) return cached;
 
             try {
-                // Get inspection campaigns with duc_campaigntype = 100000000 (Inspection Campaign)
                 const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
                 
                 const results = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -366,7 +417,6 @@
             if (cached) return cached;
 
             try {
-                // Get all incident types related to organization unit
                 const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$orderby=msdyn_name asc`;
                 
                 const results = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -391,13 +441,11 @@
         // HANDLERS
         // =====================================================================
 
-        // OPTIMIZED: No API call needed - use already loaded data!
         private handleInspectionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
             const value = e.target.value ? parseInt(e.target.value, 10) : null;
 
             let accountTypeRecord: any = null;
 
-            // Get account type from already loaded inspection types (instant, no waiting!)
             if (value !== null) {
                 const inspectionType = this.state.inspectionTypes.find(t => t.value === value);
                 if (inspectionType?.accountTypeId) {
@@ -428,6 +476,60 @@
         };
 
         // =====================================================================
+        // CAMPAIGN ↔ INCIDENT TYPE POPUP HANDLERS
+        // =====================================================================
+
+        /**
+         * When campaign is selected in the popup:
+         * - Auto-fill incident type from cached map
+         * - Make incident type read-only
+         */
+        private handleCampaignChange = (campaignId: string): void => {
+            if (!campaignId) {
+                // Campaign cleared
+                this.setState({
+                    selectedCampaignId: undefined,
+                    selectedCampaignName: undefined,
+                    selectedIncidentTypeId: undefined,
+                    selectedIncidentTypeName: undefined,
+                    incidentTypeReadOnly: false,
+                });
+                return;
+            }
+
+            const campaignName = this.state.campaigns.find(c => c.id === campaignId)?.name;
+            const mappedIncidentType = this.state.campaignIncidentTypeMap[campaignId];
+
+            this.setState({
+                selectedCampaignId: campaignId,
+                selectedCampaignName: campaignName,
+                selectedIncidentTypeId: mappedIncidentType?.id,
+                selectedIncidentTypeName: mappedIncidentType?.name,
+                incidentTypeReadOnly: !!mappedIncidentType,
+            });
+        };
+
+        /**
+         * When incident type is selected manually in the popup:
+         * - Campaign is NOT mandatory
+         */
+        private handleIncidentTypeChange = (incidentTypeId: string): void => {
+            if (!incidentTypeId) {
+                this.setState({
+                    selectedIncidentTypeId: undefined,
+                    selectedIncidentTypeName: undefined,
+                });
+                return;
+            }
+
+            const incidentTypeName = this.state.incidentTypes.find(it => it.id === incidentTypeId)?.name;
+            this.setState({
+                selectedIncidentTypeId: incidentTypeId,
+                selectedIncidentTypeName: incidentTypeName,
+            });
+        };
+
+        // =====================================================================
         // VALIDATION
         // =====================================================================
 
@@ -437,16 +539,11 @@
 
             if (!selectedInspectionType) return [];
 
-            // Type 1 (Vehicle) => ID, car color, and vehicle brand
             if (selectedInspectionType === 1) {
                 requiredFields.push('id', 'carColor', 'vehicleBrand');
-            }
-            // Type 2 (Individual), 3 (Cabin), or 6 (Wilderness camps) => Qatary ID and Name
-            else if ([2, 3, 6].includes(selectedInspectionType)) {
+            } else if ([2, 3, 6].includes(selectedInspectionType)) {
                 requiredFields.push('qataryId', 'name');
-            }
-            // Type 5 (Company) or 7 (Manor) => CR Number
-            else if ([5, 7].includes(selectedInspectionType)) {
+            } else if ([5, 7].includes(selectedInspectionType)) {
                 requiredFields.push('crNumber');
             }
 
@@ -461,12 +558,10 @@
                 return false;
             }
 
-            // Type 4 (Anonymous) doesn't need field validation
             if (selectedInspectionType === 4) {
                 return true;
             }
 
-            // If anonymous checkbox is checked for types 3, 6, or 7, skip field validation
             if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
                 return true;
             }
@@ -670,8 +765,7 @@
                 let latitude: number | undefined = undefined;
                 let longitude: number | undefined = undefined;
 
-                // STEP 1: Handle sub-account change logic (onSubaccountChange)
-                // Get service account, address, and coordinates
+                // STEP 1: Handle sub-account change logic
                 const subAccountResult = await WorkOrderHelpers.handleSubAccountChange(accountId);
                 if (subAccountResult) {
                     serviceAccountData = subAccountResult.serviceAccount;
@@ -684,20 +778,28 @@
                 let incidentTypeData: { id: string; name: string; entityType: string } | undefined;
                 
                 if (this.state.selectedIncidentTypeId && this.state.selectedIncidentTypeName) {
-                    // User selected from popup
                     incidentTypeData = {
                         id: this.state.selectedIncidentTypeId,
                         name: this.state.selectedIncidentTypeName,
                         entityType: 'msdyn_incidenttype'
                     };
                 } else if (this.state.selectedCampaignId) {
-                    // Get incident type from campaign (SetParentCampaign logic)
-                    const campaignData = await WorkOrderHelpers.getCampaignData(this.state.selectedCampaignId);
-                    if (campaignData?.incidentType) {
-                        incidentTypeData = campaignData.incidentType;
+                    // Get incident type from campaign using cached map (no API call)
+                    const mapped = this.state.campaignIncidentTypeMap[this.state.selectedCampaignId];
+                    if (mapped) {
+                        incidentTypeData = {
+                            id: mapped.id,
+                            name: mapped.name,
+                            entityType: 'msdyn_incidenttype'
+                        };
+                    } else {
+                        // Fallback: fetch from API (should rarely happen since we preloaded)
+                        const campaignData = await WorkOrderHelpers.getCampaignData(this.state.selectedCampaignId);
+                        if (campaignData?.incidentType) {
+                            incidentTypeData = campaignData.incidentType;
+                        }
                     }
                 } else if (this.props.incidentTypeId && this.props.incidentTypeName) {
-                    // Use from props
                     incidentTypeData = {
                         id: this.props.incidentTypeId,
                         name: this.props.incidentTypeName,
@@ -709,17 +811,15 @@
                     throw new Error('No incident type available');
                 }
 
-                // STEP 3 & 4: OPTIMIZATION - Get work order type AND department in ONE API call
+                // STEP 3 & 4: Get work order type AND department in ONE API call
                 const incidentData = await WorkOrderHelpers.getIncidentTypeData(incidentTypeData.id);
                 const workOrderTypeData = incidentData?.workOrderType;
                 let departmentData = incidentData?.department || null;
 
-                // If not found, get from user (SetDepartment fallback)
                 if (!departmentData) {
                     departmentData = await WorkOrderHelpers.setDepartmentFromUser(userId);
                 }
 
-                // Fallback to props
                 if (!departmentData && this.props.organizationUnitId && this.props.organizationUnitName) {
                     departmentData = {
                         id: this.props.organizationUnitId,
@@ -740,8 +840,6 @@
                         id: this.state.selectedCampaignId,
                         name: this.state.selectedCampaignName
                     };
-
-                    // Set parent campaign (SetParentCampaign logic)
                     parentCampaignData = campaignData;
                 } else if (this.props.activePatrolId && this.props.activePatrolName) {
                     campaignData = {
@@ -756,7 +854,7 @@
                     this.state.selectedInspectionType === 4 || 
                     (this.state.isAnonymous && [3, 6, 7].includes(this.state.selectedInspectionType!));
 
-                // STEP 7: Detect if created from mobile (DetectMObileCreation)
+                // STEP 7: Detect if created from mobile
                 const createdFromMobile = WorkOrderHelpers.isMobileClient();
 
                 // STEP 8: Validate data
@@ -770,7 +868,8 @@
                     throw new Error(`Missing required fields: ${validation.missingFields.join(', ')}`);
                 }
 
-                // STEP 9: Create work order using helper
+                // STEP 9: Create work order — with progress indicator
+                this.xrm.Utility.showProgressIndicator(this.strings.CreatingWorkOrder);
                 const workOrderId = await WorkOrderHelpers.createWorkOrder({
                     subAccount: {
                         id: accountId,
@@ -789,6 +888,7 @@
                     accountInspectionType: this.state.selectedInspectionType || undefined,
                     createdFromMobile: createdFromMobile
                 });
+                this.xrm.Utility.closeProgressIndicator();
 
                 if (!workOrderId) {
                     throw new Error('Failed to create work order');
@@ -796,10 +896,14 @@
 
                 console.log('Work order created successfully:', workOrderId);
 
-                // STEP 10: Create auto booking if from mobile (createAutoBookingOnWorkOrderCreate)
-                // OPTIMIZATION: createAutoBooking now parallelizes resource/status fetch internally
-                if (createdFromMobile) {
-                    const bookingId = await WorkOrderHelpers.createAutoBooking(workOrderId, userId);
+                // STEP 10: Create auto booking if from mobile — using cached values
+                if (createdFromMobile && InitCache.hasBookableResource) {
+                    this.xrm.Utility.showProgressIndicator(this.strings.CreatingBooking);
+                    const bookingId = await WorkOrderHelpers.createAutoBooking(workOrderId, userId, {
+                        bookableResourceId: InitCache.bookableResourceId!,
+                        bookingStatusId: InitCache.bookingStatusId!,
+                    });
+                    this.xrm.Utility.closeProgressIndicator();
                     if (bookingId) {
                         console.log('Auto booking created:', bookingId);
                     }
@@ -818,6 +922,7 @@
                 }
 
             } catch (error: any) {
+                this.xrm.Utility.closeProgressIndicator();
                 console.error('Error creating work order:', error);
                 throw error;
             }
@@ -835,8 +940,11 @@
             try {
                 this.setState({ loading: true, error: null });
 
-                // Get or create account
+                // Get or create account — with progress indicator
+                this.xrm.Utility.showProgressIndicator(this.strings.CreatingAccount);
                 const accountId = await this.searchOrCreateAccount();
+                this.xrm.Utility.closeProgressIndicator();
+
                 if (!accountId) {
                     throw new Error('Failed to get account');
                 }
@@ -846,15 +954,20 @@
                 const needsIncidentType = !this.state.selectedIncidentTypeId && !this.props.incidentTypeId;
 
                 if (needsCampaign || needsIncidentType) {
-                    // Show selection popup with only the missing fields
-                    // OPTIMIZATION: Store accountId for reuse in handleContinueWithSelections
+                    // Show selection popup — atomic state transition (fixes intermittent rendering)
                     this.pendingAccountId = accountId;
-                    this.setState({
+                    this.setState(prev => ({
+                        ...prev,
                         showCampaignIncidentPopup: true,
                         popupShowCampaign: needsCampaign,
                         popupShowIncidentType: needsIncidentType,
-                        loading: false
-                    });
+                        loading: false,
+                        error: null,
+                        incidentTypeReadOnly: false,
+                        // Preserve popup field values
+                        selectedCampaignId: prev.selectedCampaignId,
+                        selectedIncidentTypeId: prev.selectedIncidentTypeId,
+                    }));
                 } else {
                     // Has both campaign and incident type, can create work order directly
                     await this.createWorkOrder(accountId);
@@ -862,6 +975,7 @@
                 }
 
             } catch (error: any) {
+                this.xrm.Utility.closeProgressIndicator();
                 console.error('Error in handleStart:', error);
                 this.setState({
                     error: error.message || 'Error starting inspection',
@@ -883,9 +997,9 @@
 
                 this.setState({ loading: true, error: null, showCampaignIncidentPopup: false });
 
-                // OPTIMIZATION: Reuse account ID from handleStart instead of re-searching
+                // Reuse account ID from handleStart instead of re-searching
                 const accountId = this.pendingAccountId || await this.searchOrCreateAccount();
-                this.pendingAccountId = null; // Clear after use
+                this.pendingAccountId = null;
                 if (!accountId) {
                     throw new Error('Failed to get account');
                 }
@@ -894,6 +1008,7 @@
                 this.setState({ loading: false });
 
             } catch (error: any) {
+                this.xrm.Utility.closeProgressIndicator();
                 console.error('Error creating work order:', error);
                 this.setState({
                     error: error.message || 'Error creating work order',
@@ -910,7 +1025,6 @@
             const { selectedInspectionType, isAnonymous } = this.state;
             if (!selectedInspectionType) return false;
 
-            // If anonymous is checked for types 3, 6, or 7, hide all fields
             if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
                 return false;
             }
@@ -936,52 +1050,43 @@
         };
 
         // =====================================================================
-        // RENDER
+        // STYLE HELPERS
         // =====================================================================
 
-        render() {
-            if (!this.props.isOpen) {
-                return null;
-            }
+        private getStyles = () => {
+            const { loading } = this.state;
 
-            const {
-                isRTL, inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id,
-                carColor, vehicleBrand, vehicleBrands, loading, error, showCampaignIncidentPopup,
-                campaigns, incidentTypes, selectedCampaignId, selectedIncidentTypeId, isAnonymous
-            } = this.state;
-
-            // Styles
             const containerStyle: React.CSSProperties = {
                 position: 'fixed',
                 top: 0,
                 left: 0,
                 width: '100%',
                 height: '100%',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: FLUENT.overlay,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 zIndex: 1000,
-                direction: isRTL ? 'rtl' : 'ltr',
+                direction: this.state.isRTL ? 'rtl' : 'ltr',
             };
 
             const modalStyle: React.CSSProperties = {
-                backgroundColor: 'white',
-                borderRadius: 2,
+                backgroundColor: FLUENT.colorWhite,
+                borderRadius: FLUENT.borderRadiusModal,
                 padding: 24,
                 maxWidth: 500,
                 width: '90%',
                 maxHeight: '90vh',
                 overflowY: 'auto',
-                boxShadow: '0 0 10px rgba(0, 0, 0, 0.3)',
+                boxShadow: FLUENT.shadowModal,
             };
 
             const titleStyle: React.CSSProperties = {
                 fontSize: 18,
                 fontWeight: 600,
                 marginBottom: 20,
-                color: '#333333',
-                fontFamily: '"Segoe UI", sans-serif',
+                color: FLUENT.colorNeutralDark,
+                fontFamily: FLUENT.fontFamily,
             };
 
             const fieldStyle: React.CSSProperties = {
@@ -993,19 +1098,55 @@
                 fontSize: 14,
                 fontWeight: 600,
                 marginBottom: 4,
-                color: '#323130',
-                fontFamily: '"Segoe UI", sans-serif',
+                color: FLUENT.colorNeutralPrimary,
+                fontFamily: FLUENT.fontFamily,
             };
 
             const inputStyle: React.CSSProperties = {
                 width: '100%',
                 padding: '6px 8px',
-                border: '1px solid #605e5c',
-                borderRadius: 2,
+                border: `1px solid ${FLUENT.colorNeutralSecondary}`,
+                borderRadius: FLUENT.borderRadius,
                 fontSize: 14,
-                fontFamily: '"Segoe UI", sans-serif',
+                fontFamily: FLUENT.fontFamily,
                 boxSizing: 'border-box',
                 outline: 'none',
+                transition: `border-color ${FLUENT.transitionFast}`,
+            };
+
+            const selectWrapperStyle: React.CSSProperties = {
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+            };
+
+            const selectInnerStyle: React.CSSProperties = {
+                ...inputStyle,
+                paddingRight: 28,
+                appearance: 'none' as any,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23605e5c' d='M2.15 4.65a.5.5 0 01.7 0L6 7.79l3.15-3.14a.5.5 0 11.7.7l-3.5 3.5a.5.5 0 01-.7 0l-3.5-3.5a.5.5 0 010-.7z'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: this.state.isRTL ? '8px center' : 'calc(100% - 8px) center',
+            };
+
+            const clearIconStyle: React.CSSProperties = {
+                position: 'absolute',
+                right: this.state.isRTL ? 'auto' : 32,
+                left: this.state.isRTL ? 32 : 'auto',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: FLUENT.colorNeutralSecondary,
+                fontSize: 12,
+                fontWeight: 'bold',
+                borderRadius: '50%',
+                transition: `background-color ${FLUENT.transitionFast}`,
+                userSelect: 'none',
             };
 
             const buttonContainerStyle: React.CSSProperties = {
@@ -1018,37 +1159,37 @@
             const buttonStyle: React.CSSProperties = {
                 padding: '8px 16px',
                 border: '1px solid transparent',
-                borderRadius: 2,
+                borderRadius: FLUENT.borderRadius,
                 fontSize: 14,
                 fontWeight: 600,
                 cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: '"Segoe UI", sans-serif',
-                transition: 'background-color 0.1s ease',
+                fontFamily: FLUENT.fontFamily,
+                transition: `background-color ${FLUENT.transitionFast}`,
                 minWidth: 80,
             };
 
             const startButtonStyle: React.CSSProperties = {
                 ...buttonStyle,
-                backgroundColor: loading ? '#d3d3d3' : '#0078d4',
-                color: 'white',
+                backgroundColor: loading ? '#d3d3d3' : FLUENT.colorPrimary,
+                color: FLUENT.colorWhite,
             };
 
             const closeButtonStyle: React.CSSProperties = {
                 ...buttonStyle,
-                backgroundColor: 'white',
-                color: '#323130',
-                border: '1px solid #8a8886',
+                backgroundColor: FLUENT.colorWhite,
+                color: FLUENT.colorNeutralPrimary,
+                border: `1px solid ${FLUENT.colorNeutralSecondary}`,
             };
 
             const errorStyle: React.CSSProperties = {
-                color: '#a4262c',
+                color: FLUENT.colorErrorPrimary,
                 fontSize: 12,
                 marginBottom: 16,
                 padding: 8,
-                backgroundColor: '#fde7e9',
-                border: '1px solid #a4262c',
-                borderRadius: 2,
-                fontFamily: '"Segoe UI", sans-serif',
+                backgroundColor: FLUENT.colorErrorBackground,
+                border: `1px solid ${FLUENT.colorErrorPrimary}`,
+                borderRadius: FLUENT.borderRadius,
+                fontFamily: FLUENT.fontFamily,
             };
 
             const checkboxContainerStyle: React.CSSProperties = {
@@ -1064,15 +1205,101 @@
                 cursor: loading ? 'not-allowed' : 'pointer',
             };
 
+            return {
+                containerStyle,
+                modalStyle,
+                titleStyle,
+                fieldStyle,
+                labelStyle,
+                inputStyle,
+                selectWrapperStyle,
+                selectInnerStyle,
+                clearIconStyle,
+                buttonContainerStyle,
+                startButtonStyle,
+                closeButtonStyle,
+                errorStyle,
+                checkboxContainerStyle,
+                checkboxStyle,
+            };
+        };
+
+        // =====================================================================
+        // RENDER HELPERS
+        // =====================================================================
+
+        /**
+         * Render a select dropdown wrapped with a clear (X) button.
+         */
+        private renderSelectWithClear = (
+            value: string,
+            onChange: (val: string) => void,
+            options: Array<{ key: string; value: string; label: string }>,
+            placeholder: string,
+            disabled: boolean,
+            styles: ReturnType<typeof this.getStyles>,
+            extraSelectStyle?: React.CSSProperties
+        ) => {
+            return React.createElement(
+                'div',
+                { style: styles.selectWrapperStyle },
+                React.createElement(
+                    'select',
+                    {
+                        value: value || '',
+                        onChange: (e: { target: { value: string } }) => onChange(e.target.value),
+                        disabled: disabled,
+                        style: {
+                            ...styles.selectInnerStyle,
+                            backgroundColor: disabled ? FLUENT.colorNeutralLighter : FLUENT.colorWhite,
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            ...extraSelectStyle,
+                        },
+                    },
+                    React.createElement('option', { value: '' }, placeholder),
+                    options.map((opt) =>
+                        React.createElement('option', { key: opt.key, value: opt.value }, opt.label)
+                    )
+                ),
+                // Clear (X) button — only show when value is selected and not disabled
+                value && !disabled && React.createElement(
+                    'span',
+                    {
+                        onClick: () => onChange(''),
+                        style: styles.clearIconStyle,
+                        title: 'Clear',
+                    },
+                    '✕'
+                )
+            );
+        };
+
+        // =====================================================================
+        // RENDER
+        // =====================================================================
+
+        render() {
+            if (!this.props.isOpen) {
+                return null;
+            }
+
+            const {
+                inspectionTypes, selectedInspectionType, qataryId, name, crNumber, id,
+                carColor, vehicleBrand, vehicleBrands, loading, error, showCampaignIncidentPopup,
+                campaigns, incidentTypes, selectedCampaignId, selectedIncidentTypeId, isAnonymous,
+                incidentTypeReadOnly
+            } = this.state;
+
+            const styles = this.getStyles();
             const isInspectionTypeDisabled = this.props.lockInspectionType || loading;
 
-            // Campaign/Incident Popup - show only missing fields
+            // ------
+            // Campaign/Incident Popup
+            // ------
             if (showCampaignIncidentPopup) {
-                // Determine which fields need to be shown based on initial check when popup opened
                 const showCampaignField = this.state.popupShowCampaign;
                 const showIncidentField = this.state.popupShowIncidentType;
 
-                // Dynamic title based on what's missing
                 let popupTitle = '';
                 if (showCampaignField && showIncidentField) {
                     popupTitle = this.strings.SelectCampaign + ' / ' + this.strings.SelectIncidentType;
@@ -1084,78 +1311,65 @@
 
                 return React.createElement(
                     'div',
-                    { style: containerStyle },
+                    { style: styles.containerStyle },
                     React.createElement(
                         'div',
-                        { style: modalStyle },
-                        React.createElement('h2', { style: titleStyle }, popupTitle),
+                        { style: styles.modalStyle },
+                        React.createElement('h2', { style: styles.titleStyle }, popupTitle),
 
-                        error && React.createElement('div', { style: errorStyle }, error),
+                        error && React.createElement('div', { style: styles.errorStyle }, error),
 
-                        // Campaign Selection - show only if missing
+                        // Campaign Selection
                         showCampaignField && React.createElement(
                             'div',
-                            { style: fieldStyle },
-                            React.createElement('label', { style: labelStyle }, this.strings.Campaign),
-                            React.createElement(
-                                'select',
-                                {
-                                    value: selectedCampaignId || '',
-                                    onChange: (e: { target: { value: string; }; }) => this.setState({
-                                        selectedCampaignId: e.target.value,
-                                        selectedCampaignName: campaigns.find(c => c.id === e.target.value)?.name
-                                    }),
-                                    disabled: loading,
-                                    style: inputStyle,
-                                },
-                                React.createElement('option', { value: '' }, '--'),
-                                campaigns.map((c) =>
-                                    React.createElement('option', { key: c.id, value: c.id }, c.name)
-                                )
+                            { style: styles.fieldStyle },
+                            React.createElement('label', { style: styles.labelStyle }, this.strings.Campaign),
+                            this.renderSelectWithClear(
+                                selectedCampaignId || '',
+                                (val) => this.handleCampaignChange(val),
+                                campaigns.map(c => ({ key: c.id, value: c.id, label: c.name })),
+                                '--',
+                                loading,
+                                styles
                             )
                         ),
 
-                        // Incident Type Selection - show only if missing
+                        // Incident Type Selection
                         showIncidentField && React.createElement(
                             'div',
-                            { style: fieldStyle },
-                            React.createElement('label', { style: labelStyle }, this.strings.IncidentType),
-                            React.createElement(
-                                'select',
-                                {
-                                    value: selectedIncidentTypeId || '',
-                                    onChange: (e: { target: { value: string; }; }) => this.setState({
-                                        selectedIncidentTypeId: e.target.value,
-                                        selectedIncidentTypeName: incidentTypes.find(it => it.id === e.target.value)?.name
-                                    }),
-                                    disabled: loading,
-                                    style: inputStyle,
-                                },
-                                React.createElement('option', { value: '' }, '--'),
-                                incidentTypes.map((it) =>
-                                    React.createElement('option', { key: it.id, value: it.id }, it.name)
-                                )
+                            { style: styles.fieldStyle },
+                            React.createElement('label', { style: styles.labelStyle }, this.strings.IncidentType),
+                            this.renderSelectWithClear(
+                                selectedIncidentTypeId || '',
+                                (val) => this.handleIncidentTypeChange(val),
+                                incidentTypes.map(it => ({ key: it.id, value: it.id, label: it.name })),
+                                '--',
+                                loading || incidentTypeReadOnly,
+                                styles
                             )
                         ),
 
                         React.createElement(
                             'div',
-                            { style: buttonContainerStyle },
+                            { style: styles.buttonContainerStyle },
                             React.createElement(
                                 'button',
                                 {
                                     onClick: this.handleContinueWithSelections,
                                     disabled: loading,
-                                    style: startButtonStyle,
+                                    style: styles.startButtonStyle,
                                 },
                                 loading ? this.strings.Loading : this.strings.Continue
                             ),
                             React.createElement(
                                 'button',
                                 {
-                                    onClick: () => this.setState({ showCampaignIncidentPopup: false }),
+                                    onClick: () => this.setState({
+                                        showCampaignIncidentPopup: false,
+                                        incidentTypeReadOnly: false,
+                                    }),
                                     disabled: loading,
-                                    style: closeButtonStyle,
+                                    style: styles.closeButtonStyle,
                                 },
                                 this.strings.Close
                             )
@@ -1164,54 +1378,51 @@
                 );
             }
 
+            // ------
             // Main Form
+            // ------
             return React.createElement(
                 'div',
-                { style: containerStyle },
+                { style: styles.containerStyle },
                 React.createElement(
                     'div',
-                    { style: modalStyle },
-                    React.createElement('h2', { style: titleStyle }, this.strings.StartMultiTypeInspection),
+                    { style: styles.modalStyle },
+                    React.createElement('h2', { style: styles.titleStyle }, this.strings.StartMultiTypeInspection),
 
-                    error && React.createElement('div', { style: errorStyle }, error),
+                    error && React.createElement('div', { style: styles.errorStyle }, error),
 
                     // Inspection Type
                     React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle }, this.strings.InspectionType),
-                        React.createElement(
-                            'select',
-                            {
-                                value: selectedInspectionType || '',
-                                onChange: this.handleInspectionTypeChange,
-                                disabled: isInspectionTypeDisabled,
-                                style: {
-                                    ...inputStyle,
-                                    backgroundColor: isInspectionTypeDisabled ? '#f3f2f1' : 'white',
-                                    cursor: isInspectionTypeDisabled ? 'not-allowed' : 'pointer'
-                                },
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.InspectionType),
+                        this.renderSelectWithClear(
+                            selectedInspectionType !== null ? String(selectedInspectionType) : '',
+                            (val) => {
+                                // Build a synthetic event for the existing handler
+                                const syntheticEvent = { target: { value: val } } as React.ChangeEvent<HTMLSelectElement>;
+                                this.handleInspectionTypeChange(syntheticEvent);
                             },
-                            React.createElement('option', { value: '' }, this.strings.chooseInspectionType),
-                            inspectionTypes.map((type) =>
-                                React.createElement('option', { key: type.value, value: type.value }, type.label)
-                            )
+                            inspectionTypes.map(t => ({ key: String(t.value), value: String(t.value), label: t.label })),
+                            this.strings.chooseInspectionType,
+                            isInspectionTypeDisabled,
+                            styles
                         )
                     ),
 
                     // Anonymous Checkbox (for types 3, 6, 7)
                     this.shouldShowAnonymousCheckbox() && React.createElement(
                         'div',
-                        { style: checkboxContainerStyle },
+                        { style: styles.checkboxContainerStyle },
                         React.createElement('input', {
                             type: 'checkbox',
                             checked: isAnonymous,
                             onChange: (e) => this.setState({ isAnonymous: e.target.checked }),
                             disabled: loading,
-                            style: checkboxStyle,
+                            style: styles.checkboxStyle,
                         }),
                         React.createElement('label', { 
-                            style: { ...labelStyle, marginBottom: 0, cursor: loading ? 'not-allowed' : 'pointer' },
+                            style: { ...styles.labelStyle, marginBottom: 0, cursor: loading ? 'not-allowed' : 'pointer' } as React.CSSProperties,
                             onClick: () => !loading && this.setState({ isAnonymous: !isAnonymous })
                         }, this.strings.Anonymous)
                     ),
@@ -1219,87 +1430,82 @@
                     // ID (Vehicle)
                     this.shouldShowField('id') && React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle }, this.strings.ID),
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.ID),
                         React.createElement('input', {
                             type: 'text',
                             value: id,
                             onChange: (e) => this.handleInputChange('id', e.target.value),
                             disabled: loading,
-                            style: inputStyle,
+                            style: styles.inputStyle,
                         })
                     ),
 
                     // Car Color
                     this.shouldShowField('carColor') && React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle }, this.strings.CarColor),
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.CarColor),
                         React.createElement('input', {
                             type: 'text',
                             value: carColor,
                             onChange: (e) => this.handleInputChange('carColor', e.target.value),
                             disabled: loading,
-                            style: inputStyle,
+                            style: styles.inputStyle,
                         })
                     ),
 
                     // Vehicle Brand
                     this.shouldShowField('vehicleBrand') && React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle }, this.strings.VehicleBrand),
-                        React.createElement(
-                            'select',
-                            {
-                                value: vehicleBrand ?? '',
-                                onChange: (e: { target: { value: string; }; }) => {
-                                    const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                                    this.setState({ vehicleBrand: val });
-                                },
-                                disabled: loading,
-                                style: inputStyle,
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.VehicleBrand),
+                        this.renderSelectWithClear(
+                            vehicleBrand !== null ? String(vehicleBrand) : '',
+                            (val) => {
+                                const parsed = val ? parseInt(val, 10) : null;
+                                this.setState({ vehicleBrand: parsed });
                             },
-                            React.createElement('option', { value: '' }, '--'),
-                            vehicleBrands.map((vb) =>
-                                React.createElement('option', { key: vb.value, value: vb.value }, vb.label)
-                            )
+                            vehicleBrands.map(vb => ({ key: String(vb.value), value: String(vb.value), label: vb.label })),
+                            '--',
+                            loading,
+                            styles
                         )
                     ),
 
                     // Qatary ID
                     this.shouldShowField('qataryId') && React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle }, this.strings.QataryID),
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.QataryID),
                         React.createElement('input', {
                             type: 'text',
                             value: qataryId,
                             onChange: (e) => this.handleInputChange('qataryId', e.target.value),
                             disabled: loading,
-                            style: inputStyle,
+                            style: styles.inputStyle,
                         })
                     ),
 
                     // Name
                     this.shouldShowField('name') && React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle }, this.strings.Name),
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.Name),
                         React.createElement('input', {
                             type: 'text',
                             value: name,
                             onChange: (e) => this.handleInputChange('name', e.target.value),
                             disabled: loading,
-                            style: inputStyle,
+                            style: styles.inputStyle,
                         })
                     ),
 
                     // CR Number
                     this.shouldShowField('crNumber') && React.createElement(
                         'div',
-                        { style: fieldStyle },
-                        React.createElement('label', { style: labelStyle },
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle },
                             selectedInspectionType === 7 ? this.strings.MonourNumber : this.strings.CRNumber
                         ),
                         React.createElement('input', {
@@ -1307,20 +1513,20 @@
                             value: crNumber,
                             onChange: (e) => this.handleInputChange('crNumber', e.target.value),
                             disabled: loading,
-                            style: inputStyle,
+                            style: styles.inputStyle,
                         })
                     ),
 
                     // Buttons
                     React.createElement(
                         'div',
-                        { style: buttonContainerStyle },
+                        { style: styles.buttonContainerStyle },
                         React.createElement(
                             'button',
                             {
                                 onClick: this.handleStart,
                                 disabled: loading,
-                                style: startButtonStyle,
+                                style: styles.startButtonStyle,
                             },
                             loading ? this.strings.Loading : this.strings.Start
                         ),
@@ -1329,7 +1535,7 @@
                             {
                                 onClick: this.props.onClose,
                                 disabled: loading,
-                                style: closeButtonStyle,
+                                style: styles.closeButtonStyle,
                             },
                             this.strings.Close
                         )

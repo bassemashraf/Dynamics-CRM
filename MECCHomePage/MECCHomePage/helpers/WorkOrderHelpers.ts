@@ -301,107 +301,19 @@ export class WorkOrderHelpers {
     // =====================================================================
 
     /**
-     * Check if user is an inspector
-     */
-    static async isUserInspector(userId: string): Promise<boolean> {
-        try {
-            const userResults = await this.xrm.WebApi.retrieveMultipleRecords(
-                "systemuser",
-                `?$select=duc_isinspector&$filter=systemuserid eq ${userId}`
-            );
-
-            if (userResults.entities.length > 0) {
-                return userResults.entities[0].duc_isinspector === true;
-            }
-
-            return false;
-        } catch (error) {
-            console.error("Error checking if user is inspector:", error);
-            return false;
-        }
-    }
-
-    /**
-     * Get bookable resource for user
-     */
-    static async getBookableResourceForUser(userId: string): Promise<string | null> {
-        try {
-            const resourceResults = await this.xrm.WebApi.retrieveMultipleRecords(
-                "bookableresource",
-                `?$select=bookableresourceid&$filter=_userid_value eq ${userId} and resourcetype eq 3`
-            );
-
-            if (resourceResults.entities.length > 0) {
-                return resourceResults.entities[0].bookableresourceid;
-            }
-
-            return null;
-        } catch (error) {
-            console.error("Error getting bookable resource:", error);
-            return null;
-        }
-    }
-
-    /**
-     * Get "Scheduled" booking status ID
-     */
-    static async getScheduledBookingStatusId(): Promise<string | null> {
-        try {
-            const statusResults = await this.xrm.WebApi.retrieveMultipleRecords(
-                "bookingstatus",
-                "?$select=bookingstatusid,name&$filter=name eq 'Scheduled'"
-            );
-
-            if (statusResults.entities.length > 0) {
-                return statusResults.entities[0].bookingstatusid;
-            }
-
-            return null;
-        } catch (error) {
-            console.error("Error getting scheduled booking status:", error);
-            return null;
-        }
-    }
-
-    /**
-     * Create automatic booking for work order (for mobile creation)
-     * OPTIMIZATION: Accepts options to skip redundant checks and parallelize calls
+     * Create automatic booking for work order (for mobile creation).
+     * Uses pre-cached bookableResourceId and bookingStatusId from InitCache.
+     * No WebApi calls are made during this method.
      */
     static async createAutoBooking(
-        workOrderId: string, 
+        workOrderId: string,
         userId: string,
-        options?: {
-            skipInspectorCheck?: boolean;  // Skip if caller already verified
-            resourceId?: string;           // Pre-fetched resource ID
+        options: {
+            bookableResourceId: string;
+            bookingStatusId: string;
         }
     ): Promise<string | null> {
         try {
-            // Only check inspector if not already verified by caller
-            if (!options?.skipInspectorCheck) {
-                const isInspector = await this.isUserInspector(userId);
-                if (!isInspector) {
-                    console.log("User is not an inspector. Booking not created.");
-                    return null;
-                }
-            }
-
-            // OPTIMIZATION: Fetch resource and booking status in parallel
-            const [resourceId, bookingStatusId] = await Promise.all([
-                options?.resourceId ? Promise.resolve(options.resourceId) : this.getBookableResourceForUser(userId),
-                this.getScheduledBookingStatusId()
-            ]);
-
-            if (!resourceId) {
-                console.error("No bookable resource found for user");
-                return null;
-            }
-
-            if (!bookingStatusId) {
-                console.error("Booking status 'Scheduled' not found");
-                return null;
-            }
-
-            // Create booking
             const now = new Date();
             const end = new Date(Date.now() + 60 * 60 * 1000); // 1 hour later
 
@@ -411,8 +323,8 @@ export class WorkOrderHelpers {
                 "endtime": end.toISOString(),
                 "duration": 1,
                 "msdyn_workorder@odata.bind": `/msdyn_workorders(${workOrderId})`,
-                "Resource@odata.bind": `/bookableresources(${resourceId})`,
-                "BookingStatus@odata.bind": `/bookingstatuses(${bookingStatusId})`
+                "Resource@odata.bind": `/bookableresources(${options.bookableResourceId})`,
+                "BookingStatus@odata.bind": `/bookingstatuses(${options.bookingStatusId})`
             };
 
             const result = await this.xrm.WebApi.createRecord("bookableresourcebooking", bookingData);

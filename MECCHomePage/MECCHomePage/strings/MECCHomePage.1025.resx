@@ -151,9 +151,14 @@
 <data name="Campaign" xml:space="preserve"><value>الحملة</value></data>
 <data name="IncidentType" xml:space="preserve"><value>نوع الحادث</value></data>
 <data name="Continue" xml:space="preserve"><value>متابعة</value></data>
-<data name="Anonymous" xml:space="preserve"><value>مجهول</value></data>
 <data name="PleaseSelectInspectionType" xml:space="preserve"><value>الرجاء اختيار نوع التفتيش</value></data>
 <data name="Error" xml:space="preserve"><value>خطأ</value></data>
+  <data name="CreatingAccount" xml:space="preserve"><value>جاري إنشاء الحساب...</value></data>
+  <data name="CreatingWorkOrder" xml:space="preserve"><value>جاري إنشاء أمر العمل...</value></data>
+  <data name="CreatingBooking" xml:space="preserve"><value>جاري إنشاء الحجز...</value></data>
+  <data name="NoResultsFound" xml:space="preserve"><value>لم يتم العثور على نتائج</value></data>
+  <data name="NoPatrolCampaignFound" xml:space="preserve"><value>لا توجد حملة دورية</value></data>
+  <data name="Inspector" xml:space="preserve"><value>مفتش</value></data>
 
   
 </root>

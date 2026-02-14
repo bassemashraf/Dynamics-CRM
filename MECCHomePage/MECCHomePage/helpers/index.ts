@@ -6,3 +6,4 @@
 export { WorkOrderHelpers } from './WorkOrderHelpers';
 export { CampaignHelpers } from './CampaignHelpers';
 export { IncidentTypeHelpers } from './IncidentTypeHelpers';
+export { InitCache } from './InitCache';
