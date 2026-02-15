@@ -159,6 +159,8 @@
   <data name="NoResultsFound" xml:space="preserve"><value>لم يتم العثور على نتائج</value></data>
   <data name="NoPatrolCampaignFound" xml:space="preserve"><value>لا توجد حملة دورية</value></data>
   <data name="Inspector" xml:space="preserve"><value>مفتش</value></data>
+  <data name="ScanBarcode" xml:space="preserve"><value>مسح الباركود</value></data>
+  <data name="Clear" xml:space="preserve"><value>مسح</value></data>
 
   
 </root>

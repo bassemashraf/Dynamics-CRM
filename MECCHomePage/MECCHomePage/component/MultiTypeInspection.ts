@@ -74,6 +74,8 @@
         CreatingAccount: string;
         CreatingWorkOrder: string;
         CreatingBooking: string;
+        ScanBarcode: string;
+        Clear: string;
     }
 
     // Cache constants
@@ -154,6 +156,8 @@
                 CreatingAccount: props.context.resources.getString("CreatingAccount") || "Creating Account...",
                 CreatingWorkOrder: props.context.resources.getString("CreatingWorkOrder") || "Creating Work Order...",
                 CreatingBooking: props.context.resources.getString("CreatingBooking") || "Creating Booking...",
+                ScanBarcode: props.context.resources.getString("ScanBarcode") || "Scan Barcode",
+                Clear: props.context.resources.getString("Clear") || "Clear",
             };
 
             this.state = {
@@ -473,6 +477,25 @@
 
         private handleInputChange = (field: keyof IMultiTypeInspectionState, value: any): void => {
             this.setState({ [field]: value } as any);
+        };
+
+        // =====================================================================
+        // BARCODE SCANNER
+        // =====================================================================
+
+        private handleScanBarcode = async (field: 'qataryId' | 'crNumber'): Promise<void> => {
+            try {
+                if (this.xrm?.Device?.getBarcodeValue) {
+                    const result: any = await this.xrm.Device.getBarcodeValue();
+                    if (result) {
+                        this.setState({ [field]: result } as any);
+                    }
+                } else {
+                    console.warn('Barcode scanner is not available on this device');
+                }
+            } catch (error) {
+                console.error('Error scanning barcode:', error);
+            }
         };
 
         // =====================================================================
@@ -951,28 +974,55 @@
 
                 // Check if campaign or incident type is missing
                 const needsCampaign = !this.state.selectedCampaignId && !this.props.activePatrolId;
-                const needsIncidentType = !this.state.selectedIncidentTypeId && !this.props.incidentTypeId;
 
-                if (needsCampaign || needsIncidentType) {
-                    // Show selection popup — atomic state transition (fixes intermittent rendering)
+                // Auto-resolve incident type from campaign if available
+                let resolvedIncidentTypeId = this.state.selectedIncidentTypeId || this.props.incidentTypeId;
+                let resolvedIncidentTypeName = this.state.selectedIncidentTypeName || this.props.incidentTypeName;
+                const campaignId = this.state.selectedCampaignId || this.props.activePatrolId;
+                if (!resolvedIncidentTypeId && campaignId) {
+                    const mapped = this.state.campaignIncidentTypeMap[campaignId];
+                    if (mapped) {
+                        resolvedIncidentTypeId = mapped.id;
+                        resolvedIncidentTypeName = mapped.name;
+                        this.setState({
+                            selectedIncidentTypeId: mapped.id,
+                            selectedIncidentTypeName: mapped.name,
+                        });
+                    }
+                }
+                // const needsIncidentType = !resolvedIncidentTypeId; // Removed check, always show popup
+
+                // If we have a resolved incident type, SKIP the popup and go straight to creation
+                if (resolvedIncidentTypeId) {
                     this.pendingAccountId = accountId;
-                    this.setState(prev => ({
-                        ...prev,
-                        showCampaignIncidentPopup: true,
-                        popupShowCampaign: needsCampaign,
-                        popupShowIncidentType: needsIncidentType,
-                        loading: false,
-                        error: null,
-                        incidentTypeReadOnly: false,
-                        // Preserve popup field values
-                        selectedCampaignId: prev.selectedCampaignId,
-                        selectedIncidentTypeId: prev.selectedIncidentTypeId,
-                    }));
-                } else {
-                    // Has both campaign and incident type, can create work order directly
+                    this.setState({
+                        loading: true, // Keep loading true for progress indicator
+                        selectedIncidentTypeId: resolvedIncidentTypeId,
+                        selectedIncidentTypeName: resolvedIncidentTypeName,
+                        selectedCampaignId: campaignId,
+                        // Ensure popup state is consistent just in case
+                        showCampaignIncidentPopup: false 
+                    });
+                    
                     await this.createWorkOrder(accountId);
                     this.setState({ loading: false });
+                    return;
                 }
+
+                // OTHERWISE: Show selection popup
+                this.pendingAccountId = accountId;
+                this.setState(prev => ({
+                    ...prev,
+                    showCampaignIncidentPopup: true,
+                    popupShowCampaign: true, // Always show campaign field
+                    popupShowIncidentType: true, // Always show incident type field
+                    loading: false,
+                    error: null,
+                    incidentTypeReadOnly: false,
+                    // Preserve popup field values
+                    selectedCampaignId: prev.selectedCampaignId,
+                    selectedIncidentTypeId: prev.selectedIncidentTypeId,
+                }));
 
             } catch (error: any) {
                 this.xrm.Utility.closeProgressIndicator();
@@ -995,7 +1045,8 @@
                     return;
                 }
 
-                this.setState({ loading: true, error: null, showCampaignIncidentPopup: false });
+                // Keep popup open while loading to prevent "Main Form" flash
+                this.setState({ loading: true, error: null });
 
                 // Reuse account ID from handleStart instead of re-searching
                 const accountId = this.pendingAccountId || await this.searchOrCreateAccount();
@@ -1118,10 +1169,12 @@
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
+                gap: 6,
             };
 
             const selectInnerStyle: React.CSSProperties = {
                 ...inputStyle,
+                flex: 1,
                 paddingRight: 28,
                 appearance: 'none' as any,
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23605e5c' d='M2.15 4.65a.5.5 0 01.7 0L6 7.79l3.15-3.14a.5.5 0 11.7.7l-3.5 3.5a.5.5 0 01-.7 0l-3.5-3.5a.5.5 0 010-.7z'/%3E%3C/svg%3E")`,
@@ -1129,24 +1182,37 @@
                 backgroundPosition: this.state.isRTL ? '8px center' : 'calc(100% - 8px) center',
             };
 
-            const clearIconStyle: React.CSSProperties = {
-                position: 'absolute',
-                right: this.state.isRTL ? 'auto' : 32,
-                left: this.state.isRTL ? 32 : 'auto',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: 16,
-                height: 16,
+            const clearButtonStyle: React.CSSProperties = {
+                padding: '6px 10px',
+                border: 'none',
+                borderRadius: FLUENT.borderRadius,
+                backgroundColor: FLUENT.colorErrorPrimary,
+                color: FLUENT.colorWhite,
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: FLUENT.fontFamily,
+                cursor: 'pointer',
+                transition: `background-color ${FLUENT.transitionFast}`,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+            };
+
+            const scanButtonStyle: React.CSSProperties = {
+                padding: '6px',
+                border: 'none',
+                borderRadius: FLUENT.borderRadius,
+                backgroundColor: 'transparent',
+                color: FLUENT.colorNeutralSecondary, // Grey icon
+                fontSize: 16,
+                fontWeight: 600,
+                fontFamily: FLUENT.fontFamily,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: `background-color ${FLUENT.transitionFast}, color ${FLUENT.transitionFast}`,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer',
-                color: FLUENT.colorNeutralSecondary,
-                fontSize: 12,
-                fontWeight: 'bold',
-                borderRadius: '50%',
-                transition: `background-color ${FLUENT.transitionFast}`,
-                userSelect: 'none',
             };
 
             const buttonContainerStyle: React.CSSProperties = {
@@ -1205,6 +1271,17 @@
                 cursor: loading ? 'not-allowed' : 'pointer',
             };
 
+            const readOnlyDisplayStyle: React.CSSProperties = {
+                padding: '6px 8px',
+                backgroundColor: FLUENT.colorNeutralLighter,
+                border: `1px solid ${FLUENT.colorNeutralLight}`,
+                borderRadius: FLUENT.borderRadius,
+                fontSize: 14,
+                fontFamily: FLUENT.fontFamily,
+                color: FLUENT.colorNeutralPrimary,
+                flex: 1,
+            };
+
             return {
                 containerStyle,
                 modalStyle,
@@ -1214,13 +1291,15 @@
                 inputStyle,
                 selectWrapperStyle,
                 selectInnerStyle,
-                clearIconStyle,
+                clearButtonStyle,
+                scanButtonStyle,
                 buttonContainerStyle,
                 startButtonStyle,
                 closeButtonStyle,
                 errorStyle,
                 checkboxContainerStyle,
                 checkboxStyle,
+                readOnlyDisplayStyle,
             };
         };
 
@@ -1261,15 +1340,16 @@
                         React.createElement('option', { key: opt.key, value: opt.value }, opt.label)
                     )
                 ),
-                // Clear (X) button — only show when value is selected and not disabled
+                // Clear button — colored button beside the field, shown when value is selected and not disabled
                 value && !disabled && React.createElement(
-                    'span',
+                    'button',
                     {
                         onClick: () => onChange(''),
-                        style: styles.clearIconStyle,
-                        title: 'Clear',
+                        style: styles.clearButtonStyle,
+                        title: this.strings.Clear,
+                        type: 'button',
                     },
-                    '✕'
+                    this.strings.Clear
                 )
             );
         };
@@ -1367,6 +1447,11 @@
                                     onClick: () => this.setState({
                                         showCampaignIncidentPopup: false,
                                         incidentTypeReadOnly: false,
+                                        // CLEAR selections on close so they don't show on main form
+                                        selectedCampaignId: undefined,
+                                        selectedCampaignName: undefined,
+                                        selectedIncidentTypeId: undefined,
+                                        selectedIncidentTypeName: undefined,
                                     }),
                                     disabled: loading,
                                     style: styles.closeButtonStyle,
@@ -1473,18 +1558,49 @@
                         )
                     ),
 
-                    // Qatary ID
+                    // Qatary ID with Barcode Scanner
                     this.shouldShowField('qataryId') && React.createElement(
                         'div',
                         { style: styles.fieldStyle },
                         React.createElement('label', { style: styles.labelStyle }, this.strings.QataryID),
-                        React.createElement('input', {
-                            type: 'text',
-                            value: qataryId,
-                            onChange: (e) => this.handleInputChange('qataryId', e.target.value),
-                            disabled: loading,
-                            style: styles.inputStyle,
-                        })
+                        React.createElement(
+                            'div',
+                            { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                            React.createElement('input', {
+                                type: 'text',
+                                value: qataryId,
+                                onChange: (e) => this.handleInputChange('qataryId', e.target.value),
+                                disabled: loading,
+                                style: { ...styles.inputStyle, flex: 1 },
+                            }),
+                            React.createElement(
+                                'button',
+                                {
+                                    onClick: () => this.handleScanBarcode('qataryId'),
+                                    disabled: loading,
+                                    style: styles.scanButtonStyle,
+                                    type: 'button',
+                                    title: this.strings.ScanBarcode,
+                                },
+                                // SVG Barcode Icon
+                                React.createElement('svg', {
+                                    width: "20",
+                                    height: "20",
+                                    viewBox: "0 0 24 24",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    strokeWidth: "2",
+                                    strokeLinecap: "round",
+                                    strokeLinejoin: "round"
+                                },
+                                    React.createElement('path', { d: "M3 5v14" }),
+                                    React.createElement('path', { d: "M8 5v14" }),
+                                    React.createElement('path', { d: "M12 5v14" }),
+                                    React.createElement('path', { d: "M17 5v14" }),
+                                    React.createElement('path', { d: "M21 5v14" })
+                                )
+                            )
+                        )
                     ),
 
                     // Name
@@ -1508,13 +1624,90 @@
                         React.createElement('label', { style: styles.labelStyle },
                             selectedInspectionType === 7 ? this.strings.MonourNumber : this.strings.CRNumber
                         ),
-                        React.createElement('input', {
-                            type: 'text',
-                            value: crNumber,
-                            onChange: (e) => this.handleInputChange('crNumber', e.target.value),
-                            disabled: loading,
-                            style: styles.inputStyle,
-                        })
+                        React.createElement(
+                            'div',
+                            { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                            React.createElement('input', {
+                                type: 'text',
+                                value: crNumber,
+                                onChange: (e) => this.handleInputChange('crNumber', e.target.value),
+                                disabled: loading,
+                                style: { ...styles.inputStyle, flex: 1 },
+                            }),
+                            React.createElement(
+                                'button',
+                                {
+                                    onClick: () => this.handleScanBarcode('crNumber'),
+                                    disabled: loading,
+                                    style: styles.scanButtonStyle,
+                                    type: 'button',
+                                    title: this.strings.ScanBarcode,
+                                },
+                                // SVG Barcode Icon
+                                React.createElement('svg', {
+                                    width: "20",
+                                    height: "20",
+                                    viewBox: "0 0 24 24",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    strokeWidth: "2",
+                                    strokeLinecap: "round",
+                                    strokeLinejoin: "round"
+                                },
+                                    React.createElement('path', { d: "M3 5v14" }),
+                                    React.createElement('path', { d: "M8 5v14" }),
+                                    React.createElement('path', { d: "M12 5v14" }),
+                                    React.createElement('path', { d: "M17 5v14" }),
+                                    React.createElement('path', { d: "M21 5v14" })
+                                )
+                            )
+                        )
+                    ),
+
+                    // Campaign (read-only display when pre-filled)
+                    (this.state.selectedCampaignId && this.state.selectedCampaignName) && React.createElement(
+                        'div',
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.Campaign),
+                        React.createElement(
+                            'div',
+                            { style: styles.selectWrapperStyle },
+                            React.createElement('span', { style: styles.readOnlyDisplayStyle }, this.state.selectedCampaignName),
+                            React.createElement(
+                                'button',
+                                {
+                                    onClick: () => this.setState({ selectedCampaignId: undefined, selectedCampaignName: undefined }),
+                                    disabled: loading,
+                                    style: styles.clearButtonStyle,
+                                    type: 'button',
+                                    title: this.strings.Clear,
+                                },
+                                this.strings.Clear
+                            )
+                        )
+                    ),
+
+                    // Incident Type (read-only display when pre-filled)
+                    (this.state.selectedIncidentTypeId && this.state.selectedIncidentTypeName) && React.createElement(
+                        'div',
+                        { style: styles.fieldStyle },
+                        React.createElement('label', { style: styles.labelStyle }, this.strings.IncidentType),
+                        React.createElement(
+                            'div',
+                            { style: styles.selectWrapperStyle },
+                            React.createElement('span', { style: styles.readOnlyDisplayStyle }, this.state.selectedIncidentTypeName),
+                            React.createElement(
+                                'button',
+                                {
+                                    onClick: () => this.setState({ selectedIncidentTypeId: undefined, selectedIncidentTypeName: undefined }),
+                                    disabled: loading,
+                                    style: styles.clearButtonStyle,
+                                    type: 'button',
+                                    title: this.strings.Clear,
+                                },
+                                this.strings.Clear
+                            )
+                        )
                     ),
 
                     // Buttons

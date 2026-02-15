@@ -157,4 +157,6 @@
   <data name="NoResultsFound" xml:space="preserve"><value>No results found</value></data>
   <data name="NoPatrolCampaignFound" xml:space="preserve"><value>No patrol campaign found</value></data>
   <data name="Inspector" xml:space="preserve"><value>Inspector</value></data>
+  <data name="ScanBarcode" xml:space="preserve"><value>Scan Barcode</value></data>
+  <data name="Clear" xml:space="preserve"><value>Clear</value></data>
 </root>
