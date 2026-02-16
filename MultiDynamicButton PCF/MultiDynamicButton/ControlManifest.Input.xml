@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="DynamicControls" constructor="MultiDynamicButton" version="0.0.1" display-name-key="MultiDynamicButton" description-key="MultiDynamicButton description - displays 3 dynamic buttons in a row" control-type="standard" >
+
+    <external-service-usage enabled="false">
+    </external-service-usage>
+
+    <!-- Bound property (required by PCF) -->
+    <property name="sampleProperty" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="SingleLine.Text" usage="bound" required="false" />
+
+    <!-- ========== Button 1 ========== -->
+    <property name="button1ActionTypeId" display-name-key="Button 1 - Action Type" description-key="Action type name for Button 1 (looks up duc_actiontype for command, color, icon)" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="button1Text" display-name-key="Button 1 - Text (English)" description-key="English label for Button 1" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="button1TextArabic" display-name-key="Button 1 - Text (Arabic)" description-key="Arabic label for Button 1" of-type="SingleLine.Text" usage="input" required="false" />
+
+    <!-- ========== Button 2 ========== -->
+    <property name="button2ActionTypeId" display-name-key="Button 2 - Action Type" description-key="Action type name for Button 2 (looks up duc_actiontype for command, color, icon)" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="button2Text" display-name-key="Button 2 - Text (English)" description-key="English label for Button 2" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="button2TextArabic" display-name-key="Button 2 - Text (Arabic)" description-key="Arabic label for Button 2" of-type="SingleLine.Text" usage="input" required="false" />
+
+    <!-- ========== Button 3 ========== -->
+    <property name="button3ActionTypeId" display-name-key="Button 3 - Action Type" description-key="Action type name for Button 3 (looks up duc_actiontype for command, color, icon)" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="button3Text" display-name-key="Button 3 - Text (English)" description-key="English label for Button 3" of-type="SingleLine.Text" usage="input" required="false" />
+    <property name="button3TextArabic" display-name-key="Button 3 - Text (Arabic)" description-key="Arabic label for Button 3" of-type="SingleLine.Text" usage="input" required="false" />
+
+    <resources>
+      <code path="index.ts" order="1"/>
+      <css path="css/MultiDynamicButton.css" order="1" />
+    </resources>
+    <feature-usage>
+      <uses-feature name="Utility" required="true" />
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
+  </control>
+</manifest>

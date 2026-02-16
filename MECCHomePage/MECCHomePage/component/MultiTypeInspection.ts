@@ -177,8 +177,8 @@
                 showCampaignIncidentPopup: false,
                 selectedCampaignId: props.activePatrolId,
                 selectedCampaignName: props.activePatrolName,
-                selectedIncidentTypeId: props.incidentTypeId,
-                selectedIncidentTypeName: props.incidentTypeName,
+                selectedIncidentTypeId: undefined,
+                selectedIncidentTypeName: undefined,
                 campaigns: [],
                 incidentTypes: [],
                 isAnonymous: false,
@@ -1687,28 +1687,7 @@
                         )
                     ),
 
-                    // Incident Type (read-only display when pre-filled)
-                    (this.state.selectedIncidentTypeId && this.state.selectedIncidentTypeName) && React.createElement(
-                        'div',
-                        { style: styles.fieldStyle },
-                        React.createElement('label', { style: styles.labelStyle }, this.strings.IncidentType),
-                        React.createElement(
-                            'div',
-                            { style: styles.selectWrapperStyle },
-                            React.createElement('span', { style: styles.readOnlyDisplayStyle }, this.state.selectedIncidentTypeName),
-                            React.createElement(
-                                'button',
-                                {
-                                    onClick: () => this.setState({ selectedIncidentTypeId: undefined, selectedIncidentTypeName: undefined }),
-                                    disabled: loading,
-                                    style: styles.clearButtonStyle,
-                                    type: 'button',
-                                    title: this.strings.Clear,
-                                },
-                                this.strings.Clear
-                            )
-                        )
-                    ),
+
 
                     // Buttons
                     React.createElement(

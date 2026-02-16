@@ -1,0 +1,26 @@
+.multi-button-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    /* gap: 4px; */
+    flex-wrap: wrap;
+}
+
+.multi-button-container .Jsaction {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 3px;
+    border-radius: 8px;
+    border: none;
+    padding: 17px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 15px;
+}
