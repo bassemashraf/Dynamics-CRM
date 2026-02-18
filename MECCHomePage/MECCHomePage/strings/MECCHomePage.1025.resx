@@ -97,7 +97,7 @@
     <comment>Button text for starting a multi-type inspection</comment>
   </data>
   <data name="InspectionType" xml:space="preserve">
-    <value>نوع التفتيش:</value>
+    <value>نوع جهة التفتيش:</value>
     <comment>Label for inspection type field</comment>
   </data>
   <data name="PleaseEnterRequiredFields" xml:space="preserve">
@@ -147,9 +147,9 @@
     <comment>Label for anonymous inspection checkbox</comment>
   </data>
   <data name="SelectCampaign" xml:space="preserve"><value>اختر الحملة</value></data>
-<data name="SelectIncidentType" xml:space="preserve"><value>اختر نوع الحادث</value></data>
+<data name="SelectIncidentType" xml:space="preserve"><value>اختر نوع التفتيش</value></data>
 <data name="Campaign" xml:space="preserve"><value>الحملة</value></data>
-<data name="IncidentType" xml:space="preserve"><value>نوع الحادث</value></data>
+<data name="IncidentType" xml:space="preserve"><value>نوع التفتيش</value></data>
 <data name="Continue" xml:space="preserve"><value>متابعة</value></data>
 <data name="PleaseSelectInspectionType" xml:space="preserve"><value>الرجاء اختيار نوع التفتيش</value></data>
 <data name="Error" xml:space="preserve"><value>خطأ</value></data>

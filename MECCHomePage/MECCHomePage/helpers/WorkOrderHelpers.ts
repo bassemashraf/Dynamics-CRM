@@ -326,13 +326,12 @@ export class WorkOrderHelpers {
                 "Resource@odata.bind": `/bookableresources(${options.bookableResourceId})`,
                 "BookingStatus@odata.bind": `/bookingstatuses(${options.bookingStatusId})`
             };
-
             const result = await this.xrm.WebApi.createRecord("bookableresourcebooking", bookingData);
             console.log("Booking created successfully. Booking ID:", result.id);
-
             return result.id;
         } catch (error) {
             console.error("Error creating auto booking:", error);
+            throw error;
             return null;
         }
     }
@@ -464,7 +463,7 @@ export class WorkOrderHelpers {
             }
 
             if (data.address) {
-                workOrderData['duc_address@odata.bind'] = `/duc_addressinformations(${data.address.id})`;
+                workOrderData['duc_Address@odata.bind'] = `/duc_addressinformations(${data.address.id})`;
             }
 
             if (data.latitude != null) {
