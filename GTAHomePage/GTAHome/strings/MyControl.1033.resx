@@ -80,4 +80,25 @@
   <comment>Search button text</comment>
 </data>
 
+  <!-- MultiTypeInspection strings -->
+  <data name="StartMultiTypeInspection" xml:space="preserve"><value>Start Inspection</value></data>
+  <data name="Taxable" xml:space="preserve"><value>Taxable (Tax Registered)</value></data>
+  <data name="NonTaxable" xml:space="preserve"><value>Non-Taxable (Not Tax Registered)</value></data>
+  <data name="CRNumber" xml:space="preserve"><value>CR Number:</value></data>
+  <data name="TempCRNumber" xml:space="preserve"><value>Temp CR Number:</value></data>
+  <data name="Start" xml:space="preserve"><value>Start</value></data>
+  <data name="PleaseEnterRequiredFields" xml:space="preserve"><value>Please enter required fields</value></data>
+  <data name="Error" xml:space="preserve"><value>Error</value></data>
+  <data name="SelectCampaign" xml:space="preserve"><value>Select Campaign</value></data>
+  <data name="SelectIncidentType" xml:space="preserve"><value>Select Incident Type</value></data>
+  <data name="Campaign" xml:space="preserve"><value>Campaign</value></data>
+  <data name="IncidentType" xml:space="preserve"><value>Incident Type</value></data>
+  <data name="Continue" xml:space="preserve"><value>Continue</value></data>
+  <data name="CreatingAccount" xml:space="preserve"><value>Creating Account...</value></data>
+  <data name="CreatingWorkOrder" xml:space="preserve"><value>Creating Work Order...</value></data>
+  <data name="CreatingBooking" xml:space="preserve"><value>Creating Booking...</value></data>
+  <data name="ScanBarcode" xml:space="preserve"><value>Scan Barcode</value></data>
+  <data name="Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="TaxType" xml:space="preserve"><value>Tax Type</value></data>
+
 </root>

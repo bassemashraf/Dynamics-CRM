@@ -81,4 +81,26 @@
   <data name="SearchError" xml:space="preserve">
     <value>حدث خطأ أثناء البحث</value>
   </data>
+
+  <!-- MultiTypeInspection strings -->
+  <data name="StartMultiTypeInspection" xml:space="preserve"><value>بدء التفتيش</value></data>
+  <data name="Taxable" xml:space="preserve"><value>مسجل ضريبى</value></data>
+  <data name="NonTaxable" xml:space="preserve"><value>غير مسجل ضريبى</value></data>
+  <data name="CRNumber" xml:space="preserve"><value>رقم السجل التجاري:</value></data>
+  <data name="TempCRNumber" xml:space="preserve"><value>رقم السجل التجاري المؤقت:</value></data>
+  <data name="Start" xml:space="preserve"><value>ابدأ</value></data>
+  <data name="PleaseEnterRequiredFields" xml:space="preserve"><value>يرجى إدخال الحقول المطلوبة</value></data>
+  <data name="Error" xml:space="preserve"><value>خطأ</value></data>
+  <data name="SelectCampaign" xml:space="preserve"><value>اختر الحملة</value></data>
+  <data name="SelectIncidentType" xml:space="preserve"><value>اختر نوع الحادثة</value></data>
+  <data name="Campaign" xml:space="preserve"><value>الحملة</value></data>
+  <data name="IncidentType" xml:space="preserve"><value>نوع الحادثة</value></data>
+  <data name="Continue" xml:space="preserve"><value>متابعة</value></data>
+  <data name="CreatingAccount" xml:space="preserve"><value>جاري إنشاء الحساب...</value></data>
+  <data name="CreatingWorkOrder" xml:space="preserve"><value>جاري إنشاء أمر العمل...</value></data>
+  <data name="CreatingBooking" xml:space="preserve"><value>جاري إنشاء الحجز...</value></data>
+  <data name="ScanBarcode" xml:space="preserve"><value>مسح الباركود</value></data>
+  <data name="Clear" xml:space="preserve"><value>مسح</value></data>
+  <data name="TaxType" xml:space="preserve"><value>نوع الضريبة</value></data>
+
 </root>

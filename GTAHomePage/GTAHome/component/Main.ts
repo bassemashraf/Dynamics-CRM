@@ -2,6 +2,7 @@
 import * as React from "react";
 import { IInputs } from "../generated/ManifestTypes";
 import { SearchResults } from "./SearchResults";
+import { MultiTypeInspection } from "./MultiTypeInspection";
 import { logoBase64 } from "../images/logo64";
 import { startSvgContent } from "../images/start";
 import { magnify } from "../images/magnify";
@@ -29,6 +30,7 @@ interface State {
     showAdvancedSearch: boolean;
     patrolStatus: 'none' | 'start' | 'end';
     activePatrolId?: string;
+    showInspectionPopup: boolean;
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -172,6 +174,7 @@ export const Main = (props: IProps) => {
         showAdvancedSearch: false,
         patrolStatus: 'none',
         activePatrolId: undefined,
+        showInspectionPopup: false,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -548,12 +551,15 @@ export const Main = (props: IProps) => {
     };
 
     const startInspection = (): void => {
-        const ctx: any = props.context;
         if (isOffline()) {
             setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
             return;
         }
-        void ctx.navigation.openForm({ entityName: "msdyn_workorder", useQuickCreateForm: true }, {});
+        setState(prev => ({ ...prev, showInspectionPopup: true }));
+    };
+
+    const closeInspectionPopup = (): void => {
+        setState(prev => ({ ...prev, showInspectionPopup: false }));
     };
 
     const startPatrol = async (): Promise<void> => {
@@ -976,6 +982,13 @@ export const Main = (props: IProps) => {
             onRecordClick: onRecordClick,
             onClose: onCloseResults,
             context: props.context
+        }),
+        // MultiTypeInspection Popup
+        React.createElement(MultiTypeInspection, {
+            context: props.context,
+            isOpen: state.showInspectionPopup,
+            onClose: closeInspectionPopup,
+            activePatrolId: state.activePatrolId,
         })
     );
 };
