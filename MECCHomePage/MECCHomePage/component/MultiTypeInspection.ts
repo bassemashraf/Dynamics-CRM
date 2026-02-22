@@ -227,33 +227,38 @@ export class MultiTypeInspection extends React.Component<
   }
 
   async componentDidMount(): Promise<void> {
-    const userId =
-      this.xrm.Utility.getGlobalContext().userSettings.userId.replace(
-        /[{}]/g,
-        "",
-      );
+    try {
+      const userId =
+        this.xrm.Utility.getGlobalContext().userSettings.userId.replace(
+          /[{}]/g,
+          "",
+        );
 
-    // Parallel loading — includes InitCache
-    await Promise.all([
-      this.loadInspectionTypesFromOrgUnit(),
-      this.loadVehicleTypes(),
-      this.preloadCampaignsAndIncidentTypes(),
-      InitCache.load(userId),
-    ]);
+      // Parallel loading — includes InitCache
+      await Promise.all([
+        this.loadInspectionTypesFromOrgUnit(),
+        this.loadVehicleTypes(),
+        this.preloadCampaignsAndIncidentTypes(),
+        InitCache.load(userId),
+      ]);
 
-    // If default inspection type is provided, set account type from loaded data
-    if (this.props.defaultInspectionType) {
-      const inspectionType = this.state.inspectionTypes.find(
-        (t) => t.value === this.props.defaultInspectionType,
-      );
-      if (inspectionType?.accountTypeId) {
-        const accountTypeRecord = {
-          duc_accounttypeid: inspectionType.accountTypeId,
-          duc_accounttype: this.props.defaultInspectionType,
-          duc_name: inspectionType.label,
-        };
-        this.setState({ accountTypeRecord });
+      // If default inspection type is provided, set account type from loaded data
+      if (this.props.defaultInspectionType) {
+        const inspectionType = this.state.inspectionTypes.find(
+          (t) => t.value === this.props.defaultInspectionType,
+        );
+        if (inspectionType?.accountTypeId) {
+          const accountTypeRecord = {
+            duc_accounttypeid: inspectionType.accountTypeId,
+            duc_accounttype: this.props.defaultInspectionType,
+            duc_name: inspectionType.label,
+          };
+          this.setState({ accountTypeRecord });
+        }
       }
+    } catch (error: any) {
+      console.error("Error in componentDidMount:", error);
+      // alert("Error in componentDidMount: " + (error?.message || error));
     }
   }
 
@@ -275,8 +280,9 @@ export class MultiTypeInspection extends React.Component<
       }
 
       return cacheData.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error reading cache for ${key}:`, error);
+      // alert(`Error reading cache for ${key}: ` + (error?.message || error));
       return null;
     }
   };
@@ -288,8 +294,9 @@ export class MultiTypeInspection extends React.Component<
         timestamp: Date.now(),
       };
       localStorage.setItem(key, JSON.stringify(cacheData));
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error saving cache for ${key}:`, error);
+      // alert(`Error saving cache for ${key}: ` + (error?.message || error));
     }
   };
 
@@ -372,8 +379,9 @@ export class MultiTypeInspection extends React.Component<
 
       this.saveToCache(cacheKey, types);
       this.setState({ inspectionTypes: types });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading inspection types from org unit:", error);
+      // alert("Error loading inspection types from org unit: " + (error?.message || error));
       this.setState({ error: "Failed to load inspection types" });
     }
   };
@@ -409,8 +417,9 @@ export class MultiTypeInspection extends React.Component<
         this.saveToCache(VEHICLE_TYPES_CACHE_KEY, types);
         this.setState({ vehicleBrands: types });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading vehicle types:", error);
+      // alert("Error loading vehicle types: " + (error?.message || error));
     }
   };
 
@@ -462,8 +471,9 @@ export class MultiTypeInspection extends React.Component<
       }
 
       this.setState({ campaigns, incidentTypes, campaignIncidentTypeMap });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error preloading campaigns/incident types:", error);
+      // alert("Error preloading campaigns/incident types: " + (error?.message || error));
     }
   };
 
@@ -492,8 +502,9 @@ export class MultiTypeInspection extends React.Component<
 
       this.saveToCache(cacheKey, campaigns);
       return campaigns;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading campaigns:", error);
+      // alert("Error loading campaigns: " + (error?.message || error));
       return [];
     }
   };
@@ -523,8 +534,9 @@ export class MultiTypeInspection extends React.Component<
 
       this.saveToCache(cacheKey, incidentTypes);
       return incidentTypes;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading incident types:", error);
+      // alert("Error loading incident types: " + (error?.message || error));
       return [];
     }
   };
@@ -590,8 +602,9 @@ export class MultiTypeInspection extends React.Component<
       } else {
         console.warn("Barcode scanner is not available on this device");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error scanning barcode:", error);
+      // alert("Error scanning barcode: " + (error?.message || error));
     }
   };
 
@@ -760,8 +773,9 @@ export class MultiTypeInspection extends React.Component<
           longitude: location.coords.longitude,
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error getting location:", error);
+      // alert("Error getting location: " + (error?.message || error));
     }
     return null;
   };
@@ -785,8 +799,9 @@ export class MultiTypeInspection extends React.Component<
       };
 
       await this.xrm.WebApi.createRecord("duc_addressinformation", addressData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating address information:", error);
+      // alert("Error creating address information: " + (error?.message || error));
     }
   };
 
@@ -887,6 +902,7 @@ export class MultiTypeInspection extends React.Component<
       return newAccountId;
     } catch (error: any) {
       console.error("Error searching/creating account:", error);
+      // alert("Error searching/creating account: " + (error?.message || error));
       throw error;
     }
   };
@@ -1103,6 +1119,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error creating work order:", error);
+      // alert("Error creating work order: " + (error?.message || error));
       throw error;
     }
   };
@@ -1169,6 +1186,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error in handleStart:", error);
+      // alert("Error in handleStart: " + (error?.message || error));
       this.setState({
         error: error.message || "Error starting inspection",
         loading: false,
@@ -1203,7 +1221,8 @@ export class MultiTypeInspection extends React.Component<
       this.setState({ loading: false });
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
-      console.error("Error creating work order:", error);
+      console.error("Error creating work order (handleContinueWithSelections):", error);
+      // alert("Error creating work order (handleContinueWithSelections): " + (error?.message || error));
       this.setState({
         error: error.message || "Error creating work order",
         loading: false,

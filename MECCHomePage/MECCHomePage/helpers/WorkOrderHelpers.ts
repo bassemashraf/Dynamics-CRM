@@ -32,8 +32,9 @@ export class WorkOrderHelpers {
                 id: orgUnitId,
                 name: orgUnitName
             };
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error getting department from user:", error);
+            // alert("Error getting department from user: " + (error?.message || error));
             return null;
         }
     }
@@ -63,8 +64,9 @@ export class WorkOrderHelpers {
             }
 
             return null;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error setting department from incident type:", error);
+            // alert("Error setting department from incident type: " + (error?.message || error));
             return null;
         }
     }
@@ -95,8 +97,9 @@ export class WorkOrderHelpers {
                 name: workOrderTypeName,
                 entityType: entityType
             };
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error setting work order type from incident type:", error);
+            // alert("Error setting work order type from incident type: " + (error?.message || error));
             return null;
         }
     }
@@ -142,8 +145,9 @@ export class WorkOrderHelpers {
             }
 
             return Object.keys(response).length > 0 ? response : null;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error getting incident type data:", error);
+            // alert("Error getting incident type data: " + (error?.message || error));
             return null;
         }
     }
@@ -189,8 +193,9 @@ export class WorkOrderHelpers {
             }
 
             return campaignData;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error getting campaign data:", error);
+            // alert("Error getting campaign data: " + (error?.message || error));
             return null;
         }
     }
@@ -265,8 +270,9 @@ export class WorkOrderHelpers {
             }
 
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error handling sub-account change:", error);
+            // alert("Error handling sub-account change: " + (error?.message || error));
             return null;
         }
     }
@@ -290,8 +296,9 @@ export class WorkOrderHelpers {
             }
 
             return null;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error getting coordinates from address:", error);
+            // alert("Error getting coordinates from address: " + (error?.message || error));
             return null;
         }
     }
@@ -329,8 +336,9 @@ export class WorkOrderHelpers {
             const result = await this.xrm.WebApi.createRecord("bookableresourcebooking", bookingData);
             console.log("Booking created successfully. Booking ID:", result.id);
             return result.id;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error creating auto booking:", error);
+            // alert("Error creating auto booking: " + (error?.message || error));
             throw error;
             return null;
         }
@@ -380,8 +388,9 @@ export class WorkOrderHelpers {
             const context = this.xrm.Utility.getGlobalContext().client;
             const clientType = context.getClient();
             return clientType === "Mobile";
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error detecting mobile client:", error);
+            // alert("Error detecting mobile client: " + (error?.message || error));
             return false;
         }
     }
@@ -413,8 +422,9 @@ export class WorkOrderHelpers {
             }
 
             return null;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error getting active patrol campaign:", error);
+            // alert("Error getting active patrol campaign: " + (error?.message || error));
             return null;
         }
     }
@@ -493,6 +503,7 @@ export class WorkOrderHelpers {
             return result.id;
         } catch (error: any) {
             console.error('Error creating work order:', error);
+            // alert('Error creating work order: ' + (error?.message || error));
             throw error;
         }
     }

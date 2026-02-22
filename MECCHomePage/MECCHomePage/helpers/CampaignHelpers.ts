@@ -55,8 +55,9 @@ export class CampaignHelpers {
                 status: e.duc_campaignstatus,
                 type: e.duc_campaigntype
             }));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error getting campaigns:', error);
+            // alert('Error getting campaigns: ' + (error?.message || error));
             return [];
         }
     }
@@ -101,8 +102,9 @@ export class CampaignHelpers {
 
             const orgUnitName = campaign.duc_organizationalunitid?.duc_englishname || '';
             return orgUnitName === 'Inspection Section – Natural Reserves';
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error checking if campaign is Natural Reserve:', error);
+            // alert('Error checking if campaign is Natural Reserve: ' + (error?.message || error));
             return false;
         }
     }
@@ -118,8 +120,9 @@ export class CampaignHelpers {
                 { duc_campaignstatus: status }
             );
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error updating campaign status:', error);
+            // alert('Error updating campaign status: ' + (error?.message || error));
             return false;
         }
     }

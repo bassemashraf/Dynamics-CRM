@@ -21,8 +21,9 @@ export class IncidentTypeHelpers {
                 id: e.msdyn_incidenttypeid,
                 name: e.msdyn_name
             }));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error getting incident types:', error);
+            // alert('Error getting incident types: ' + (error?.message || error));
             return [];
         }
     }
@@ -68,8 +69,9 @@ export class IncidentTypeHelpers {
                 id: e.msdyn_incidenttypeid,
                 name: e.msdyn_name
             }));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error getting incident types (M:M):', error);
+            // alert('Error getting incident types (M:M): ' + (error?.message || error));
             return [];
         }
     }
@@ -96,8 +98,9 @@ export class IncidentTypeHelpers {
                 name: workOrderTypeName,
                 entityType: entityType
             };
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error getting default work order type:', error);
+            // alert('Error getting default work order type: ' + (error?.message || error));
             return null;
         }
     }
@@ -129,8 +132,9 @@ export class IncidentTypeHelpers {
             }
 
             return null;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error getting org unit from incident type:', error);
+            // alert('Error getting org unit from incident type: ' + (error?.message || error));
             return null;
         }
     }

@@ -159,6 +159,9 @@ const STYLES = {
     width: { width: '90%' }
 };
 
+// Global Xrm reference
+const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
 // Cache constants
 const ORG_UNIT_CACHE_KEY = 'MOCI_OrgUnit_Cache';
 const CACHE_DURATION = 60_000; // 1 minute
@@ -260,8 +263,9 @@ export const Main = (props: IProps) => {
             }
 
             return cacheData;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error reading org unit cache:", error);
+            // alert("Error reading org unit cache: " + (error?.message || error));
             return null;
         }
     };
@@ -276,8 +280,9 @@ export const Main = (props: IProps) => {
             };
             localStorage.setItem(cacheKey, JSON.stringify(cacheData));
             //console.log("Organization unit data cached successfully");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving org unit cache:", error);
+            // alert("Error saving org unit cache: " + (error?.message || error));
         }
     };
 
@@ -302,7 +307,7 @@ export const Main = (props: IProps) => {
             }
 
             // Get user's organizational unit
-            const userResult = await ctx.webAPI.retrieveRecord(
+            const userResult = await xrm.WebApi.retrieveRecord(
                 "systemuser",
                 userId,
                 "?$select=_duc_organizationalunitid_value"
@@ -316,7 +321,7 @@ export const Main = (props: IProps) => {
             const orgUnitId = userResult._duc_organizationalunitid_value;
 
             // Retrieve the organizational unit details with default incident type
-            const orgUnitResult = await ctx.webAPI.retrieveRecord(
+            const orgUnitResult = await xrm.WebApi.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
                 "?$select=_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name)"
@@ -383,8 +388,9 @@ export const Main = (props: IProps) => {
             //console.log("Incident Type ID:", incidentTypeId);
             //console.log("Incident Type Name:", incidentTypeName);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error checking organization unit:", error);
+            // alert("Error checking organization unit: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 isNaturalReserve: false,
@@ -432,7 +438,7 @@ export const Main = (props: IProps) => {
             // Check for active patrol (status = 2)
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
-            const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+            const activePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 activePatrolQuery
             );
@@ -451,7 +457,7 @@ export const Main = (props: IProps) => {
             // Check for available patrol to start (status = 1 or 100000004)
             const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
-            const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+            const availablePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 availablePatrolQuery
             );
@@ -474,8 +480,9 @@ export const Main = (props: IProps) => {
                 }));
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error checking patrol status:", error);
+            // alert("Error checking patrol status: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 patrolStatus: 'none',
@@ -499,7 +506,7 @@ export const Main = (props: IProps) => {
 
                 if (!resourceId) {
                     const userQuery = `?$select=_duc_bookableresourceid_value&$filter=systemuserid eq '${userId}'`;
-                    const userResults = await ctx.webAPI.retrieveMultipleRecords("systemuser", userQuery);
+                    const userResults = await xrm.WebApi.retrieveMultipleRecords("systemuser", userQuery);
 
                     const retrievedResourceId = userResults.entities.length > 0
                         ? userResults.entities[0]["_duc_bookableresourceid_value"]
@@ -522,25 +529,27 @@ export const Main = (props: IProps) => {
                 }
 
                 const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
-                const completedResults = await ctx.webAPI.retrieveMultipleRecords("msdyn_workorder", completedQuery);
+                const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
                 completedToday = completedResults.entities.length;
                 //console.log("Completed Work Orders Count:", completedToday);
 
                 const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
                 const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and _bookingstatus_value eq '${bookingStatusGuid}' and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
-                const remainingResults = await ctx.webAPI.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
+                const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                 remainingToday = remainingResults.entities.length;
                 //console.log("Remaining Bookings Count:", remainingToday);
 
                 return { completedToday, remainingToday, campaignsToday };
 
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error retrieving counts:", error);
+                // alert("Error retrieving counts: " + (error?.message || error));
                 return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
             }
 
-        } catch (e) {
+        } catch (e: any) {
             //console.log("Failed to load today's counts:", e);
+            // alert("Failed to load today's counts: " + (e?.message || e));
             return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
         }
     };
@@ -560,7 +569,7 @@ export const Main = (props: IProps) => {
                 );
                 res = results?.entities?.[0] ?? null;
             } else {
-                res = await ctx.webAPI.retrieveRecord(
+                res = await xrm.WebApi.retrieveRecord(
                     "systemuser",
                     userId,
                     "?$select=duc_usernamearabic"
@@ -594,8 +603,9 @@ export const Main = (props: IProps) => {
                     }
                 }
             }
-        } catch (e) {
+        } catch (e: any) {
             console.warn("User data load failed, using cache.", e);
+            // alert("User data load failed: " + (e?.message || e));
             restoreCache();
         }
     }, [props.context, checkOrganizationUnit, checkPatrolStatus]);
@@ -658,7 +668,7 @@ export const Main = (props: IProps) => {
                     });
                 }
             } else {
-                results = await ctx.webAPI.retrieveMultipleRecords("account", `?$top=100`);
+                results = await xrm.WebApi.retrieveMultipleRecords("account", `?$top=100`);
                 if (text) {
                     const lowerText = text.toLowerCase();
                     results.entities = results.entities.filter((entity: any) => {
@@ -812,7 +822,7 @@ export const Main = (props: IProps) => {
                 duc_campaignstatus: 2
             };
 
-            await ctx.webAPI.updateRecord(
+            await xrm.WebApi.updateRecord(
                 "new_inspectioncampaign",
                 state.activePatrolId,
                 updateData
@@ -831,8 +841,9 @@ export const Main = (props: IProps) => {
                 setState(prev => ({ ...prev, message: undefined }));
             }, 3000);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error starting patrol:", error);
+            // alert("Error starting patrol: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 isLoading: false,
@@ -859,7 +870,7 @@ export const Main = (props: IProps) => {
             // Query for active patrol
             const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
 
-            const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
+            const activePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
                 activePatrolQuery
             );
@@ -880,7 +891,7 @@ export const Main = (props: IProps) => {
                 duc_campaignstatus: 100000004
             };
 
-            await ctx.webAPI.updateRecord(
+            await xrm.WebApi.updateRecord(
                 "new_inspectioncampaign",
                 patrolId,
                 updateData
@@ -902,8 +913,9 @@ export const Main = (props: IProps) => {
                 setState(prev => ({ ...prev, message: undefined }));
             }, 3000);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error ending patrol:", error);
+            // alert("Error ending patrol: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 isLoading: false,

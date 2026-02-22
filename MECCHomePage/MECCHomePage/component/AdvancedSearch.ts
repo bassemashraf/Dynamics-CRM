@@ -47,6 +47,7 @@ interface LocalizedStrings {
 
 export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvancedSearchState> {
     private strings: LocalizedStrings;
+    private xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
 
     constructor(props: IAdvancedSearchProps) {
         super(props);
@@ -94,7 +95,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
         } = this.state;
 
         if (!valAccName && !valRegNo && !valBuildingNo && !valPinNo && !valLicenseNo) {
-            alert(this.strings.PleaseEnterSearchText);
+            // alert(this.strings.PleaseEnterSearchText);
             return;
         }
 
@@ -132,13 +133,13 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
         fetch += "</fetch>";
 
         try {
-            const result = await (this.props.context.webAPI as any).retrieveMultipleRecords(
+            const result = await this.xrm.WebApi.retrieveMultipleRecords(
                 'account',
                 `?fetchXml=${encodeURIComponent(fetch)}`
             );
 
             if (result.entities.length === 0) {
-                alert(this.strings.NoResultsFound);
+                // alert(this.strings.NoResultsFound);
             } else if (result.entities.length === 1) {
                 this.openRecord(result.entities[0].accountid);
             } else {
@@ -147,7 +148,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
         } catch (error: any) {
             console.error('Search error:', error);
             const message = `${this.strings.SearchError}: ${error?.message || JSON.stringify(error)}`;
-            alert(message);
+            // alert(message);
         }
     };
 

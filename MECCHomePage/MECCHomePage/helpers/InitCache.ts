@@ -51,8 +51,9 @@ export class InitCache {
                 : null;
 
             this._loaded = true;
-        } catch (error) {
+        } catch (error: any) {
             console.error('InitCache: Error loading cached data:', error);
+            // alert('InitCache: Error loading cached data: ' + (error?.message || error));
             this._loaded = true; // Mark as loaded to prevent infinite retries
         } finally {
             this._loadPromise = null;
