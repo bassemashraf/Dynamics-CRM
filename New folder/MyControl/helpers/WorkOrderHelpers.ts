@@ -30,6 +30,8 @@ export class WorkOrderHelpers {
 
             const orgUnitName = userResult["_duc_organizationalunitid_value@OData.Community.Display.V1.FormattedValue"];
 
+            alert(`User Organization Unit: ${orgUnitName}`);
+
             return {
                 id: orgUnitId,
                 name: orgUnitName
@@ -56,6 +58,8 @@ export class WorkOrderHelpers {
                 const incidentTypeRecord = results.entities[0];
                 const orgUnitId = incidentTypeRecord["_duc_organizationalunitid_value"];
                 const orgUnitName = incidentTypeRecord["_duc_organizationalunitid_value@OData.Community.Display.V1.FormattedValue"];
+
+                alert(`Department found for Incident Type: ${orgUnitName}`);
 
                 if (orgUnitId) {
                     return {
@@ -93,6 +97,8 @@ export class WorkOrderHelpers {
 
             const workOrderTypeName = result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"];
             const entityType = result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"];
+
+            alert(`Default Work Order Type: ${workOrderTypeName}`);
 
             return {
                 id: workOrderTypeId,
@@ -139,11 +145,15 @@ export class WorkOrderHelpers {
             // Extract work order type
             const workOrderTypeId = result["_msdyn_defaultworkordertype_value"];
             if (workOrderTypeId) {
+                const workOrderTypeName = result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"];
                 response.workOrderType = {
                     id: workOrderTypeId,
-                    name: result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"],
+                    name: workOrderTypeName,
                     entityType: result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"]
                 };
+                alert(`Retrieved Incident Data: Dept: ${response.department?.name}, WO Type: ${workOrderTypeName}`);
+            } else if (response.department) {
+                alert(`Retrieved Incident Data: Dept: ${response.department.name}, WO Type: Not Found`);
             }
 
             return Object.keys(response).length > 0 ? response : null;
@@ -192,6 +202,9 @@ export class WorkOrderHelpers {
                     name: incidentTypeName,
                     entityType: entityType
                 };
+                alert(`Campaign Data: Campaign: ${campaignName}, Incident Type: ${incidentTypeName}`);
+            } else {
+                alert(`Campaign Data: Campaign: ${campaignName}, Incident Type: Not Found`);
             }
 
             return campaignData;
@@ -248,6 +261,8 @@ export class WorkOrderHelpers {
             const addressId = accountResult["_duc_address_value"];
             if (addressId) {
                 const addressName = accountResult["_duc_address_value@OData.Community.Display.V1.FormattedValue"];
+
+                alert(`Service Account: ${serviceAccountName}, Address: ${addressName}`);
 
                 result.address = {
                     id: addressId,
@@ -415,12 +430,14 @@ export class WorkOrderHelpers {
 
             if (results?.entities?.length > 0) {
                 const campaign = results.entities[0];
+                alert(`Active Patrol Campaign found: ${campaign.new_name}`);
                 return {
                     id: campaign.new_inspectioncampaignid,
                     name: campaign.new_name
                 };
             }
 
+            alert("No active patrol campaign found.");
             return null;
         } catch (error: any) {
             console.error("Error getting active patrol campaign:", error);

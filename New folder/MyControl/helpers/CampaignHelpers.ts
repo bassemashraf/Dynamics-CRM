@@ -51,7 +51,10 @@ export class CampaignHelpers {
                 `?$select=new_inspectioncampaignid,new_name,duc_campaignstatus,duc_campaigntype&$filter=${filter}&$orderby=new_name`
             );
 
-            return (results?.entities || []).map((e: any) => ({
+            const entities = results?.entities || [];
+            alert(`Campaigns retrieved: ${entities.length}`);
+
+            return entities.map((e: any) => ({
                 id: e.new_inspectioncampaignid,
                 name: e.new_name,
                 status: e.duc_campaignstatus,
@@ -114,6 +117,7 @@ export class CampaignHelpers {
             );
 
             const orgUnitName = orgUnit?.duc_englishname || '';
+            alert(`Campaign Organization Unit: ${orgUnitName}`);
             return orgUnitName === 'Inspection Section – Natural Reserves';
         } catch (error: any) {
             console.error('Error checking if campaign is Natural Reserve:', error);

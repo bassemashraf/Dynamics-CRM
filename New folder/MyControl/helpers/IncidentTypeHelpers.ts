@@ -19,7 +19,10 @@ export class IncidentTypeHelpers {
                 `?$select=msdyn_incidenttypeid,msdyn_name&$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$orderby=msdyn_name`
             );
 
-            return (results?.entities || []).map((e: any) => ({
+            const entities = results?.entities || [];
+            alert(`Incident Types retrieved: ${entities.length}`);
+
+            return entities.map((e: any) => ({
                 id: e.msdyn_incidenttypeid,
                 name: e.msdyn_name
             }));
@@ -47,6 +50,8 @@ export class IncidentTypeHelpers {
             const workOrderTypeName = result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"];
             const entityType = result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"];
 
+            alert(`Default Work Order Type for Incident: ${workOrderTypeName}`);
+
             return {
                 id: workOrderTypeId,
                 name: workOrderTypeName,
@@ -73,6 +78,8 @@ export class IncidentTypeHelpers {
 
             const orgUnitId = result["_duc_organizationalunitid_value"];
             const orgUnitName = result["_duc_organizationalunitid_value@OData.Community.Display.V1.FormattedValue"];
+
+            alert(`Incident Type Organization Unit: ${orgUnitName}`);
 
             if (orgUnitId) {
                 return {

@@ -52,6 +52,8 @@ export class InitCache {
                 ? statusResult.entities[0].bookingstatusid
                 : null;
 
+            alert(`InitCache: Bookable Resource: ${this._bookableResourceId ? 'Found' : 'Not Found'}, Booking Status: ${this._bookingStatusId ? 'Found' : 'Not Found'}`);
+
             this._loaded = true;
         } catch (error: any) {
             console.error('InitCache: Error loading cached data:', error);
