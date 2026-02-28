@@ -20,7 +20,6 @@ export class IncidentTypeHelpers {
             );
 
             const entities = results?.entities || [];
-            alert(`Incident Types retrieved: ${entities.length}`);
 
             return entities.map((e: any) => ({
                 id: e.msdyn_incidenttypeid,
@@ -28,7 +27,6 @@ export class IncidentTypeHelpers {
             }));
         } catch (error: any) {
             console.error('Error getting incident types:', error);
-            alert('Error getting incident types: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             return [];
         }
     }
@@ -50,7 +48,6 @@ export class IncidentTypeHelpers {
             const workOrderTypeName = result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"];
             const entityType = result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"];
 
-            alert(`Default Work Order Type for Incident: ${workOrderTypeName}`);
 
             return {
                 id: workOrderTypeId,
@@ -59,7 +56,6 @@ export class IncidentTypeHelpers {
             };
         } catch (error: any) {
             console.error('Error getting default work order type:', error);
-            alert('Error getting default work order type: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             return null;
         }
     }
@@ -79,7 +75,6 @@ export class IncidentTypeHelpers {
             const orgUnitId = result["_duc_organizationalunitid_value"];
             const orgUnitName = result["_duc_organizationalunitid_value@OData.Community.Display.V1.FormattedValue"];
 
-            alert(`Incident Type Organization Unit: ${orgUnitName}`);
 
             if (orgUnitId) {
                 return {
@@ -91,7 +86,6 @@ export class IncidentTypeHelpers {
             return null;
         } catch (error: any) {
             console.error('Error getting org unit from incident type:', error);
-            alert('Error getting org unit from incident type: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             return null;
         }
     }

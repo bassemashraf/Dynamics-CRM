@@ -30,7 +30,6 @@ export class WorkOrderHelpers {
 
             const orgUnitName = userResult["_duc_organizationalunitid_value@OData.Community.Display.V1.FormattedValue"];
 
-            alert(`User Organization Unit: ${orgUnitName}`);
 
             return {
                 id: orgUnitId,
@@ -38,7 +37,6 @@ export class WorkOrderHelpers {
             };
         } catch (error: any) {
             console.error("Error getting department from user:", error);
-            alert("Error getting department from user: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -59,7 +57,6 @@ export class WorkOrderHelpers {
                 const orgUnitId = incidentTypeRecord["_duc_organizationalunitid_value"];
                 const orgUnitName = incidentTypeRecord["_duc_organizationalunitid_value@OData.Community.Display.V1.FormattedValue"];
 
-                alert(`Department found for Incident Type: ${orgUnitName}`);
 
                 if (orgUnitId) {
                     return {
@@ -72,7 +69,6 @@ export class WorkOrderHelpers {
             return null;
         } catch (error: any) {
             console.error("Error setting department from incident type:", error);
-            alert("Error setting department from incident type: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -98,7 +94,6 @@ export class WorkOrderHelpers {
             const workOrderTypeName = result["_msdyn_defaultworkordertype_value@OData.Community.Display.V1.FormattedValue"];
             const entityType = result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"];
 
-            alert(`Default Work Order Type: ${workOrderTypeName}`);
 
             return {
                 id: workOrderTypeId,
@@ -107,7 +102,6 @@ export class WorkOrderHelpers {
             };
         } catch (error: any) {
             console.error("Error setting work order type from incident type:", error);
-            alert("Error setting work order type from incident type: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -151,15 +145,12 @@ export class WorkOrderHelpers {
                     name: workOrderTypeName,
                     entityType: result["_msdyn_defaultworkordertype_value@Microsoft.Dynamics.CRM.lookuplogicalname"]
                 };
-                alert(`Retrieved Incident Data: Dept: ${response.department?.name}, WO Type: ${workOrderTypeName}`);
             } else if (response.department) {
-                alert(`Retrieved Incident Data: Dept: ${response.department.name}, WO Type: Not Found`);
             }
 
             return Object.keys(response).length > 0 ? response : null;
         } catch (error: any) {
             console.error("Error getting incident type data:", error);
-            alert("Error getting incident type data: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -202,15 +193,12 @@ export class WorkOrderHelpers {
                     name: incidentTypeName,
                     entityType: entityType
                 };
-                alert(`Campaign Data: Campaign: ${campaignName}, Incident Type: ${incidentTypeName}`);
             } else {
-                alert(`Campaign Data: Campaign: ${campaignName}, Incident Type: Not Found`);
             }
 
             return campaignData;
         } catch (error: any) {
             console.error("Error getting campaign data:", error);
-            alert("Error getting campaign data: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -262,7 +250,6 @@ export class WorkOrderHelpers {
             if (addressId) {
                 const addressName = accountResult["_duc_address_value@OData.Community.Display.V1.FormattedValue"];
 
-                alert(`Service Account: ${serviceAccountName}, Address: ${addressName}`);
 
                 result.address = {
                     id: addressId,
@@ -289,7 +276,6 @@ export class WorkOrderHelpers {
             return result;
         } catch (error: any) {
             console.error("Error handling sub-account change:", error);
-            alert("Error handling sub-account change: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -315,7 +301,6 @@ export class WorkOrderHelpers {
             return null;
         } catch (error: any) {
             console.error("Error getting coordinates from address:", error);
-            alert("Error getting coordinates from address: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -342,8 +327,8 @@ export class WorkOrderHelpers {
 
             const bookingData = {
                 "ownerid@odata.bind": `/systemusers(${userId})`,
-                "starttime": now.toISOString(),
-                "endtime": end.toISOString(),
+                "starttime": now,
+                "endtime": end,
                 "duration": 1,
                 "msdyn_workorder@odata.bind": `/msdyn_workorders(${workOrderId})`,
                 "Resource@odata.bind": `/bookableresources(${options.bookableResourceId})`,
@@ -405,7 +390,6 @@ export class WorkOrderHelpers {
             return clientType === "Mobile";
         } catch (error: any) {
             console.error("Error detecting mobile client:", error);
-            alert("Error detecting mobile client: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return false;
         }
     }
@@ -430,18 +414,15 @@ export class WorkOrderHelpers {
 
             if (results?.entities?.length > 0) {
                 const campaign = results.entities[0];
-                alert(`Active Patrol Campaign found: ${campaign.new_name}`);
                 return {
                     id: campaign.new_inspectioncampaignid,
                     name: campaign.new_name
                 };
             }
 
-            alert("No active patrol campaign found.");
             return null;
         } catch (error: any) {
             console.error("Error getting active patrol campaign:", error);
-            alert("Error getting active patrol campaign: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             return null;
         }
     }
@@ -520,7 +501,6 @@ export class WorkOrderHelpers {
             return result.id;
         } catch (error: any) {
             console.error('Error creating work order:', error);
-            alert('Error creating work order: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             throw error;
         }
     }

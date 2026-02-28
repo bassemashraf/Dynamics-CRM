@@ -52,7 +52,6 @@ export class CampaignHelpers {
             );
 
             const entities = results?.entities || [];
-            alert(`Campaigns retrieved: ${entities.length}`);
 
             return entities.map((e: any) => ({
                 id: e.new_inspectioncampaignid,
@@ -62,7 +61,6 @@ export class CampaignHelpers {
             }));
         } catch (error: any) {
             console.error('Error getting campaigns:', error);
-            alert('Error getting campaigns: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             return [];
         }
     }
@@ -117,11 +115,9 @@ export class CampaignHelpers {
             );
 
             const orgUnitName = orgUnit?.duc_englishname || '';
-            alert(`Campaign Organization Unit: ${orgUnitName}`);
             return orgUnitName === 'Inspection Section – Natural Reserves';
         } catch (error: any) {
             console.error('Error checking if campaign is Natural Reserve:', error);
-            alert('Error checking if campaign is Natural Reserve: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             return false;
         }
     }
@@ -139,7 +135,6 @@ export class CampaignHelpers {
             return true;
         } catch (error: any) {
             console.error('Error updating campaign status:', error);
-            alert('Error updating campaign status: ' + (error?.message || error) + (error?.innerError ? '\nInner: ' + JSON.stringify(error.innerError) : ''));
             return false;
         }
     }
