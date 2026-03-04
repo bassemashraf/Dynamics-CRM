@@ -5,6 +5,7 @@ import {
   CampaignHelpers,
   IncidentTypeHelpers,
   InitCache,
+  ProcessExtensionHelpers,
 } from "../helpers";
 
 interface IMultiTypeInspectionProps {
@@ -1035,20 +1036,44 @@ export class MultiTypeInspection extends React.Component<
 
       console.log("Work order created successfully:", workOrderId);
 
-      // STEP 10: Create auto booking if from mobile
-      if (createdFromMobile && InitCache.hasBookableResource) {
-        this.xrm.Utility.showProgressIndicator(this.strings.CreatingBooking);
-        const bookingId = await WorkOrderHelpers.createAutoBooking(
+      // STEP 9.5: Create process extension record with defaults
+      try {
+        this.xrm.Utility.showProgressIndicator("Creating Process Extension...");
+        const peId = await ProcessExtensionHelpers.createProcessExtensionForWorkOrder(
           workOrderId,
-          userId,
-          {
-            bookableResourceId: InitCache.bookableResourceId!,
-            bookingStatusId: InitCache.bookingStatusId!,
-          },
+          incidentTypeData.id,
+          serviceAccountData?.id
         );
         this.xrm.Utility.closeProgressIndicator();
-        if (bookingId) {
-          console.log("Auto booking created:", bookingId);
+        if (peId) {
+          console.log("Process extension created:", peId);
+        }
+      } catch (peError: any) {
+        this.xrm.Utility.closeProgressIndicator();
+        console.warn("Process extension creation failed (non-blocking):", peError);
+        alert(`❌ Process Extension Error:\n${peError?.message || peError}`);
+      }
+
+      // STEP 10: Create auto booking if from mobile
+      if (createdFromMobile && InitCache.hasBookableResource) {
+        try {
+          this.xrm.Utility.showProgressIndicator(this.strings.CreatingBooking);
+          const bookingId = await WorkOrderHelpers.createAutoBooking(
+            workOrderId,
+            userId,
+            {
+              bookableResourceId: InitCache.bookableResourceId!,
+              bookingStatusId: InitCache.bookingStatusId!,
+            },
+          );
+          this.xrm.Utility.closeProgressIndicator();
+          if (bookingId) {
+            console.log("Auto booking created:", bookingId);
+          }
+        } catch (bookingError: any) {
+          this.xrm.Utility.closeProgressIndicator();
+          console.error("Booking creation failed:", bookingError);
+          alert(`❌ Booking Error:\n${bookingError?.message || bookingError}`);
         }
       }
 
@@ -1067,6 +1092,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error creating work order:", error);
+      alert(`❌ Work Order Error:\n${error?.message || error}`);
       throw error;
     }
   };

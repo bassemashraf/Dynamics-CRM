@@ -1,0 +1,114 @@
+<root>
+    <data name="NoRecords" xml:space="preserve">
+        <value>لا توجد إجراءات متاحة يمكن اتخاذها على الطلب الحالي.</value>
+    </data>
+    <data name="Loading" xml:space="preserve">
+        <value>جاري التحميل...</value>
+    </data>
+    <data name="ConfirmActionTitle" xml:space="preserve">
+        <value>تأكيد</value>
+    </data>
+    <data name="WarningAlertTitle" xml:space="preserve">
+        <value>تحذير</value>
+    </data>
+    <data name="ConfirmActionMsg" xml:space="preserve">
+        <value>هل أنت متأكد أنك تريد اتخاذ هذا الإجراء؟</value>
+    </data>
+    <data name="MsgSpecifyComment" xml:space="preserve">
+        <value>يجب ادخال السبب</value>
+    </data>
+    <data name="Cancel" xml:space="preserve">
+        <value>إلغاء</value>
+    </data>
+    
+  <data name="EnterCommentsMessage" xml:space="preserve">
+    <value>من فضلك أدخل تعليقك للمتابعة</value>
+  </data>
+  <data name="DetailsBtnText" xml:space="preserve">
+    <value>عرض المزيد</value>
+  </data>
+  <data name="OwningTeamLabel" xml:space="preserve">
+    <value>مُكَلَّف إلي</value>
+  </data>
+  <data name="CheckListBtnLbl" xml:space="preserve">
+    <value>الاستبيان</value>
+  </data>
+  <data name="AttachmentsBtnLbl" xml:space="preserve">
+    <value>المرفقات</value>
+  </data>
+  <data name="CloseModal" xml:space="preserve">
+    <value>إلغاء</value>
+  </data>
+  <data name="NS" xml:space="preserve">
+    <value>غير محدد</value>
+  </data>
+  <data name="ActionsDisplayName" xml:space="preserve">
+    <value>duc_arabicname</value>
+  </data>
+  <data name="AssignmentBtnLbl" xml:space="preserve">
+    <value>تعيين</value>
+  </data> 
+  <data name="NoStaticReplies" xml:space="preserve">
+    <value>لا توجد ردود ثابتة متاحة لهذا الإجراء.</value>
+  </data>  
+  <data name="LoadingStaticReplies" xml:space="preserve">
+    <value>جارٍ تحميل الردود الثابتة</value>
+  </data> 
+   <data name="NOT_AUTHORIZED_MSG" xml:space="preserve">
+      <value>ليس لديك صلاحية تنفيذ أي إجراء.</value>
+    </data>
+<data name="Assigned_Label" xml:space="preserve">
+  <value>المعين</value>
+</data>
+<data name="AssignedToday_Label" xml:space="preserve">
+  <value>المعين اليوم</value>
+</data>
+<data name="Assigned_Record" xml:space="preserve">
+  <value>تعيين موظف</value>
+</data>
+<data name="Capacity_Label" xml:space="preserve">
+  <value>القدرة</value>
+</data>
+<data name="OnLeave_Label" xml:space="preserve">
+  <value>في إجازة</value>
+</data>
+  <data name="staticReplytitleColName" xml:space="preserve">
+    <value>duc_name</value>
+  </data> 
+  <data name="staticReplyBodyColName" xml:space="preserve">
+    <value>duc_replybodyar</value>
+  </data> 
+    <data name="CustomerCommentsTitle" xml:space="preserve">
+       <value>اختيار تعليقات العملاء السابقة</value>
+   </data>
+   <data name="SelectCustomerComments" xml:space="preserve">
+      <value>اختر من التعليقات السابقة لتضمينها في ردك</value>
+   </data>
+   <data name="NoCustomerComments" xml:space="preserve">
+    <value>لم يتم العثور على تعليقات عملاء سابقة لطلب الخدمة هذا.</value>
+   </data>
+   <data name="SelectAllLabel" xml:space="preserve">
+    <value>تحديد الكل ({0} تعليقات)</value>
+</data>
+<data name="CommentNumberLabel" xml:space="preserve">
+    <value>التعليق رقم {0}</value>
+</data>
+<data name="SelectedCountLabel" xml:space="preserve">
+    <value>{0} من {1} محدد</value>
+</data>
+<data name="AddSelectedCommentsLabel" xml:space="preserve">
+    <value>إضافة التعليقات المحددة ({0})</value>
+</data>
+<data name="LoadingCommentsLabel" xml:space="preserve">
+    <value>جاري تحميل التعليقات...</value>
+</data>
+<data name="ProceedWithoutCommentsLabel" xml:space="preserve">
+    <value>المتابعة بدون التعليقات السابقة</value>
+</data>
+<data name="AddPreviousCommentsTitle" xml:space="preserve">
+    <value>هل تريد إضافة التعليقات السابقة؟</value>
+</data>
+<data name="LBL_ATTACHMENT" xml:space="preserve">
+    <value>إرفاق ملف (اختياري)</value>
+</data>
+</root>

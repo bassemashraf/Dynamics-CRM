@@ -494,6 +494,7 @@ export class WorkOrderHelpers {
             if (data.createdFromMobile !== undefined) {
                 workOrderData.duc_createdfrommobile = data.createdFromMobile;
             }
+            workOrderData.duc_iscreatedoffline = true;
 
             const result = await this.xrm.WebApi.createRecord('msdyn_workorder', workOrderData);
             console.log('Work order created successfully:', result.id);

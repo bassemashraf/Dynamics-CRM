@@ -1,0 +1,563 @@
+/* === File Upload Section (Shared PCF Styles) === */
+/* Buttons */
+.btnaction {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.primary-btn {
+  background-color: #0078d4;
+  /* or dynamically via class if needed */
+  color: white;
+  border: none;
+}
+
+.secondary-btn {
+  background-color: white;
+  color: #323130;
+  border: 2px solid #e5e7eb;
+}
+
+.file-upload-section {
+  margin-top: 1rem;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.file-upload-label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #323130;
+}
+
+.file-dropzone {
+  border: 2px dashed #0078d4;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  background: linear-gradient(135deg,
+      rgba(0, 120, 212, 0.08) 0%,
+      rgba(0, 120, 212, 0.05) 100%);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.file-dropzone:hover {
+  background: linear-gradient(135deg,
+      rgba(0, 120, 212, 0.12) 0%,
+      rgba(0, 120, 212, 0.08) 100%);
+}
+
+.file-dropzone.drag-over {
+  border-color: #005a9e;
+  background-color: #eaf4ff;
+  transform: scale(1.02);
+}
+
+.upload-icon {
+  font-size: 2.5rem;
+  color: #0078d4;
+  margin-bottom: 1rem;
+}
+
+.upload-text {
+  color: #605e5c;
+  font-size: 0.95rem;
+}
+
+.upload-text span {
+  color: #0078d4;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.file-upload-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-upload-item {
+  background: #f8f9fa;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.2s;
+}
+
+.file-upload-item:hover {
+  background: #f4f6f8;
+}
+
+.file-icon {
+  color: #0078d4;
+  margin-right: 0.75rem;
+  font-size: 1rem;
+}
+
+.file-name {
+  flex: 1;
+  color: #323130;
+  font-size: 0.9rem;
+  margin-right: 0.75rem;
+  word-break: break-all;
+}
+
+.file-size {
+  color: #605e5c;
+  font-size: 0.85rem;
+  margin-right: 0.75rem;
+}
+
+.file-remove {
+  color: #a4262c;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: color 0.2s;
+}
+
+.file-remove:hover {
+  color: #d13438;
+}
+
+.error-message {
+  color: red;
+  margin-top: 10px;
+}
+
+/* === Modal and Layout (keep as-is if used elsewhere) === */
+.custom-comment-modal {
+  width: 600px;
+  max-height: 70vh;
+  background-color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.modal-header {
+  margin-bottom: 16px;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.comment-textfield {
+  height: 200px;
+  overflow-y: auto;
+}
+
+.file-upload {
+  margin-top: 12px;
+}
+
+.selected-files {
+  margin-top: 6px;
+}
+
+.error-message {
+  color: red;
+  margin-top: 8px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* === Buttons & Layout (keep as-is if still used) === */
+.viewDetailsbtn {
+  width: 100%;
+  height: 10px;
+  background-color: white;
+  border: solid 1px #007aff;
+  color: #007aff;
+  margin: 7px;
+  margin-left: 0px;
+  border-radius: 8px;
+  padding: 17px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 15px;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.col2 {
+  width: 39%;
+  display: inline-block;
+}
+
+.col {
+  width: 22%;
+  display: inline-block;
+}
+
+.col2 label {
+  width: 40%;
+  font-size: 15px;
+  font-family: 'aptos';
+  margin: 8px;
+}
+
+.txt {
+  width: 54%;
+  margin: 3px;
+  padding: 2px;
+  font-size: 15px;
+  font-family: 'aptos';
+  padding-left: 7PX;
+}
+
+
+.buttonIcons {
+  padding-top: 10px;
+  vertical-align: text-top;
+}
+
+.btnaction {
+  margin: 7px;
+  height: 10px;
+  border-radius: 8px;
+  border: none;
+  padding: 17px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 15px;
+}
+
+/* === Modal Styles === */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-body-title {
+  color: black;
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.modal {
+  max-width: 480px;
+  min-width: 350px;
+  height: auto;
+  margin: 150px auto;
+  background-color: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ccc;
+  margin: -20px;
+  padding: 20px;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.modal-header-container {
+  display: flex;
+  align-items: center;
+}
+
+.modal-title-container {
+  flex-grow: 1;
+}
+
+.modal-title {
+  font-size: 2rem;
+  font-weight: 600;
+  color: white;
+}
+
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #ebebf2;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 1rem 1.5rem;
+  outline: none;
+  font-weight: 500;
+  text-transform: uppercase;
+  border: none;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+  background-color: #9393b2;
+  color: white;
+}
+
+.modal-body {
+  padding: 15px 0;
+}
+
+.modal-container {
+  padding: 0 20px;
+}
+
+.modal-img {
+  border-radius: 50%;
+  height: 100px;
+  width: 100px;
+  margin: 4rem 0 2rem;
+}
+
+.modal-name {
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.modal-role {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  font-style: italic;
+}
+
+.skills ul {
+  display: flex;
+  padding: 0;
+  justify-content: center;
+  margin-top: 0;
+}
+
+.skills li {
+  list-style-type: none;
+  margin-right: 10px;
+  color: black;
+  background-color: #ebebf2;
+  padding: 0.5rem 1rem;
+  margin: 2rem 0.5rem;
+  font-size: 1.3rem;
+  border-radius: 5px;
+  font-weight: 600;
+}
+
+
+.borders {
+    padding-bottom: 10px;
+    padding-top: 10px;
+    border-bottom: solid 1px lightgrey;
+    border-top: solid 1px lightgrey;
+  }
+
+
+.close-btn {
+  background-color: #ebebf2;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 1.5rem;
+  padding: 1rem 2rem;
+  margin-top: 1rem;
+  outline: none;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+  background-color: #9393B2;
+  color: #ffff;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 20px;
+}
+
+@media screen and (max-width: 480px) {
+
+  .skills li {
+    padding: 0.5rem 0.8rem;
+    margin: 2rem 0.4rem;
+    font-size: 1rem;
+  }
+
+  .modal {
+    width: 90%;
+    padding: 15px;
+  }
+
+  .modal-title {
+    font-size: 1.3rem;
+  }
+
+  .close-btn {
+    padding: 0.8rem 1rem;
+    font-size: 1rem;
+  }
+}
+
+/* Flow Progress Bar*/
+@font-face {
+  font-family: 'aptos';
+  src: url('../fonts/Aptos.ttf') format('woff2'),
+    url('../fonts/Aptos.ttf') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
+.main-pcf-flow-container {
+  display: flex;
+  justify-content: space-between;
+  /* padding: 20px; */
+  /* background-color: #f0f8ff; */
+  font-family: Arial, sans-serif;
+  position: relative;
+  margin-top: auto;
+  /* margin-bottom: 20px; */
+}
+.main-pcf-flow-container-web-padding {
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.main-pcf-flow-container-mobile-padding {
+    padding: 5px;
+    margin-bottom: 5px;
+}
+
+
+
+/* Step styling */
+.main-pcf-flow-container>.step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+
+
+/* Circle with step number */
+.main-pcf-flow-container .step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 5;
+  box-shadow: none;
+}
+
+/* Step number animation for active state */
+.main-pcf-flow-container>.active .step-number {
+  /* background-color: #ffc107 !important;
+color: white !important; */
+  /* box-shadow: 0 0 10px rgba(255, 193, 7, 0.8); */
+  transform: scale(1.1);
+  animation: pulse 2s infinite;
+  /* Pulse animation */
+}
+
+/* Step number animation for active state */
+.main-pcf-flow-container>.done .step-number {
+  /* background-color: #28a745;
+color: white; */
+  transform: scale(1.1);
+}
+
+/* Step description */
+.main-pcf-flow-container>.step p {
+  margin: 0;
+}
+
+.main-pcf-flow-container>.step:first-child::before {
+  content: none !important;
+}
+
+.main-pcf-flow-container>.step:last-child::after {
+  content: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .main-pcf-flow-container>.steps-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .main-pcf-flow-container>.connector {
+    display: none;
+  }
+
+  .main-pcf-flow-container>.step-number {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+
+  .main-pcf-flow-container>.step p {
+    font-size: 12px;
+    font-family: 'aptos';
+  }
+}
+
+
+
+/* Keyframes for pulse animation */
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+  }
+
+  50% {
+    box-shadow: 0 0 15px rgba(255, 193, 7, 1);
+  }
+}
+
+/* Keyframes for connector line growth */
+@keyframes grow {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 100%;
+  }
+}

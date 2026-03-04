@@ -1,0 +1,130 @@
+:root {
+    --progress-bar-bg: #f0f8ff;
+    --connector-bg: #3BB674;
+    --inactive-step-bg: #95A0B6;
+    --inactive-step-text: white;
+    --active-step-bg: #FFA800;
+    --active-step-text: white;
+    --active-step-shadow: rgba(255, 193, 7, 0.8);
+    --done-step-bg: #3BB674;
+    --done-step-text: white;
+    --step-text-color: #333;
+    --step-text-size: 14px;
+    --step-text-weight: normal;
+}
+
+.main-pcf-flow-container.ltr>.step::before {
+    left: -50%;
+    right: auto;
+}
+
+.main-pcf-flow-container.rtl>.step::before {
+    right: -50%;
+    left: auto;
+}
+
+.main-pcf-flow-container.ltr>.step.done::after {
+    position: absolute;
+    content: "";
+    border-bottom: 4px solid var(--done-step-bg);
+    width: 100%;
+    top: 20px;
+    left: 50%;
+    right: auto;
+    z-index: 3;
+}
+
+.main-pcf-flow-container.rtl>.step.done::after {
+    position: absolute;
+    content: "";
+    border-bottom: 4px solid var(--done-step-bg);
+    width: 100%;
+    top: 20px;
+    right: 50%;
+    left: auto;
+    z-index: 3;
+}
+
+/* Main container */
+.main-pcf-flow-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /*background-color: var(--progress-bar-bg);*/
+    position: relative;
+    padding: 10px;
+}
+
+/* Step number */
+.main-pcf-flow-container .step-number {
+    background-color: var(--inactive-step-bg);
+    color: var(--inactive-step-text);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    position: relative;
+    z-index: 4;
+}
+
+/* Active step */
+.main-pcf-flow-container>.active .step-number {
+    background-color: var(--active-step-bg) !important;
+    color: var(--active-step-text) !important;
+    box-shadow: 0 0 10px var(--active-step-shadow);
+}
+
+/* Done step */
+.main-pcf-flow-container>.done .step-number {
+    background-color: var(--done-step-bg);
+    color: var(--done-step-text);
+}
+
+/* Connector line */
+.main-pcf-flow-container>.connector {
+    flex: 1;
+    height: 4px;
+    background-color: var(--connector-bg);
+    position: relative;
+    z-index: 1;
+}
+
+.main-pcf-flow-container>.step::before {
+    position: absolute;
+    content: "";
+    border-bottom: 4px solid #ccc;
+    width: 100%;
+    top: 20px;
+    z-index: 2;
+}
+
+.main-pcf-flow-container>.step.done::after {
+    position: absolute;
+    content: "";
+    border-bottom: 4px solid var(--done-step-bg);
+    width: 100%;
+    top: 20px;
+    z-index: 3;
+}
+
+/* Step text */
+.main-pcf-flow-container>.step p {
+    margin-top: 6px;
+    text-align: center;
+    font-size: var(--step-text-size);
+    font-weight: var(--step-text-weight);
+    color: var(--step-text-color);
+}
+
+/* RTL connector adjustments */
+.main-pcf-flow-container.rtl>.connector {
+    right: 9%;
+}
+
+.main-pcf-flow-container.ltr>.connector {
+    left: 9%;
+}
