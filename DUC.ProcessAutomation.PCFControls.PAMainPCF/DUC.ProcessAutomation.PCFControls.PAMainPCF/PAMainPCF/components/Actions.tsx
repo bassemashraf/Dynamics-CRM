@@ -161,7 +161,7 @@ export const Actions: React.FC<IActionsProps> = ({
 
     try {
       setIsLoading(true);
-      const result = await Xrm.WebApi.execute({
+      const result = await Xrm.WebApi.online.execute({
         processExtensionId: parameters.processExtensionId,
         actionId: parameters.actionId,
         lang: parameters.lang,
@@ -471,7 +471,7 @@ export const Actions: React.FC<IActionsProps> = ({
     await onClick(action, "", undefined, assignee);
   };
   const ShowReport = async (srNumber: string) => {
-    await _context.webAPI.retrieveMultipleRecords(
+    await Xrm.WebApi.retrieveMultipleRecords(
       Constants.MAIN_ENTITY_NAME,
       `?fetchXml=${getCertificateFetchXML(srNumber)}`,
     )
