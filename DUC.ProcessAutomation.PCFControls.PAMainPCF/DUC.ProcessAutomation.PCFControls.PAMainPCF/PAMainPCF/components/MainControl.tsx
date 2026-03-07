@@ -99,8 +99,10 @@ export const Main: React.FC<IMainProps> = ({
       currentUserTeams = (teamRes.entities as TeamMembership[])
         .map((t) => t.teamid?.toLowerCase().replace(/[{}]/g, ""))
         .filter(Boolean);
+        alert("Data retrieved (teams): " + currentUserTeams.length);
     } catch (e) {
       console.error("Error fetching teams", e);
+      alert("Error fetching teams: " + (e instanceof Error ? e.message : String(e)));
     }
     console.log("Current User Teams:", currentUserTeams);
 
@@ -118,8 +120,10 @@ export const Main: React.FC<IMainProps> = ({
           .map((r: RoleAssociation) => r.name)
           .filter(Boolean);
       }
+      alert("Data retrieved (roles): " + roles.length);
     } catch (e) {
       console.error("Error fetching roles", e);
+      alert("Error fetching roles: " + (e instanceof Error ? e.message : String(e)));
     }
     console.log("User Roles:", roles);
 
@@ -165,6 +169,7 @@ export const Main: React.FC<IMainProps> = ({
         );
       } catch (e) {
         console.error("Error fetching team administrator", e);
+        alert("Error fetching team admin: " + (e instanceof Error ? e.message : String(e)));
       }
     } else {
       console.log("Case 4 - Not applicable (owner is not a team)");
@@ -201,6 +206,7 @@ export const Main: React.FC<IMainProps> = ({
       await Xrm.Navigation.navigateTo(pageInput, navigationOptions);
     } catch (error) {
       console.error("Error in navigation:", error);
+      alert("Error in navigation: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsLoading(false); // Hide loading when async is done
     }
@@ -231,6 +237,7 @@ export const Main: React.FC<IMainProps> = ({
       await Xrm.Navigation.navigateTo(pageInput, navigationOptions);
     } catch (error) {
       console.error("Error opening survey response view:", error);
+      alert("Error opening survey response view: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsLoading(false); // Hide loading when async is done
     }
@@ -245,6 +252,7 @@ export const Main: React.FC<IMainProps> = ({
       console.log("No survey response found for this service request");
     } catch (error) {
       console.error("Error in onCheckListClick:", error);
+      alert("Error in onCheckListClick: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsLoading(false); // Hide loading when async is done
     }
@@ -271,6 +279,7 @@ export const Main: React.FC<IMainProps> = ({
       await Xrm.Navigation.navigateTo(pageInput, navigationOptions);
     } catch (error) {
       console.error("Error in onAttachmentsClick:", error);
+      alert("Error in onAttachmentsClick: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsLoading(false); // Hide loading when async is done
     }

@@ -62,11 +62,13 @@ export const Actions: React.FC<IActionsProps> = ({
         await fetchData();
       } catch (error) {
         console.error("Error fetching data:", error);
+        alert("Error fetching data: " + (error instanceof Error ? error.message : String(error)));
       }
     };
 
     fetchDataAsync().catch((error) => {
       console.error("Error in fetchDataAsync:", error);
+      alert("Error in fetchDataAsync: " + (error instanceof Error ? error.message : String(error)));
     });
   }, [_context.parameters.stepLookup]);
 
@@ -112,6 +114,7 @@ export const Actions: React.FC<IActionsProps> = ({
         );
       } catch (e) {
         console.error("Error fetching roles", e);
+        alert("Error fetching roles: " + (e instanceof Error ? e.message : String(e)));
       }
 
       // Case 3: Record is owned by a team that current user is a member of
@@ -130,6 +133,7 @@ export const Actions: React.FC<IActionsProps> = ({
           );
         } catch (e) {
           console.error("Error checking team membership", e);
+          alert("Error checking team membership: " + (e instanceof Error ? e.message : String(e)));
         }
       }
 
@@ -141,6 +145,7 @@ export const Actions: React.FC<IActionsProps> = ({
       );
     } catch (error) {
       console.error("Permission check failed:", error);
+      alert("Permission check failed: " + (error instanceof Error ? error.message : String(error)));
       setIsAuthorized(false);
     } finally {
       setIsPermissionLoading(false);
@@ -218,6 +223,7 @@ export const Actions: React.FC<IActionsProps> = ({
         succeeded = false;
       } else {
         console.error("An unknown error occurred:", error);
+        alert("An unknown error occurred in validateAction: " + String(error));
         succeeded = false;
       }
     } finally {
@@ -258,6 +264,7 @@ export const Actions: React.FC<IActionsProps> = ({
       );
 
       console.log(Constants.MSG_PREFIX + response.entities.length);
+      alert("Data retrieved (actions): " + response.entities.length + " records");
 
       const tempDataSet: IActionButtonProps[] = [];
 
@@ -316,8 +323,10 @@ export const Actions: React.FC<IActionsProps> = ({
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Error occurred in API call:", error.message);
+        alert("Error occurred in API call: " + error.message);
       } else {
         console.error("An unknown error occurred");
+        alert("An unknown error occurred in fetchData");
       }
     } finally {
       setIsLoading(false);
@@ -429,11 +438,13 @@ export const Actions: React.FC<IActionsProps> = ({
         },
         (error) => {
           console.error("Error opening survey form:", error);
+          alert("Error opening survey form: " + (error instanceof Error ? error.message : String(error)));
           throw error;
         },
       );
     } catch (error) {
       console.error("Error in openSurveyModal:", error);
+      alert("Error in openSurveyModal: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -489,6 +500,7 @@ export const Actions: React.FC<IActionsProps> = ({
       })
       .catch((error) => {
         console.error("Error retrieving records:", error);
+        alert("Error retrieving records: " + (error instanceof Error ? error.message : String(error)));
       });
   };
 
@@ -586,6 +598,7 @@ export const Actions: React.FC<IActionsProps> = ({
             );
           } catch (error) {
             console.error("Error running dynamic code:", error);
+            alert("Error running dynamic code: " + (error instanceof Error ? error.message : String(error)));
           }
         } else {
           console.log("No Code Specified");
@@ -621,6 +634,7 @@ export const Actions: React.FC<IActionsProps> = ({
           }
         } catch (error) {
           console.error("Confirmation action failed:", error);
+          alert("Confirmation action failed: " + (error instanceof Error ? error.message : String(error)));
           throw error;
         }
       }

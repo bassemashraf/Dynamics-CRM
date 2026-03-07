@@ -4,7 +4,7 @@ import * as React from "react";
 import { Main, IMainProps } from "./components/MainControl";
 import * as ReactDOM from 'react-dom';
 
-export class PAMainPCF implements ComponentFramework.ReactControl<IInputs, IOutputs> {
+export class PAMainPCFOffline implements ComponentFramework.StandardControl<IInputs, IOutputs> {
     private notifyOutputChanged: () => void;
     private container: HTMLDivElement;
     private currentProps: IInputs;
@@ -14,7 +14,6 @@ export class PAMainPCF implements ComponentFramework.ReactControl<IInputs, IOutp
      */
     constructor() {
         // Empty
-        this.container = document.createElement('div'); // Create a container for React component
     }
 
     /**
@@ -27,8 +26,10 @@ export class PAMainPCF implements ComponentFramework.ReactControl<IInputs, IOutp
     public init(
         context: ComponentFramework.Context<IInputs>,
         notifyOutputChanged: () => void,
-        state: ComponentFramework.Dictionary
+        state: ComponentFramework.Dictionary,
+        container: HTMLDivElement
     ): void {
+        this.container = container;
         this.notifyOutputChanged = notifyOutputChanged;
         this.currentProps = context.parameters;
         this._context = context;
@@ -39,7 +40,7 @@ export class PAMainPCF implements ComponentFramework.ReactControl<IInputs, IOutp
      * @param context The entire property bag available to control via Context Object; It contains values as set up by the customizer mapped to names defined in the manifest, as well as utility functions
      * @returns ReactElement root react element for the control
      */
-    public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
+    public updateView(context: ComponentFramework.Context<IInputs>): void {
         this.currentProps = context.parameters;
         this._context = context;
         // Get the dataset from the context
@@ -47,7 +48,7 @@ export class PAMainPCF implements ComponentFramework.ReactControl<IInputs, IOutp
             _context: context,
             onnotifyOutputChanged: this.notifyOutputChanged
         };
-        return React.createElement(Main, props);
+        ReactDOM.render(React.createElement(Main, props), this.container);
 
         /* const props: IHelloWorldProps = { name: 'Power Apps' };
         return React.createElement(
@@ -77,6 +78,6 @@ export class PAMainPCF implements ComponentFramework.ReactControl<IInputs, IOutp
      * i.e. cancelling any pending remote calls, removing listeners, etc.
      */
     public destroy(): void {
-        // Add code to cleanup control if necessary
+        ReactDOM.unmountComponentAtNode(this.container);
     }
 }
