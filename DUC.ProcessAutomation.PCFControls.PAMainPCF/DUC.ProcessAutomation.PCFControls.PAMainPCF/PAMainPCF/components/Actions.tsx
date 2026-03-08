@@ -245,6 +245,7 @@ export const Actions: React.FC<IActionsProps> = ({
   };
 
   const fetchData = async () => {
+    let currentQuery = "";
     try {
       if (
         _context.parameters.stepLookup.raw == null ||
@@ -252,15 +253,19 @@ export const Actions: React.FC<IActionsProps> = ({
       )
         return;
       setIsLoading(true);
+      const isMob = isMobile(_context);
+      const stepId = _context.parameters.stepLookup.raw[0].id.toString();
+
       const Filter = (
-        isMobile(_context)
+        isMob
           ? Constants.STAGE_ACTION_MOBILE_FILTER
           : Constants.STAGE_ACTION_DEFAULT_FILTER
-      ).replace("{0}", _context.parameters.stepLookup.raw[0].id.toString());
-      const query = Filter + Constants.STAGE_ACTION_QUERY;
+      ).replace("{0}", stepId);
+      currentQuery = Filter + Constants.STAGE_ACTION_QUERY;
+
       const response = await _context.webAPI.retrieveMultipleRecords(
         Constants.ENTITY_NAME,
-        query,
+        currentQuery,
       );
 
       console.log(Constants.MSG_PREFIX + response.entities.length);
@@ -323,10 +328,10 @@ export const Actions: React.FC<IActionsProps> = ({
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Error occurred in API call:", error.message);
-        alert("Error occurred in API call: " + error.message);
+        alert(`Error occurred in Action fetching API call:\n\nQuery: ${currentQuery}\n\nMessage: ${error.message}\n\nStack: ${error.stack}`);
       } else {
         console.error("An unknown error occurred");
-        alert("An unknown error occurred in fetchData");
+        alert(`An unknown error occurred in Action fetchData.\n\nQuery: ${currentQuery}\n\nError: ` + String(error));
       }
     } finally {
       setIsLoading(false);

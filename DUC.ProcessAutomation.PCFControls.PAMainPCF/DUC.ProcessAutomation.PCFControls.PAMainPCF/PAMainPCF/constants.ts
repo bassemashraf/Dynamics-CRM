@@ -20,17 +20,17 @@ export const Constants = {
   // 🔹 API Filter Strings
   // ==========================
   STAGE_ACTION_DEFAULT_FILTER:
-    "?$filter=(duc_visible eq true and _duc_relatedstage_value eq {0})",
+    "?$filter=(duc_visible eq true and duc_relatedstage eq {0})",
 
   STAGE_ACTION_MOBILE_FILTER:
-    "?$filter=(duc_showonmobile eq true and _duc_relatedstage_value eq {0})",
+    "?$filter=(duc_showonmobile eq true and duc_relatedstage eq {0})",
 
   STAGE_ACTION_QUERY:
     "&$orderby=duc_sequence asc" +
     "&$expand=" +
-    "duc_ActionType($select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer)," +
-    "duc_RelatedStage($select=duc_sequence)," +
-    "duc_NextStage($select=_duc_assignedteam_value)",
+    "duc_actiontype($select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer)," +
+    "duc_relatedstage($select=duc_sequence)," +
+    "duc_nextstage($select=duc_assignedteam)",
 
   STAGE_ACTION_MOBILE_VISIBLE_FIELD: "duc_showonmobile",
 
@@ -38,29 +38,29 @@ export const Constants = {
     "?$filter=duc_stageactionid eq {0}" +
     "&$orderby=duc_sequence asc" +
     "&$expand=" +
-    "duc_ActionType($select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer)",
+    "duc_actiontype($select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer)",
 
   STAGE_VISIBLE_FIELD: "duc_visible",
   STAGE_MOBILE_VISIBLE_FIELD: "duc_visibleonmobile",
   STAGE_SELECT:
     "?$select=duc_visible,duc_visibleonmobile,duc_sequence,duc_processstageid,duc_name,duc_arabicname,duc_arabicdescription,duc_description,duc_sequenceoverride",
   STAGE_FILTER:
-    "&$filter=_duc_relatedprocess_value eq {0} and statecode eq 0 and ({2} eq true {1})",
+    "&$filter=duc_relatedprocess eq {0} and statecode eq 0 and ({2} eq true {1})",
   STAGE_ORDER: "&$orderby=duc_sequence,duc_sequenceoverride asc",
   // ==========================
   // 🔹 Field Names
   // ==========================
-  BUTTON_ICON: "duc_ActionType.duc_icon",
+  BUTTON_ICON: "duc_actiontype.duc_icon",
   REQUIRE_COMMENTS: "duc_requirescomments",
-  IS_ASSIGN_ACTION_TYPE: "duc_ActionType.duc_isassignaction",
-  ACTION_CODE: "duc_ActionType.duc_actioncommand",
-  WFACTION: "duc_ActionType.duc_wfaction",
-  BUTTON_COLOR: "duc_ActionType.duc_color",
+  IS_ASSIGN_ACTION_TYPE: "duc_actiontype.duc_isassignaction",
+  ACTION_CODE: "duc_actiontype.duc_actioncommand",
+  WFACTION: "duc_actiontype.duc_wfaction",
+  BUTTON_COLOR: "duc_actiontype.duc_color",
   BUTTON_STATUS: "duc_enabled",
   BUTTON_ID: "duc_stageactionid",
-  SEND_TO_CUSTOMER: "duc_ActionType.duc_sendtocustomer",
-  NEXT_STEP_TEAM: "duc_NextStage._duc_assignedteam_value",
-  STATIC_REPLY_TEMPLATE_ID: "_duc_relatedstaticresponsestemplate_value",
+  SEND_TO_CUSTOMER: "duc_actiontype.duc_sendtocustomer",
+  NEXT_STEP_TEAM: "duc_nextstage.duc_assignedteam",
+  STATIC_REPLY_TEMPLATE_ID: "duc_relatedstaticresponsestemplate",
   ACTION_LOG_USER_COMMENTS: "duc_comments",
 
   // 🔹 ModalDialog specific fields
@@ -70,11 +70,11 @@ export const Constants = {
   STATIC_REPLY_ID: "duc_processstaticresponseid",
   STATIC_REPLY_NAME_AR: "duc_replybodyar",
   STATIC_REPLY_NAME_EN: "duc_replybodyen",
-  STATIC_REPLY_TEMPLATE_LOOKUP: "_duc_template_value",
+  STATIC_REPLY_TEMPLATE_LOOKUP: "duc_template",
   STATIC_REPLY_IS_ACTIVE: "duc_isactive",
-  CURRENT_STEP_SEQUENCE: "duc_RelatedStage.duc_sequence",
+  CURRENT_STEP_SEQUENCE: "duc_relatedstage.duc_sequence",
   REQUIRES_SURVEY: "duc_requiressurvey",
-  ACTION_SURVEY: "_duc_actionsurvey_value",
+  ACTION_SURVEY: "duc_actionsurvey",
 
   // ==========================
   // 🔹 Localized Resource Keys
@@ -220,7 +220,7 @@ export const getCertificateFetchXML = (srNumber: string): string => `
 // FetchXML for service request logs with customer comments
 export const getServiceRequestLogFetchXML = (primaryKey: string) => `
 ?$select=${Constants.SR_LOG_ID},${Constants.SR_LOG_CONTAINS_CUSTOMER_COMMENTS},${Constants.SR_LOG_USER_COMMENTS}
-&$filter=(_duc_processextension_value eq ${primaryKey} and ${Constants.SR_LOG_CONTAINS_CUSTOMER_COMMENTS} eq true)
+&$filter=(duc_processextension eq ${primaryKey} and ${Constants.SR_LOG_CONTAINS_CUSTOMER_COMMENTS} eq true)
 `;
 
 // FetchXML for static replies by template
