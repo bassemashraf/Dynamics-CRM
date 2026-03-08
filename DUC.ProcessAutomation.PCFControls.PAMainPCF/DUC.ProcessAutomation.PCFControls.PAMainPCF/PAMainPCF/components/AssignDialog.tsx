@@ -61,7 +61,6 @@ const AssignDialog: React.FC<AssignDialogProps> = ({ _context, isVisible, onClos
         }));
 
         setItems(usersLst); // Display users immediately
-        alert("Data retrieved (assignees): " + usersLst.length);
 
         // 2️⃣ Fetch counts & leave in parallel for each user
         const updateCounts = async (user: AssigneeItem) => {
@@ -97,7 +96,6 @@ const AssignDialog: React.FC<AssignDialogProps> = ({ _context, isVisible, onClos
             setItems(prev => [...prev]); // Trigger re-render
           } catch (err) {
             console.error("Error updating counts for user", user.id, err);
-            alert("Error updating counts for user " + user.name + ": " + (err instanceof Error ? err.message : String(err)));
           }
         };
 
@@ -105,7 +103,6 @@ const AssignDialog: React.FC<AssignDialogProps> = ({ _context, isVisible, onClos
 
       } catch (err) {
         setMessage({ text: "Failed to load assignees", type: MessageBarType.error });
-        alert("Failed to load assignees: " + (err instanceof Error ? err.message : String(err)));
       } finally {
         setLoading(false);
       }

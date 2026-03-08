@@ -62,13 +62,11 @@ export const Actions: React.FC<IActionsProps> = ({
         await fetchData();
       } catch (error) {
         console.error("Error fetching data:", error);
-        alert("Error fetching data: " + (error instanceof Error ? error.message : String(error)));
       }
     };
 
     fetchDataAsync().catch((error) => {
       console.error("Error in fetchDataAsync:", error);
-      alert("Error in fetchDataAsync: " + (error instanceof Error ? error.message : String(error)));
     });
   }, [_context.parameters.stepLookup]);
 
@@ -96,25 +94,38 @@ export const Actions: React.FC<IActionsProps> = ({
       let roles: string[] = [];
 
       try {
-        const userRoles = await _context.webAPI.retrieveMultipleRecords(
-          "systemuser",
-          `?$filter=systemuserid eq ${currentUserId}&$expand=systemuserroles_association($select=name)`,
+        // Step 1: Query the many-to-many relationship entity to get role IDs
+        const userRolesRes = await _context.webAPI.retrieveMultipleRecords(
+          "systemuserrolescollection",
+          `?$filter=systemuserid eq '${currentUserId}'`,
         );
 
-        if (userRoles.entities.length > 0) {
-          const roleAssociations = userRoles.entities[0]
-            .systemuserroles_association as RoleAssociation[] | undefined;
-          roles = (roleAssociations ?? [])
-            .map((r: RoleAssociation) => r.name)
-            .filter(Boolean);
+        const roleIds = userRolesRes.entities
+          .map((e: any) => e.roleid)
+          .filter(Boolean);
+
+        if (roleIds.length > 0) {
+          // Step 2: Query the roles entity to get role names
+          let roleFilter = "";
+          roleIds.forEach((id: string, index: number) => {
+            if (index > 0) roleFilter += " or ";
+            roleFilter += `roleid eq ${id}`;
+          });
+
+          const rolesRes = await _context.webAPI.retrieveMultipleRecords(
+            "role",
+            `?$filter=${roleFilter}&$select=name`,
+          );
+
+          roles = rolesRes.entities.map((r: any) => r.name).filter(Boolean);
         }
+
         isAdmin = roles.includes("System Administrator");
         console.log(
           `Case 2 - Is current user System Administrator? ${isAdmin}`,
         );
       } catch (e) {
         console.error("Error fetching roles", e);
-        alert("Error fetching roles: " + (e instanceof Error ? e.message : String(e)));
       }
 
       // Case 3: Record is owned by a team that current user is a member of
@@ -133,7 +144,6 @@ export const Actions: React.FC<IActionsProps> = ({
           );
         } catch (e) {
           console.error("Error checking team membership", e);
-          alert("Error checking team membership: " + (e instanceof Error ? e.message : String(e)));
         }
       }
 
@@ -145,7 +155,6 @@ export const Actions: React.FC<IActionsProps> = ({
       );
     } catch (error) {
       console.error("Permission check failed:", error);
-      alert("Permission check failed: " + (error instanceof Error ? error.message : String(error)));
       setIsAuthorized(false);
     } finally {
       setIsPermissionLoading(false);
@@ -223,7 +232,6 @@ export const Actions: React.FC<IActionsProps> = ({
         succeeded = false;
       } else {
         console.error("An unknown error occurred:", error);
-        alert("An unknown error occurred in validateAction: " + String(error));
         succeeded = false;
       }
     } finally {
@@ -256,11 +264,10 @@ export const Actions: React.FC<IActionsProps> = ({
       const isMob = isMobile(_context);
       const stepId = _context.parameters.stepLookup.raw[0].id.toString();
 
-      const Filter = (
-        isMob
-          ? Constants.STAGE_ACTION_MOBILE_FILTER
-          : Constants.STAGE_ACTION_DEFAULT_FILTER
-      ).replace("{0}", stepId);
+      const Filter = isMob
+        ? Constants.STAGE_ACTION_MOBILE_FILTER
+        : Constants.STAGE_ACTION_DEFAULT_FILTER;
+
       currentQuery = Filter + Constants.STAGE_ACTION_QUERY;
 
       const response = await _context.webAPI.retrieveMultipleRecords(
@@ -268,15 +275,21 @@ export const Actions: React.FC<IActionsProps> = ({
         currentQuery,
       );
 
-      console.log(Constants.MSG_PREFIX + response.entities.length);
-      alert("Data retrieved (actions): " + response.entities.length + " records");
+      // Local runtime filtering of the actions based on related stage ID
+      const filteredEntities = response.entities.filter((entity) => {
+        const relatedStageId = entity["_duc_relatedstage_value"] || entity["duc_relatedstage"];
+        return relatedStageId && relatedStageId.toLowerCase() === stepId.toLowerCase();
+      });
+
+      console.log(Constants.MSG_PREFIX + filteredEntities.length);
+      alert(`Data retrieved (actions): ${response.entities.length} total fetched, ${filteredEntities.length} matching current stage.\n\nQuery Executed: \n${currentQuery}`);
 
       const tempDataSet: IActionButtonProps[] = [];
 
       if (
-        response.entities &&
+        filteredEntities && filteredEntities.length > 0 &&
         getValue(
-          response.entities[0],
+          filteredEntities[0],
           _context.resources.getString(Constants.CURRENT_STEP_SEQUENCE),
         ) == "1" &&
         _context.parameters.GenericCancelAction.raw != null &&
@@ -292,35 +305,67 @@ export const Actions: React.FC<IActionsProps> = ({
             Constants.ENTITY_NAME,
             genericfilter,
           );
-        if (genericcancelresponse.entities)
-          response.entities.push(genericcancelresponse.entities[0]);
+        if (genericcancelresponse.entities && genericcancelresponse.entities.length > 0)
+          filteredEntities.push(genericcancelresponse.entities[0]);
       }
 
-      response.entities.forEach((entity) => {
+      // Collect all unique ActionType IDs to fetch metadata for buttons
+      const actionTypeIds: string[] = [];
+      filteredEntities.forEach((entity) => {
+        const typeId = entity["duc_actiontype"];
+        if (typeId && !actionTypeIds.includes(typeId)) {
+          actionTypeIds.push(typeId);
+        }
+      });
+
+      // Fetch ActionType details explicitly to bypass offline $expand limits
+      const actionTypeMap: Record<string, any> = {};
+      if (actionTypeIds.length > 0) {
+        let typeFilter = "";
+        actionTypeIds.forEach((id, index) => {
+          if (index > 0) typeFilter += " or ";
+          typeFilter += `duc_processactiontypeid eq ${id}`;
+        });
+
+        try {
+          const typeResponse = await _context.webAPI.retrieveMultipleRecords(
+            Constants.ACTION_TYPE_ENTITY_NAME,
+            `?$filter=${typeFilter}&$select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer`
+          );
+
+          typeResponse.entities.forEach(typeEnt => {
+            actionTypeMap[typeEnt.duc_processactiontypeid] = typeEnt;
+          });
+        } catch (e) {
+          console.error("Action Type Fetch Error", e);
+        }
+      }
+
+      filteredEntities.forEach((entity) => {
+        const typeId = entity["duc_actiontype"];
+        const actionType = typeId ? actionTypeMap[typeId] : null;
+
         const prop: IActionButtonProps = {
           displayName:
             getValue(
               entity,
               _context.resources.getString(Constants.DISPLAY_NAME),
             ) ?? "",
-          buttonIcon: getValue(entity, Constants.BUTTON_ICON) ?? "",
-          buttonColor: getValue(entity, Constants.BUTTON_COLOR) ?? "",
+          buttonIcon: actionType ? getValue(actionType, Constants.BUTTON_ICON) : "",
+          buttonColor: actionType ? getValue(actionType, Constants.BUTTON_COLOR) : "",
           buttonStatus: getValue(entity, Constants.BUTTON_STATUS) === "true",
           buttonId: getValue(entity, Constants.BUTTON_ID) ?? "",
           requireComments:
             getValue(entity, Constants.REQUIRE_COMMENTS) === "true",
-          requireAssign:
-            getValue(entity, Constants.IS_ASSIGN_ACTION_TYPE) === "true",
+          requireAssign: actionType ?
+            getValue(actionType, Constants.IS_ASSIGN_ACTION_TYPE) === "true" : false,
           requiresSurvey:
             getValue(entity, Constants.REQUIRES_SURVEY) === "true",
-          sendToCustomer:
-            getValue(entity, Constants.SEND_TO_CUSTOMER) === "true",
-          nextTeamId: getValue(entity, Constants.NEXT_STEP_TEAM) ?? "",
-          entity: entity,
-          staticReplyTemplateId: getValue(
-            entity,
-            Constants.STATIC_REPLY_TEMPLATE_ID,
-          ),
+          sendToCustomer: actionType ?
+            getValue(actionType, Constants.SEND_TO_CUSTOMER) === "true" : false,
+          nextTeamId: entity["duc_nextstage"] ?? "",
+          entity: { ...entity, duc_actiontype: actionType }, // Embed it for evaluating later code
+          staticReplyTemplateId: entity["duc_relatedstaticresponsestemplate"] ?? "",
         };
         tempDataSet.push(prop);
       });
@@ -328,10 +373,8 @@ export const Actions: React.FC<IActionsProps> = ({
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Error occurred in API call:", error.message);
-        alert(`Error occurred in Action fetching API call:\n\nQuery: ${currentQuery}\n\nMessage: ${error.message}\n\nStack: ${error.stack}`);
       } else {
         console.error("An unknown error occurred");
-        alert(`An unknown error occurred in Action fetchData.\n\nQuery: ${currentQuery}\n\nError: ` + String(error));
       }
     } finally {
       setIsLoading(false);
@@ -443,13 +486,11 @@ export const Actions: React.FC<IActionsProps> = ({
         },
         (error) => {
           console.error("Error opening survey form:", error);
-          alert("Error opening survey form: " + (error instanceof Error ? error.message : String(error)));
           throw error;
         },
       );
     } catch (error) {
       console.error("Error in openSurveyModal:", error);
-      alert("Error in openSurveyModal: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -505,7 +546,6 @@ export const Actions: React.FC<IActionsProps> = ({
       })
       .catch((error) => {
         console.error("Error retrieving records:", error);
-        alert("Error retrieving records: " + (error instanceof Error ? error.message : String(error)));
       });
   };
 
@@ -603,7 +643,6 @@ export const Actions: React.FC<IActionsProps> = ({
             );
           } catch (error) {
             console.error("Error running dynamic code:", error);
-            alert("Error running dynamic code: " + (error instanceof Error ? error.message : String(error)));
           }
         } else {
           console.log("No Code Specified");
@@ -639,7 +678,6 @@ export const Actions: React.FC<IActionsProps> = ({
           }
         } catch (error) {
           console.error("Confirmation action failed:", error);
-          alert("Confirmation action failed: " + (error instanceof Error ? error.message : String(error)));
           throw error;
         }
       }

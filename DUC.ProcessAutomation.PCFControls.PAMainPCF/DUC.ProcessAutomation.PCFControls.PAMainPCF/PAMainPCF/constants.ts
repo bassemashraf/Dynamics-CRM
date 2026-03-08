@@ -15,30 +15,25 @@ export const Constants = {
     "duc_processdefinitioncertifications",
   REPORT_ENTITY: "duc_report",
   CUSTOMER_LICENSES_ENTITY: "duc_customerlicenses",
+  ACTION_TYPE_ENTITY_NAME: "duc_processactiontype",
 
   // ==========================
   // 🔹 API Filter Strings
   // ==========================
   STAGE_ACTION_DEFAULT_FILTER:
-    "?$filter=(duc_visible eq true and duc_relatedstage eq {0})",
+    "?$filter=(duc_visible eq true)",
 
   STAGE_ACTION_MOBILE_FILTER:
-    "?$filter=(duc_showonmobile eq true and duc_relatedstage eq {0})",
+    "?$filter=(duc_showonmobile eq true)",
 
   STAGE_ACTION_QUERY:
-    "&$orderby=duc_sequence asc" +
-    "&$expand=" +
-    "duc_actiontype($select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer)," +
-    "duc_relatedstage($select=duc_sequence)," +
-    "duc_nextstage($select=duc_assignedteam)",
+    "&$orderby=duc_sequence asc",
 
   STAGE_ACTION_MOBILE_VISIBLE_FIELD: "duc_showonmobile",
 
   GENERIC_CANCEL_FILTER:
     "?$filter=duc_stageactionid eq {0}" +
-    "&$orderby=duc_sequence asc" +
-    "&$expand=" +
-    "duc_actiontype($select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer)",
+    "&$orderby=duc_sequence asc",
 
   STAGE_VISIBLE_FIELD: "duc_visible",
   STAGE_MOBILE_VISIBLE_FIELD: "duc_visibleonmobile",
@@ -50,18 +45,19 @@ export const Constants = {
   // ==========================
   // 🔹 Field Names
   // ==========================
-  BUTTON_ICON: "duc_actiontype.duc_icon",
-  REQUIRE_COMMENTS: "duc_requirescomments",
-  IS_ASSIGN_ACTION_TYPE: "duc_actiontype.duc_isassignaction",
-  ACTION_CODE: "duc_actiontype.duc_actioncommand",
-  WFACTION: "duc_actiontype.duc_wfaction",
-  BUTTON_COLOR: "duc_actiontype.duc_color",
-  BUTTON_STATUS: "duc_enabled",
-  BUTTON_ID: "duc_stageactionid",
-  SEND_TO_CUSTOMER: "duc_actiontype.duc_sendtocustomer",
-  NEXT_STEP_TEAM: "duc_nextstage.duc_assignedteam",
+  BUTTON_ICON: "duc_icon",             // Fetched from Action Type lookup
+  REQUIRE_COMMENTS: "duc_requirescomments", // Fetched from Stage Action
+  IS_ASSIGN_ACTION_TYPE: "duc_isassignaction", // Fetched from Action Type
+  ACTION_CODE: "duc_actioncommand",    // Fetched from Action Type
+  WFACTION: "duc_wfaction",            // Fetched from Action Type
+  BUTTON_COLOR: "duc_color",           // Fetched from Action Type
+  BUTTON_STATUS: "duc_enabled",        // Fetched from Stage Action
+  BUTTON_ID: "duc_stageactionid",      // Fetched from Stage Action
+  SEND_TO_CUSTOMER: "duc_sendtocustomer", // Fetched from Action Type
+  NEXT_STEP_TEAM: "duc_assignedteam",  // Extrapolated from Next Stage
   STATIC_REPLY_TEMPLATE_ID: "duc_relatedstaticresponsestemplate",
   ACTION_LOG_USER_COMMENTS: "duc_comments",
+  ACTION_TYPE_LOOKUP: "duc_actiontype",
 
   // 🔹 ModalDialog specific fields
   SR_LOG_ID: "duc_processactionlogid",

@@ -110,10 +110,8 @@ export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
       }));
 
       setSteps(processed);
-      alert("Data retrieved (steps): " + processed.length);
     } catch (error) {
       console.error("Error loading steps:", error);
-      alert("Error loading steps: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsLoading(false);
     }
@@ -132,8 +130,8 @@ export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
   return (
     <div
       className={`main-pcf-flow-container ${isLTR ? "ltr" : "rtl"} ${isMobileOrTablet
-          ? "main-pcf-flow-container-mobile-padding"
-          : "main-pcf-flow-container-web-padding"
+        ? "main-pcf-flow-container-mobile-padding"
+        : "main-pcf-flow-container-web-padding"
         }`}
       ref={containerRef}
     >
