@@ -139,7 +139,7 @@ export class MultiTypeInspection extends React.Component<
         props.context.resources.getString("CRNumber") || "CR Number:",
       TempCRNumber:
         props.context.resources.getString("TempCRNumber") ||
-        "Temp CR Number:",
+        "TIN CR Number:",
       Start: props.context.resources.getString("Start") || "Start",
       Close: props.context.resources.getString("Close") || "Close",
       Loading:
@@ -363,7 +363,7 @@ export class MultiTypeInspection extends React.Component<
       return [];
     }
   };
-    
+
   private loadTaxTypeOptions = async (): Promise<void> => {
     try {
       const entityMetadata = await this.xrm.Utility.getEntityMetadata(
@@ -381,7 +381,7 @@ export class MultiTypeInspection extends React.Component<
           });
         });
       }
-      
+
       this.setState({ taxTypeOptions: options });
     } catch (error) {
       console.error("Error loading tax type options:", error);
@@ -499,7 +499,7 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private validateFields = (): boolean => {
-    const { isTaxable, isNonTaxable, crNumber } = this.state;
+    const { isTaxable, isNonTaxable, crNumber, tempCrNumber } = this.state;
 
     if (!isTaxable && !isNonTaxable) {
       this.setState({
@@ -508,9 +508,18 @@ export class MultiTypeInspection extends React.Component<
       return false;
     }
 
-    if (!crNumber.trim()) {
-      this.setState({ error: this.strings.PleaseEnterRequiredFields });
-      return false;
+    // For Taxable: at least one of CR Number or TIN CR Number must be filled
+    // For Non-Taxable: CR Number is required
+    if (isTaxable) {
+      if (!crNumber.trim() && !tempCrNumber.trim()) {
+        this.setState({ error: this.strings.PleaseEnterRequiredFields });
+        return false;
+      }
+    } else {
+      if (!crNumber.trim()) {
+        this.setState({ error: this.strings.PleaseEnterRequiredFields });
+        return false;
+      }
     }
 
     return true;
@@ -521,8 +530,9 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private getAccountName = (): string => {
-    const { crNumber } = this.state;
-    return `Company ${crNumber}`.trim();
+    const { crNumber, tempCrNumber } = this.state;
+    const identifier = crNumber.trim() || tempCrNumber.trim();
+    return `Company ${identifier}`.trim();
   };
 
   private getCurrentLocation = async (): Promise<{
@@ -569,14 +579,16 @@ export class MultiTypeInspection extends React.Component<
 
   private searchOrCreateAccount = async (): Promise<string | null> => {
     try {
-      const { crNumber } = this.state;
+      const { crNumber, tempCrNumber } = this.state;
+      // Use CR Number if filled, otherwise fall back to TIN CR Number
+      const identifier = crNumber.trim() || tempCrNumber.trim();
 
-      if (!crNumber.trim()) {
+      if (!identifier) {
         throw new Error(this.strings.PleaseEnterRequiredFields);
       }
 
-      // Search for existing account by CR number
-      const filterQuery = `duc_accountidentifier eq '${crNumber.trim()}'`;
+      // Search for existing account by CR/TIN number
+      const filterQuery = `duc_accountidentifier eq '${identifier}'`;
 
       const searchResults = await this.xrm.WebApi.retrieveMultipleRecords(
         "account",
@@ -592,7 +604,7 @@ export class MultiTypeInspection extends React.Component<
       const accountName = this.getAccountName();
       const newAccount: any = {
         name: accountName,
-        duc_accountidentifier: crNumber.trim(),
+        duc_accountidentifier: identifier,
         customertypecode: 2, // Company
       };
 
@@ -1153,16 +1165,16 @@ export class MultiTypeInspection extends React.Component<
         ),
       ),
       hasValue &&
-        React.createElement(
-          "button",
-          {
-            type: "button",
-            onClick: () => onChange(""),
-            disabled: disabled,
-            style: styles.clearButtonStyle,
-          },
-          this.strings.Clear,
-        ),
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => onChange(""),
+          disabled: disabled,
+          style: styles.clearButtonStyle,
+        },
+        this.strings.Clear,
+      ),
     );
   };
 
@@ -1246,55 +1258,55 @@ export class MultiTypeInspection extends React.Component<
           ),
 
           error &&
-            React.createElement("div", { style: styles.errorStyle }, error),
+          React.createElement("div", { style: styles.errorStyle }, error),
 
           // Campaign Selection
           showCampaignField &&
+          React.createElement(
+            "div",
+            { style: styles.fieldStyle },
             React.createElement(
-              "div",
-              { style: styles.fieldStyle },
-              React.createElement(
-                "label",
-                { style: styles.labelStyle },
-                this.strings.Campaign,
-              ),
-              this.renderSelectWithClear(
-                selectedCampaignId || "",
-                (val) => this.handleCampaignChange(val),
-                campaigns.map((c) => ({
-                  key: c.id,
-                  value: c.id,
-                  label: c.name,
-                })),
-                "--",
-                loading,
-                styles,
-              ),
+              "label",
+              { style: styles.labelStyle },
+              this.strings.Campaign,
             ),
+            this.renderSelectWithClear(
+              selectedCampaignId || "",
+              (val) => this.handleCampaignChange(val),
+              campaigns.map((c) => ({
+                key: c.id,
+                value: c.id,
+                label: c.name,
+              })),
+              "--",
+              loading,
+              styles,
+            ),
+          ),
 
           // Incident Type Selection
           showIncidentField &&
+          React.createElement(
+            "div",
+            { style: styles.fieldStyle },
             React.createElement(
-              "div",
-              { style: styles.fieldStyle },
-              React.createElement(
-                "label",
-                { style: styles.labelStyle },
-                this.strings.IncidentType,
-              ),
-              this.renderSelectWithClear(
-                selectedIncidentTypeId || "",
-                (val) => this.handleIncidentTypeChange(val),
-                incidentTypes.map((it) => ({
-                  key: it.id,
-                  value: it.id,
-                  label: it.name,
-                })),
-                "--",
-                loading || incidentTypeReadOnly,
-                styles,
-              ),
+              "label",
+              { style: styles.labelStyle },
+              this.strings.IncidentType,
             ),
+            this.renderSelectWithClear(
+              selectedIncidentTypeId || "",
+              (val) => this.handleIncidentTypeChange(val),
+              incidentTypes.map((it) => ({
+                key: it.id,
+                value: it.id,
+                label: it.name,
+              })),
+              "--",
+              loading || incidentTypeReadOnly,
+              styles,
+            ),
+          ),
 
           // Tax Type Selection
           React.createElement(
@@ -1369,7 +1381,7 @@ export class MultiTypeInspection extends React.Component<
         ),
 
         error &&
-          React.createElement("div", { style: styles.errorStyle }, error),
+        React.createElement("div", { style: styles.errorStyle }, error),
 
         // Taxable Checkbox
         React.createElement(
@@ -1454,53 +1466,53 @@ export class MultiTypeInspection extends React.Component<
 
         // CR Number (shown for both Taxable and Non-Taxable)
         (isTaxable || isNonTaxable) &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.CRNumber,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.CRNumber,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: crNumber,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  this.handleInputChange("crNumber", e.target.value),
-                disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
-              this.renderBarcodeButton("crNumber", styles),
-            ),
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: crNumber,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleInputChange("crNumber", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
+            this.renderBarcodeButton("crNumber", styles),
           ),
+        ),
 
-        // Temp CR Number (shown only for Taxable)
+        // TIN CR Number (shown only for Taxable)
         isTaxable &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.TempCRNumber,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.TempCRNumber,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: tempCrNumber,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  this.handleInputChange("tempCrNumber", e.target.value),
-                disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
-              this.renderBarcodeButton("tempCrNumber", styles),
-            ),
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: tempCrNumber,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleInputChange("tempCrNumber", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
+            this.renderBarcodeButton("tempCrNumber", styles),
           ),
+        ),
 
         // Buttons
         React.createElement(

@@ -15,7 +15,7 @@ export const Constants = {
     "duc_processdefinitioncertifications",
   REPORT_ENTITY: "duc_report",
   CUSTOMER_LICENSES_ENTITY: "duc_customerlicenses",
-  ACTION_TYPE_ENTITY_NAME: "duc_processactiontype",
+  ACTION_TYPE_ENTITY_NAME: "duc_actiontype",
 
   // ==========================
   // 🔹 API Filter Strings

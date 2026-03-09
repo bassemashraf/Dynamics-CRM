@@ -188,7 +188,7 @@ export class ProcessExtensionHelpers {
       // Nav prop: duc_processDefinition_duc_ProcessExtension
       if (processDef.id) {
         createData["duc_processDefinition_duc_ProcessExtension@odata.bind"] =
-          `/duc_processdefinitions(d470cdd4-2409-484b-be36-597260ed478d)`;
+          `/duc_processdefinitions(${processDef.id})`;
       }
 
       // Current Stage (from Start Stage)

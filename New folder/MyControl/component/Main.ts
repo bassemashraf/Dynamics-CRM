@@ -553,7 +553,7 @@ export const Main = (props: IProps) => {
 
                 localStorage.setItem(
                     "MOCI_userCounts",
-                    JSON.stringify({ userName: username })
+                    JSON.stringify({ userName: username, pendingTodayBookings: remainingToday, completedTodayWorkorders: completedToday, TodayCampaigns: campaignsToday })
                 );
 
                 // Check organization unit after loading user data — skip when offline
@@ -586,9 +586,9 @@ export const Main = (props: IProps) => {
                 const obj = JSON.parse(cached);
                 setState(prev => ({
                     ...prev,
-                    remainingToday: obj.remainingToday,
-                    completedTodayWorkorders: obj.completedTodayWorkorders,
-                    TodayCampaigns: obj.TodayCampaigns,
+                    pendingTodayBookings: obj.pendingTodayBookings ?? prev.pendingTodayBookings,
+                    completedTodayWorkorders: obj.completedTodayWorkorders ?? prev.completedTodayWorkorders,
+                    TodayCampaigns: obj.TodayCampaigns ?? prev.TodayCampaigns,
                     userName: obj.userName ?? "Inspector"
                 }));
             } catch {
@@ -598,8 +598,8 @@ export const Main = (props: IProps) => {
     };
 
     React.useEffect(() => {
-        void loadUserData();
         restoreCache();
+        void loadUserData();
     }, [loadUserData]);
 
     const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>): void => {

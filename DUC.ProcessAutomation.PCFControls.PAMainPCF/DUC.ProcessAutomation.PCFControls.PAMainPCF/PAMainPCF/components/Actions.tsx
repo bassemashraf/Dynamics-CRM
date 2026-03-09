@@ -282,7 +282,6 @@ export const Actions: React.FC<IActionsProps> = ({
       });
 
       console.log(Constants.MSG_PREFIX + filteredEntities.length);
-      alert(`Data retrieved (actions): ${response.entities.length} total fetched, ${filteredEntities.length} matching current stage.\n\nQuery Executed: \n${currentQuery}`);
 
       const tempDataSet: IActionButtonProps[] = [];
 
@@ -312,7 +311,7 @@ export const Actions: React.FC<IActionsProps> = ({
       // Collect all unique ActionType IDs to fetch metadata for buttons
       const actionTypeIds: string[] = [];
       filteredEntities.forEach((entity) => {
-        const typeId = entity["duc_actiontype"];
+        const typeId = entity["duc_actiontype"] || entity["_duc_actiontype_value"];
         if (typeId && !actionTypeIds.includes(typeId)) {
           actionTypeIds.push(typeId);
         }
@@ -324,17 +323,18 @@ export const Actions: React.FC<IActionsProps> = ({
         let typeFilter = "";
         actionTypeIds.forEach((id, index) => {
           if (index > 0) typeFilter += " or ";
-          typeFilter += `duc_processactiontypeid eq ${id}`;
+          typeFilter += `duc_actiontypeid eq ${id}`;
         });
 
+        const typeQuery = `?$filter=${typeFilter}&$select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer`;
         try {
           const typeResponse = await _context.webAPI.retrieveMultipleRecords(
             Constants.ACTION_TYPE_ENTITY_NAME,
-            `?$filter=${typeFilter}&$select=duc_isassignaction,duc_mainpcfcontroltype,duc_wfaction,duc_actioncommand,duc_color,duc_icon,duc_sendtocustomer`
+            typeQuery
           );
 
           typeResponse.entities.forEach(typeEnt => {
-            actionTypeMap[typeEnt.duc_processactiontypeid] = typeEnt;
+            actionTypeMap[typeEnt.duc_actiontypeid] = typeEnt;
           });
         } catch (e) {
           console.error("Action Type Fetch Error", e);
@@ -342,7 +342,7 @@ export const Actions: React.FC<IActionsProps> = ({
       }
 
       filteredEntities.forEach((entity) => {
-        const typeId = entity["duc_actiontype"];
+        const typeId = entity["duc_actiontype"] || entity["_duc_actiontype_value"];
         const actionType = typeId ? actionTypeMap[typeId] : null;
 
         const prop: IActionButtonProps = {
@@ -602,19 +602,20 @@ export const Actions: React.FC<IActionsProps> = ({
       }
 
       const isExecuteAction =
-        getValue(action.entity, Constants.WFACTION) == "false";
+        getValue(action.entity, "duc_actiontype." + Constants.WFACTION) == "false";
       //const code = getValue(action.entity, Constants.ACTION_CODE);
       //if (!iswfaction && code != "") {
       // Here, instead of eval, call the actual function directly
       //  await ShowReport(_context.parameters.reqNoField.raw!);
       //}
       //const varDef: string = "let srNumber = '" + _context.parameters.reqNoField.raw! + "'; ";
-      if (isExecuteAction) {
+      if (isExecuteAction || !isExecuteAction) {
         //await eval(varDef + code);
         // Example inside your PCF control
-        const codeFromField = getValue(action.entity, Constants.ACTION_CODE); // e.g. "openScheduleBoard(formContext);"
+        const codeFromField = action.entity?.duc_actiontype?.duc_actioncommand ?? ""; // e.g. "openScheduleBoard(formContext);"
 
         if (codeFromField) {
+          alert(`[DEBUG] About to run JS code from duc_actioncommand:\n\n${codeFromField}`);
           try {
             //const recordId = (_context.mode as any).contextInfo.entityId;
             //const entityName = (_context.mode as any).contextInfo.entityTypeName;
@@ -641,11 +642,13 @@ export const Actions: React.FC<IActionsProps> = ({
               (_context.mode as any).contextInfo,
               action,
             );
+            alert("[DEBUG] JS code executed successfully.");
           } catch (error) {
+            alert(`[DEBUG] JS code execution FAILED:\n\n${error instanceof Error ? error.message : JSON.stringify(error)}`);
             console.error("Error running dynamic code:", error);
           }
         } else {
-          console.log("No Code Specified");
+          alert("[DEBUG] No duc_actioncommand code found on this action.");
         }
       } else {
         try {

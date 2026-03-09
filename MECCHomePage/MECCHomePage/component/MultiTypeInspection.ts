@@ -322,10 +322,10 @@ export class MultiTypeInspection extends React.Component<
         return;
       }
 
-      // Fetch from junction entity
+      // Fetch from junction entity — include duc_name & duc_namear for labels
       const query =
         `?$filter=_duc_organizationunit_value eq '${this.props.organizationUnitId}'` +
-        `&$select=duc_organizationunitaccounttypesid` +
+        `&$select=duc_organizationunitaccounttypesid,duc_name,duc_namear` +
         `&$expand=duc_AccountType($select=duc_accounttypeid,duc_name,duc_accounttype)`;
 
       const results = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -338,23 +338,8 @@ export class MultiTypeInspection extends React.Component<
         return;
       }
 
-      // Get option set metadata for labels
-      const entityMetadata = await this.xrm.Utility.getEntityMetadata(
-        "account",
-        ["duc_accountinspectiontype"],
-      );
-      const attribute = (entityMetadata as any).Attributes.get(
-        "duc_accountinspectiontype",
-      );
-      const optionSetMap = new Map<number, string>();
-
-      if (attribute?.OptionSet) {
-        Object.values(attribute.OptionSet).forEach((opt: any) => {
-          optionSetMap.set(opt.value, opt.text);
-        });
-      }
-
       // Map results to inspection types
+      // Use duc_namear (Arabic) or duc_name (English) from the junction entity
       const types: Array<{
         value: number;
         label: string;
@@ -364,7 +349,10 @@ export class MultiTypeInspection extends React.Component<
       for (const entity of results.entities) {
         if (entity.duc_AccountType?.duc_accounttype !== undefined) {
           const optionValue = entity.duc_AccountType.duc_accounttype;
-          const label = optionSetMap.get(optionValue) || `Type ${optionValue}`;
+          // Pick label based on language direction
+          const label = this.state.isRTL
+            ? (entity.duc_namear || entity.duc_name || `Type ${optionValue}`)
+            : (entity.duc_name || entity.duc_namear || `Type ${optionValue}`);
 
           types.push({
             value: optionValue,
@@ -677,7 +665,7 @@ export class MultiTypeInspection extends React.Component<
     if (!selectedInspectionType) return [];
 
     if (selectedInspectionType === 1) {
-      requiredFields.push("id", "carColor", "vehicleBrand");
+      requiredFields.push("id");
     } else if ([2, 3, 6].includes(selectedInspectionType)) {
       requiredFields.push("qataryId", "name");
     } else if ([5, 7].includes(selectedInspectionType)) {
@@ -745,7 +733,7 @@ export class MultiTypeInspection extends React.Component<
       const brandLabel =
         vehicleBrand !== null
           ? vehicleBrands.find((v) => v.value === vehicleBrand)?.label ||
-            vehicleBrand
+          vehicleBrand
           : "";
       return `Vehicle ${id} ${carColor} ${brandLabel}`.trim();
     }
@@ -1524,17 +1512,17 @@ export class MultiTypeInspection extends React.Component<
       ),
       // Clear button — colored button beside the field, shown when value is selected and not disabled
       value &&
-        !disabled &&
-        React.createElement(
-          "button",
-          {
-            onClick: () => onChange(""),
-            style: styles.clearButtonStyle,
-            title: this.strings.Clear,
-            type: "button",
-          },
-          this.strings.Clear,
-        ),
+      !disabled &&
+      React.createElement(
+        "button",
+        {
+          onClick: () => onChange(""),
+          style: styles.clearButtonStyle,
+          title: this.strings.Clear,
+          type: "button",
+        },
+        this.strings.Clear,
+      ),
     );
   };
 
@@ -1597,55 +1585,55 @@ export class MultiTypeInspection extends React.Component<
           React.createElement("h2", { style: styles.titleStyle }, popupTitle),
 
           error &&
-            React.createElement("div", { style: styles.errorStyle }, error),
+          React.createElement("div", { style: styles.errorStyle }, error),
 
           // Campaign Selection
           showCampaignField &&
+          React.createElement(
+            "div",
+            { style: styles.fieldStyle },
             React.createElement(
-              "div",
-              { style: styles.fieldStyle },
-              React.createElement(
-                "label",
-                { style: styles.labelStyle },
-                this.strings.Campaign,
-              ),
-              this.renderSelectWithClear(
-                selectedCampaignId || "",
-                (val) => this.handleCampaignChange(val),
-                campaigns.map((c) => ({
-                  key: c.id,
-                  value: c.id,
-                  label: c.name,
-                })),
-                "--",
-                loading,
-                styles,
-              ),
+              "label",
+              { style: styles.labelStyle },
+              this.strings.Campaign,
             ),
+            this.renderSelectWithClear(
+              selectedCampaignId || "",
+              (val) => this.handleCampaignChange(val),
+              campaigns.map((c) => ({
+                key: c.id,
+                value: c.id,
+                label: c.name,
+              })),
+              "--",
+              loading,
+              styles,
+            ),
+          ),
 
           // Incident Type Selection
           showIncidentField &&
+          React.createElement(
+            "div",
+            { style: styles.fieldStyle },
             React.createElement(
-              "div",
-              { style: styles.fieldStyle },
-              React.createElement(
-                "label",
-                { style: styles.labelStyle },
-                this.strings.IncidentType,
-              ),
-              this.renderSelectWithClear(
-                selectedIncidentTypeId || "",
-                (val) => this.handleIncidentTypeChange(val),
-                incidentTypes.map((it) => ({
-                  key: it.id,
-                  value: it.id,
-                  label: it.name,
-                })),
-                "--",
-                loading || incidentTypeReadOnly,
-                styles,
-              ),
+              "label",
+              { style: styles.labelStyle },
+              this.strings.IncidentType,
             ),
+            this.renderSelectWithClear(
+              selectedIncidentTypeId || "",
+              (val) => this.handleIncidentTypeChange(val),
+              incidentTypes.map((it) => ({
+                key: it.id,
+                value: it.id,
+                label: it.name,
+              })),
+              "--",
+              loading || incidentTypeReadOnly,
+              styles,
+            ),
+          ),
 
           React.createElement(
             "div",
@@ -1698,7 +1686,7 @@ export class MultiTypeInspection extends React.Component<
         ),
 
         error &&
-          React.createElement("div", { style: styles.errorStyle }, error),
+        React.createElement("div", { style: styles.errorStyle }, error),
 
         // Inspection Type
         React.createElement(
@@ -1733,223 +1721,223 @@ export class MultiTypeInspection extends React.Component<
 
         // Anonymous Checkbox (for types 3, 6, 7)
         this.shouldShowAnonymousCheckbox() &&
+        React.createElement(
+          "div",
+          { style: styles.checkboxContainerStyle },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: isAnonymous,
+            onChange: (e) => this.setState({ isAnonymous: e.target.checked }),
+            disabled: loading,
+            style: styles.checkboxStyle,
+          }),
           React.createElement(
-            "div",
-            { style: styles.checkboxContainerStyle },
-            React.createElement("input", {
-              type: "checkbox",
-              checked: isAnonymous,
-              onChange: (e) => this.setState({ isAnonymous: e.target.checked }),
-              disabled: loading,
-              style: styles.checkboxStyle,
-            }),
-            React.createElement(
-              "label",
-              {
-                style: {
-                  ...styles.labelStyle,
-                  marginBottom: 0,
-                  cursor: loading ? "not-allowed" : "pointer",
-                } as React.CSSProperties,
-                onClick: () =>
-                  !loading && this.setState({ isAnonymous: !isAnonymous }),
-              },
-              this.strings.Anonymous,
-            ),
+            "label",
+            {
+              style: {
+                ...styles.labelStyle,
+                marginBottom: 0,
+                cursor: loading ? "not-allowed" : "pointer",
+              } as React.CSSProperties,
+              onClick: () =>
+                !loading && this.setState({ isAnonymous: !isAnonymous }),
+            },
+            this.strings.Anonymous,
           ),
+        ),
 
         // ID (Vehicle)
         this.shouldShowField("id") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.ID,
-            ),
-            React.createElement("input", {
-              type: "text",
-              value: id,
-              onChange: (e) => this.handleInputChange("id", e.target.value),
-              disabled: loading,
-              style: styles.inputStyle,
-            }),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.ID,
           ),
+          React.createElement("input", {
+            type: "text",
+            value: id,
+            onChange: (e) => this.handleInputChange("id", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
 
         // Car Color
         this.shouldShowField("carColor") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.CarColor,
-            ),
-            React.createElement("input", {
-              type: "text",
-              value: carColor,
-              onChange: (e) =>
-                this.handleInputChange("carColor", e.target.value),
-              disabled: loading,
-              style: styles.inputStyle,
-            }),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.CarColor,
           ),
+          React.createElement("input", {
+            type: "text",
+            value: carColor,
+            onChange: (e) =>
+              this.handleInputChange("carColor", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
 
         // Vehicle Brand
         this.shouldShowField("vehicleBrand") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.VehicleBrand,
-            ),
-            this.renderSelectWithClear(
-              vehicleBrand !== null ? String(vehicleBrand) : "",
-              (val) => {
-                const parsed = val ? parseInt(val, 10) : null;
-                this.setState({ vehicleBrand: parsed });
-              },
-              vehicleBrands.map((vb) => ({
-                key: String(vb.value),
-                value: String(vb.value),
-                label: vb.label,
-              })),
-              "--",
-              loading,
-              styles,
-            ),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.VehicleBrand,
           ),
+          this.renderSelectWithClear(
+            vehicleBrand !== null ? String(vehicleBrand) : "",
+            (val) => {
+              const parsed = val ? parseInt(val, 10) : null;
+              this.setState({ vehicleBrand: parsed });
+            },
+            vehicleBrands.map((vb) => ({
+              key: String(vb.value),
+              value: String(vb.value),
+              label: vb.label,
+            })),
+            "--",
+            loading,
+            styles,
+          ),
+        ),
 
         // Qatary ID with Barcode Scanner
         this.shouldShowField("qataryId") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.QataryID,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: qataryId,
+              onChange: (e) =>
+                this.handleInputChange("qataryId", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
             React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.QataryID,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: qataryId,
-                onChange: (e) =>
-                  this.handleInputChange("qataryId", e.target.value),
+              "button",
+              {
+                onClick: () => this.handleScanBarcode("qataryId"),
                 disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
+                style: styles.scanButtonStyle,
+                type: "button",
+                title: this.strings.ScanBarcode,
+              },
+              // SVG Barcode Icon
               React.createElement(
-                "button",
+                "svg",
                 {
-                  onClick: () => this.handleScanBarcode("qataryId"),
-                  disabled: loading,
-                  style: styles.scanButtonStyle,
-                  type: "button",
-                  title: this.strings.ScanBarcode,
+                  width: "20",
+                  height: "20",
+                  viewBox: "0 0 24 24",
+                  fill: "none",
+                  stroke: "currentColor",
+                  strokeWidth: "2",
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
                 },
-                // SVG Barcode Icon
-                React.createElement(
-                  "svg",
-                  {
-                    width: "20",
-                    height: "20",
-                    viewBox: "0 0 24 24",
-                    fill: "none",
-                    stroke: "currentColor",
-                    strokeWidth: "2",
-                    strokeLinecap: "round",
-                    strokeLinejoin: "round",
-                  },
-                  React.createElement("path", { d: "M3 5v14" }),
-                  React.createElement("path", { d: "M8 5v14" }),
-                  React.createElement("path", { d: "M12 5v14" }),
-                  React.createElement("path", { d: "M17 5v14" }),
-                  React.createElement("path", { d: "M21 5v14" }),
-                ),
+                React.createElement("path", { d: "M3 5v14" }),
+                React.createElement("path", { d: "M8 5v14" }),
+                React.createElement("path", { d: "M12 5v14" }),
+                React.createElement("path", { d: "M17 5v14" }),
+                React.createElement("path", { d: "M21 5v14" }),
               ),
             ),
           ),
+        ),
 
         // Name
         this.shouldShowField("name") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.Name,
-            ),
-            React.createElement("input", {
-              type: "text",
-              value: name,
-              onChange: (e) => this.handleInputChange("name", e.target.value),
-              disabled: loading,
-              style: styles.inputStyle,
-            }),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.Name,
           ),
+          React.createElement("input", {
+            type: "text",
+            value: name,
+            onChange: (e) => this.handleInputChange("name", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
 
         // CR Number
         this.shouldShowField("crNumber") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            selectedInspectionType === 7
+              ? this.strings.MonourNumber
+              : this.strings.CRNumber,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: crNumber,
+              onChange: (e) =>
+                this.handleInputChange("crNumber", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
             React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              selectedInspectionType === 7
-                ? this.strings.MonourNumber
-                : this.strings.CRNumber,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: crNumber,
-                onChange: (e) =>
-                  this.handleInputChange("crNumber", e.target.value),
+              "button",
+              {
+                onClick: () => this.handleScanBarcode("crNumber"),
                 disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
+                style: styles.scanButtonStyle,
+                type: "button",
+                title: this.strings.ScanBarcode,
+              },
+              // SVG Barcode Icon
               React.createElement(
-                "button",
+                "svg",
                 {
-                  onClick: () => this.handleScanBarcode("crNumber"),
-                  disabled: loading,
-                  style: styles.scanButtonStyle,
-                  type: "button",
-                  title: this.strings.ScanBarcode,
+                  width: "20",
+                  height: "20",
+                  viewBox: "0 0 24 24",
+                  fill: "none",
+                  stroke: "currentColor",
+                  strokeWidth: "2",
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
                 },
-                // SVG Barcode Icon
-                React.createElement(
-                  "svg",
-                  {
-                    width: "20",
-                    height: "20",
-                    viewBox: "0 0 24 24",
-                    fill: "none",
-                    stroke: "currentColor",
-                    strokeWidth: "2",
-                    strokeLinecap: "round",
-                    strokeLinejoin: "round",
-                  },
-                  React.createElement("path", { d: "M3 5v14" }),
-                  React.createElement("path", { d: "M8 5v14" }),
-                  React.createElement("path", { d: "M12 5v14" }),
-                  React.createElement("path", { d: "M17 5v14" }),
-                  React.createElement("path", { d: "M21 5v14" }),
-                ),
+                React.createElement("path", { d: "M3 5v14" }),
+                React.createElement("path", { d: "M8 5v14" }),
+                React.createElement("path", { d: "M12 5v14" }),
+                React.createElement("path", { d: "M17 5v14" }),
+                React.createElement("path", { d: "M21 5v14" }),
               ),
             ),
           ),
+        ),
 
         // Buttons
         React.createElement(

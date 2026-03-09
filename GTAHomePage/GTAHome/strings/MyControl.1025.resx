@@ -87,7 +87,7 @@
   <data name="Taxable" xml:space="preserve"><value>مسجل ضريبى</value></data>
   <data name="NonTaxable" xml:space="preserve"><value>غير مسجل ضريبى</value></data>
   <data name="CRNumber" xml:space="preserve"><value>رقم السجل التجاري:</value></data>
-  <data name="TempCRNumber" xml:space="preserve"><value>رقم السجل التجاري المؤقت:</value></data>
+  <data name="TempCRNumber" xml:space="preserve"><value>الرقم الضريبي:</value></data>
   <data name="Start" xml:space="preserve"><value>ابدأ</value></data>
   <data name="PleaseEnterRequiredFields" xml:space="preserve"><value>يرجى إدخال الحقول المطلوبة</value></data>
   <data name="Error" xml:space="preserve"><value>خطأ</value></data>
