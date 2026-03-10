@@ -15,13 +15,27 @@ import { close } from '../images/close';
 import { headerBase64 } from "../images/header";
 import { stickynote } from "../images/stickynote";
 
+// Cache interface for organization unit data
+interface OrgUnitCache {
+    orgUnitId: string;
+    orgUnitName: string;
+    unknownAccountId?: string;
+    unknownAccountName?: string;
+    incidentTypeId?: string;
+    incidentTypeName?: string;
+    timestamp: number;
+}
+
+const ORG_UNIT_CACHE_KEY = "GTA_OrgUnit_Cache";
+const ORG_UNIT_CACHE_DURATION = 300_000; // 5 minutes
+
 // Define the interface for the component's internal state.
 interface State {
     searchText: string;
     pendingTodayBookings: number | null;
     completedTodayWorkorders: number | null;
     TodayCampaigns: number | null;
-    pendingRequests: number | null; // Add this line
+    pendingRequests: number | null;
     userName: string;
     message?: string;
     isLoading: boolean;
@@ -30,7 +44,14 @@ interface State {
     showAdvancedSearch: boolean;
     patrolStatus: 'none' | 'start' | 'end';
     activePatrolId?: string;
+    activePatrolName?: string;
     showInspectionPopup: boolean;
+    orgUnitId?: string;
+    organizationUnitName?: string;
+    unknownAccountId?: string;
+    unknownAccountName?: string;
+    incidentTypeId?: string;
+    incidentTypeName?: string;
 }
 
 // Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
@@ -165,7 +186,7 @@ export const Main = (props: IProps) => {
         pendingTodayBookings: null,
         completedTodayWorkorders: null,
         TodayCampaigns: null,
-        pendingRequests: null, // Add this line
+        pendingRequests: null,
         userName: strings.Loading,
         message: undefined,
         isLoading: false,
@@ -174,7 +195,14 @@ export const Main = (props: IProps) => {
         showAdvancedSearch: false,
         patrolStatus: 'none',
         activePatrolId: undefined,
+        activePatrolName: undefined,
         showInspectionPopup: false,
+        orgUnitId: undefined,
+        organizationUnitName: undefined,
+        unknownAccountId: undefined,
+        unknownAccountName: undefined,
+        incidentTypeId: undefined,
+        incidentTypeName: undefined,
     });
 
     const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
@@ -199,6 +227,125 @@ export const Main = (props: IProps) => {
         }));
     };
 
+    // Organization unit cache helpers
+    const getOrgUnitFromCache = (userId: string): OrgUnitCache | null => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cached = localStorage.getItem(cacheKey);
+            if (!cached) return null;
+
+            const cacheData: OrgUnitCache = JSON.parse(cached);
+            const now = Date.now();
+
+            if (now - cacheData.timestamp > ORG_UNIT_CACHE_DURATION) {
+                localStorage.removeItem(cacheKey);
+                return null;
+            }
+
+            return cacheData;
+        } catch (error) {
+            console.error("Error reading org unit cache:", error);
+            return null;
+        }
+    };
+
+    const saveOrgUnitToCache = (userId: string, data: Omit<OrgUnitCache, 'timestamp'>): void => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cacheData: OrgUnitCache = {
+                ...data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        } catch (error) {
+            console.error("Error saving org unit cache:", error);
+        }
+    };
+
+    const checkOrganizationUnit = React.useCallback(async (ctx: any, userId: string): Promise<void> => {
+        try {
+            // Try cache first
+            const cachedData = getOrgUnitFromCache(userId);
+            if (cachedData) {
+                setState(prev => ({
+                    ...prev,
+                    unknownAccountId: cachedData.unknownAccountId,
+                    unknownAccountName: cachedData.unknownAccountName,
+                    incidentTypeId: cachedData.incidentTypeId,
+                    incidentTypeName: cachedData.incidentTypeName,
+                    orgUnitId: cachedData.orgUnitId,
+                    organizationUnitName: cachedData.orgUnitName,
+                }));
+                return;
+            }
+
+            // Get user's organizational unit
+            const userResult = await ctx.webAPI.retrieveRecord(
+                "systemuser",
+                userId,
+                "?$select=_duc_organizationalunitid_value"
+            );
+
+            if (!userResult._duc_organizationalunitid_value) {
+                console.warn("No organizational unit found for the user.");
+                return;
+            }
+
+            const orgUnitId = userResult._duc_organizationalunitid_value;
+
+            // Retrieve the organizational unit details with default incident type
+            const orgUnitResult = await ctx.webAPI.retrieveRecord(
+                "msdyn_organizationalunit",
+                orgUnitId,
+                "?$select=_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name)"
+            );
+
+            const orgUnitName = orgUnitResult.duc_englishname || "";
+            const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
+            const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
+
+            let incidentTypeId: string | undefined = undefined;
+            let incidentTypeName: string | undefined = undefined;
+
+            if (orgUnitResult._duc_defaultincidenttype_value && orgUnitResult.duc_DefaultIncidenttype) {
+                incidentTypeId = orgUnitResult.duc_DefaultIncidenttype.msdyn_incidenttypeid;
+                incidentTypeName = orgUnitResult.duc_DefaultIncidenttype.msdyn_name;
+            }
+
+            // Save to cache
+            saveOrgUnitToCache(userId, {
+                orgUnitId,
+                orgUnitName,
+                unknownAccountId,
+                unknownAccountName,
+                incidentTypeId,
+                incidentTypeName,
+            });
+
+            setState(prev => ({
+                ...prev,
+                unknownAccountId,
+                unknownAccountName,
+                incidentTypeId,
+                incidentTypeName,
+                orgUnitId,
+                organizationUnitName: orgUnitName,
+            }));
+
+        } catch (error) {
+            console.error("Error checking organization unit:", error);
+            setState(prev => ({
+                ...prev,
+                unknownAccountId: undefined,
+                unknownAccountName: undefined,
+                incidentTypeId: undefined,
+                incidentTypeName: undefined,
+                orgUnitId: undefined,
+                organizationUnitName: undefined,
+            }));
+        }
+    }, []);
+
     // Check patrol status on load
     const checkPatrolStatus = React.useCallback(async (): Promise<void> => {
         const ctx: any = props.context;
@@ -210,7 +357,7 @@ export const Main = (props: IProps) => {
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const activePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -222,13 +369,14 @@ export const Main = (props: IProps) => {
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'end',
-                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid
+                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: activePatrolResults.entities[0].new_name
                 }));
                 return;
             }
 
             // Check for available patrol to start (status = 1 or 100000004)
-            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const availablePatrolResults = await ctx.webAPI.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -240,14 +388,16 @@ export const Main = (props: IProps) => {
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'start',
-                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid
+                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: availablePatrolResults.entities[0].new_name
                 }));
             } else {
                 // No patrol available
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'none',
-                    activePatrolId: undefined
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
                 }));
             }
 
@@ -256,7 +406,8 @@ export const Main = (props: IProps) => {
             setState(prev => ({
                 ...prev,
                 patrolStatus: 'none',
-                activePatrolId: undefined
+                activePatrolId: undefined,
+                activePatrolName: undefined
             }));
         }
     }, [props.context]);
@@ -271,7 +422,7 @@ export const Main = (props: IProps) => {
             let pendingRequests = 0;
 
             try {
-                
+
                 let resourceId: string | null = localStorage.getItem(CACHE_KEY);
                 const pendingQuery = `?$select=duc_inspectionactionid&$filter=_ownerid_value eq '${userId}' and duc_status ne 100000005 and duc_status ne 100000003`;
 
@@ -362,8 +513,7 @@ export const Main = (props: IProps) => {
                     pendingTodayBookings: remainingToday,
                     completedTodayWorkorders: completedToday,
                     TodayCampaigns: campaignsToday,
-                    pendingRequests: pendingRequests, // Add this line
-
+                    pendingRequests: pendingRequests,
                     userName: username,
                 }));
 
@@ -371,12 +521,17 @@ export const Main = (props: IProps) => {
                     "MOCI_userCounts",
                     JSON.stringify({ userName: username })
                 );
+
+                // Load organization unit data
+                if (!isOffline()) {
+                    await checkOrganizationUnit(ctx, userId);
+                }
             }
         } catch (e) {
             console.warn("User data load failed, using cache.", e);
             restoreCache();
         }
-    }, [props.context]);
+    }, [props.context, checkOrganizationUnit]);
 
     const handleOpenAdvancedSearch = (): void => {
         setState(prev => ({ ...prev, showAdvancedSearch: true }));
@@ -984,11 +1139,18 @@ export const Main = (props: IProps) => {
             context: props.context
         }),
         // MultiTypeInspection Popup
-        React.createElement(MultiTypeInspection, {
+        state.showInspectionPopup && React.createElement(MultiTypeInspection, {
             context: props.context,
-            isOpen: state.showInspectionPopup,
+            isOpen: true,
             onClose: closeInspectionPopup,
             activePatrolId: state.activePatrolId,
+            activePatrolName: state.activePatrolName,
+            incidentTypeId: state.incidentTypeId,
+            incidentTypeName: state.incidentTypeName,
+            unknownAccountId: state.unknownAccountId,
+            unknownAccountName: state.unknownAccountName,
+            organizationUnitId: state.orgUnitId,
+            organizationUnitName: state.organizationUnitName,
         })
     );
 };

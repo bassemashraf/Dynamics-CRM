@@ -29,6 +29,7 @@ interface IMultiTypeInspectionState {
     value: number;
     label: string;
     accountTypeId: string;
+    orgUnitAccountTypeId?: string;
   }>;
   selectedInspectionType: number | null;
   qataryId: string;
@@ -344,6 +345,7 @@ export class MultiTypeInspection extends React.Component<
         value: number;
         label: string;
         accountTypeId: string;
+        orgUnitAccountTypeId?: string;
       }> = [];
 
       for (const entity of results.entities) {
@@ -358,6 +360,7 @@ export class MultiTypeInspection extends React.Component<
             value: optionValue,
             label: label,
             accountTypeId: entity.duc_AccountType.duc_accounttypeid,
+            orgUnitAccountTypeId: entity.duc_organizationunitaccounttypesid,
           });
         }
       }
@@ -536,25 +539,30 @@ export class MultiTypeInspection extends React.Component<
   private handleInspectionTypeChange = (
     e: React.ChangeEvent<HTMLSelectElement>,
   ): void => {
-    const value = e.target.value ? parseInt(e.target.value, 10) : null;
+    const selectedGuid = e.target.value || null;
 
     let accountTypeRecord: any = null;
+    let optionValue: number | null = null;
 
-    if (value !== null) {
+    if (selectedGuid) {
       const inspectionType = this.state.inspectionTypes.find(
-        (t) => t.value === value,
+        (t) => t.orgUnitAccountTypeId === selectedGuid || t.accountTypeId === selectedGuid,
       );
-      if (inspectionType?.accountTypeId) {
-        accountTypeRecord = {
-          duc_accounttypeid: inspectionType.accountTypeId,
-          duc_accounttype: value,
-          duc_name: inspectionType.label,
-        };
+      if (inspectionType) {
+        optionValue = inspectionType.value;
+        if (inspectionType.accountTypeId) {
+          accountTypeRecord = {
+            duc_accounttypeid: inspectionType.accountTypeId,
+            duc_accounttype: optionValue,
+            duc_name: inspectionType.label,
+            duc_organizationunitaccounttypesid: inspectionType.orgUnitAccountTypeId,
+          };
+        }
       }
     }
 
     this.setState({
-      selectedInspectionType: value,
+      selectedInspectionType: optionValue,
       qataryId: "",
       name: "",
       crNumber: "",
@@ -1698,9 +1706,7 @@ export class MultiTypeInspection extends React.Component<
             this.strings.InspectionType,
           ),
           this.renderSelectWithClear(
-            selectedInspectionType !== null
-              ? String(selectedInspectionType)
-              : "",
+            this.state.accountTypeRecord?.duc_organizationunitaccounttypesid || this.state.accountTypeRecord?.duc_accounttypeid || "",
             (val) => {
               // Build a synthetic event for the existing handler
               const syntheticEvent = {
@@ -1709,8 +1715,8 @@ export class MultiTypeInspection extends React.Component<
               this.handleInspectionTypeChange(syntheticEvent);
             },
             inspectionTypes.map((t) => ({
-              key: String(t.value),
-              value: String(t.value),
+              key: t.orgUnitAccountTypeId || t.accountTypeId,
+              value: t.orgUnitAccountTypeId || t.accountTypeId || "",
               label: t.label,
             })),
             this.strings.chooseInspectionType,
