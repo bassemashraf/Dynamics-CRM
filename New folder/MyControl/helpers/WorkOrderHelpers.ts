@@ -453,7 +453,7 @@ export class WorkOrderHelpers {
                 'duc_subaccount@odata.bind': `/accounts(${data.subAccount.id})`,
                 'msdyn_serviceaccount@odata.bind': `/accounts(${data.serviceAccount.id})`,
                 'msdyn_primaryincidenttype@odata.bind': `/msdyn_incidenttypes(${data.incidentType.id})`,
-                'duc_incidenttype@odata.bind': `/msdyn_incidenttypes(${data.incidentType.id})`,
+                'duc_incidenttype': data.incidentType.name,
                 'duc_Department@odata.bind': `/msdyn_organizationalunits(${data.department.id})`,
                 'msdyn_systemstatus': 690970001
             };
