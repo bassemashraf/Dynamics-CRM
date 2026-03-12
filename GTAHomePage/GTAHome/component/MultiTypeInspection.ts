@@ -219,23 +219,25 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private getFromCache = <T>(key: string): T | null => {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) return null;
+    return null;
+    // try {
 
-      const cacheData: CacheData<T> = JSON.parse(cached);
-      const now = Date.now();
+    //   const cached = localStorage.getItem(key);
+    //   if (!cached) return null;
 
-      if (now - cacheData.timestamp > CACHE_DURATION) {
-        localStorage.removeItem(key);
-        return null;
-      }
+    //   const cacheData: CacheData<T> = JSON.parse(cached);
+    //   const now = Date.now();
 
-      return cacheData.data;
-    } catch (error) {
-      console.error(`Error reading cache for ${key}:`, error);
-      return null;
-    }
+    //   if (now - cacheData.timestamp > CACHE_DURATION) {
+    //     localStorage.removeItem(key);
+    //     return null;
+    //   }
+
+    //   return cacheData.data;
+    // } catch (error) {
+    //   console.error(`Error reading cache for ${key}:`, error);
+    //   return null;
+    // }
   };
 
   private saveToCache = <T>(key: string, data: T): void => {
@@ -313,12 +315,13 @@ export class MultiTypeInspection extends React.Component<
     if (cached) return cached;
 
     try {
-      const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
+      const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000 and duc_campaignstatus eq 2 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
 
       const results = await this.xrm.WebApi.retrieveMultipleRecords(
         "new_inspectioncampaign",
         query,
       );
+
 
       const campaigns = results.entities.map((entity: any) => ({
         id: entity.new_inspectioncampaignid,
@@ -580,15 +583,22 @@ export class MultiTypeInspection extends React.Component<
   private searchOrCreateAccount = async (): Promise<string | null> => {
     try {
       const { crNumber, tempCrNumber } = this.state;
-      // Use CR Number if filled, otherwise fall back to TIN CR Number
-      const identifier = crNumber.trim() || tempCrNumber.trim();
+      const cleanCr = crNumber.trim();
+      const cleanTin = tempCrNumber.trim();
 
-      if (!identifier) {
+      if (!cleanCr && !cleanTin) {
         throw new Error(this.strings.PleaseEnterRequiredFields);
       }
 
-      // Search for existing account by CR/TIN number
-      const filterQuery = `duc_accountidentifier eq '${identifier}'`;
+      // Search for existing account by CR or TIN number
+      let filterQuery = "";
+      if (cleanCr && cleanTin) {
+        filterQuery = `duc_businessregistrationnumber eq '${cleanCr}' or duc_taxidentificationnumber eq '${cleanTin}'`;
+      } else if (cleanCr) {
+        filterQuery = `duc_businessregistrationnumber eq '${cleanCr}'`;
+      } else if (cleanTin) {
+        filterQuery = `duc_taxidentificationnumber eq '${cleanTin}'`;
+      }
 
       const searchResults = await this.xrm.WebApi.retrieveMultipleRecords(
         "account",
@@ -604,9 +614,15 @@ export class MultiTypeInspection extends React.Component<
       const accountName = this.getAccountName();
       const newAccount: any = {
         name: accountName,
-        duc_accountidentifier: identifier,
         customertypecode: 2, // Company
       };
+
+      if (cleanCr) {
+        newAccount.duc_businessregistrationnumber = cleanCr;
+      }
+      if (cleanTin) {
+        newAccount.duc_taxidentificationnumber = cleanTin;
+      }
 
       const createdAccount = await this.xrm.WebApi.createRecord(
         "account",

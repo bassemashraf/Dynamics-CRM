@@ -339,7 +339,6 @@ export class WorkOrderHelpers {
             return result.id;
         } catch (error: any) {
             console.error("Error creating auto booking:", error);
-            alert("Error creating auto booking: " + (error?.message || error) + (error?.innerError ? "\nInner: " + JSON.stringify(error.innerError) : ""));
             throw error;
         }
     }
@@ -454,7 +453,9 @@ export class WorkOrderHelpers {
                 'duc_subaccount@odata.bind': `/accounts(${data.subAccount.id})`,
                 'msdyn_serviceaccount@odata.bind': `/accounts(${data.serviceAccount.id})`,
                 'msdyn_primaryincidenttype@odata.bind': `/msdyn_incidenttypes(${data.incidentType.id})`,
-                'duc_Department@odata.bind': `/msdyn_organizationalunits(${data.department.id})`
+                'duc_incidenttype@odata.bind': `/msdyn_incidenttypes(${data.incidentType.id})`,
+                'duc_Department@odata.bind': `/msdyn_organizationalunits(${data.department.id})`,
+                'msdyn_systemstatus': 690970001
             };
 
             // Optional fields

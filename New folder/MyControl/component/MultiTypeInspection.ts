@@ -1051,7 +1051,6 @@ export class MultiTypeInspection extends React.Component<
       } catch (peError: any) {
         this.xrm.Utility.closeProgressIndicator();
         console.warn("Process extension creation failed (non-blocking):", peError);
-        alert(`❌ Process Extension Error:\n${peError?.message || peError}`);
       }
 
       // STEP 10: Create auto booking if from mobile
@@ -1073,7 +1072,6 @@ export class MultiTypeInspection extends React.Component<
         } catch (bookingError: any) {
           this.xrm.Utility.closeProgressIndicator();
           console.error("Booking creation failed:", bookingError);
-          alert(`❌ Booking Error:\n${bookingError?.message || bookingError}`);
         }
       }
 
@@ -1092,7 +1090,6 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error creating work order:", error);
-      alert(`❌ Work Order Error:\n${error?.message || error}`);
       throw error;
     }
   };

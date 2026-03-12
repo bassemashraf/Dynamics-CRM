@@ -69,7 +69,6 @@ export class ProcessExtensionHelpers {
         const msg =
           "[ProcessExtension] Incident type has no process definition linked";
         console.warn(msg);
-        alert(msg);
         return null;
       }
 
@@ -125,25 +124,11 @@ export class ProcessExtensionHelpers {
         parentLookupName: def.duc_parentlookup,
       };
 
-      // ✅ SUCCESS ALERT — show all retrieved values
-      // alert(
-      //     `✅ Process Definition Retrieved!\n` +
-      //     `Name: ${result.name}\n` +
-      //     `ID: ${result.id}\n` +
-      //     `Start Stage: ${result.startStageName || 'null'} (${result.startStageId || 'null'})\n` +
-      //     `Default Status: ${result.defaultStatusName || 'null'} (${result.defaultStatusId || 'null'})\n` +
-      //     `Default SubStatus: ${result.defaultSubStatusName || 'null'} (${result.defaultSubStatusId || 'null'})\n` +
-      //     `Start Action: ${result.startActionName || 'null'} (${result.startActionId || 'null'})\n` +
-      //     `Customer Lookup: ${result.customerLookupName || 'null'}\n` +
-      //     `Subject Field: ${result.subjectFieldName || 'null'}\n` +
-      //     `Parent Lookup: ${result.parentLookupName || 'null'}`
-      // );
 
       return result;
     } catch (error: any) {
       const msg = `[ProcessExtension] Error retrieving process definition from incident type: ${error?.message || error}`;
       console.error(msg, error);
-      alert(msg);
       return null;
     }
   }
@@ -226,16 +211,12 @@ export class ProcessExtensionHelpers {
       //   createData["duc_LastActionTaken_duc_ProcessExtension@odata.bind"] =
       //     `/duc_stageactions(01510048-cfff-4830-8e20-0552fe56a865)`;
       // }
-      alert(
-        `🔍 Creating PE with data:\n${JSON.stringify(createData, null, 2)}`,
-      );
 
       const result = await this.xrm.WebApi.createRecord(
         "duc_processextension",
         createData,
       );
       const peId = result.id;
-      alert(`✅ PE created with all lookups: ${peId}`);
 
       // ================================================================
       // Link PE back to work order
@@ -245,7 +226,7 @@ export class ProcessExtensionHelpers {
           "duc_processextension@odata.bind": `/duc_processextensions(${peId})`,
         });
       } catch (linkError: any) {
-        alert(`⚠️ Could not link PE to WO: ${linkError?.message || linkError}`);
+        console.error(`⚠️ Could not link PE to WO: ${linkError?.message || linkError}`);
       }
 
       return peId;
@@ -259,7 +240,7 @@ export class ProcessExtensionHelpers {
         /* ignore */
       }
 
-      alert(`❌ Error creating PE:\n${errorDetails}`);
+      console.error(`❌ Error creating PE:\n${errorDetails}`);
       return null;
     }
   }
@@ -293,7 +274,6 @@ export class ProcessExtensionHelpers {
       const msg =
         "[ProcessExtension] No process definition found on incident type — skipping process extension creation";
       console.warn(msg);
-      alert(msg);
       return null;
     }
 

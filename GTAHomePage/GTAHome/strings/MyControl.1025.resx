@@ -94,7 +94,7 @@
   <data name="SelectCampaign" xml:space="preserve"><value>اختر الحملة</value></data>
   <data name="SelectIncidentType" xml:space="preserve"><value>اختر نوع الحادثة</value></data>
   <data name="Campaign" xml:space="preserve"><value>الحملة</value></data>
-  <data name="IncidentType" xml:space="preserve"><value>نوع الحادثة</value></data>
+  <data name="IncidentType" xml:space="preserve"><value>نوع التفتيش</value></data>
   <data name="Continue" xml:space="preserve"><value>متابعة</value></data>
   <data name="CreatingAccount" xml:space="preserve"><value>جاري إنشاء الحساب...</value></data>
   <data name="CreatingWorkOrder" xml:space="preserve"><value>جاري إنشاء أمر العمل...</value></data>

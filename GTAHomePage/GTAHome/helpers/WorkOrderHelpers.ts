@@ -46,13 +46,13 @@ export class WorkOrderHelpers {
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 "msdyn_incidenttype",
                 `?$select=_duc_organizationalunitid_value` +
-                `&$expand=duc_organizationalunitid($select=msdyn_organizationalunitid,msdyn_name)` +
+                `&$expand=duc_organizationalunitId($select=msdyn_organizationalunitid,msdyn_name)` +
                 `&$filter=msdyn_incidenttypeid eq ${incidentTypeId}`
             );
 
             if (results?.entities?.length > 0) {
                 const incidentTypeRecord = results.entities[0];
-                const orgUnitLookup = incidentTypeRecord["duc_organizationalunitid"];
+                const orgUnitLookup = incidentTypeRecord["duc_organizationalunitId"];
 
                 if (orgUnitLookup) {
                     return {
@@ -114,7 +114,7 @@ export class WorkOrderHelpers {
                 "msdyn_incidenttype",
                 incidentTypeId,
                 "?$select=_duc_organizationalunitid_value,_msdyn_defaultworkordertype_value" +
-                "&$expand=duc_organizationalunitid($select=msdyn_organizationalunitid,msdyn_name)"
+                "&$expand=duc_organizationalunitId($select=msdyn_organizationalunitid,msdyn_name)"
             );
 
             const response: {
