@@ -347,7 +347,7 @@ export class MultiTypeInspection extends React.Component<
     if (cached) return cached;
 
     try {
-      const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$orderby=msdyn_name asc`;
+      const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_hidden eq false&$select=msdyn_incidenttypeid,msdyn_name&$orderby=msdyn_name asc`;
 
       const results = await this.xrm.WebApi.retrieveMultipleRecords(
         "msdyn_incidenttype",

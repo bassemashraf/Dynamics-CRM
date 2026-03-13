@@ -14,7 +14,7 @@ export class IncidentTypeHelpers {
         try {
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 'msdyn_incidenttype',
-                `?$select=msdyn_incidenttypeid,msdyn_name&$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$orderby=msdyn_name`
+                `?$select=msdyn_incidenttypeid,msdyn_name&$filter=_duc_organizationalunitid_value eq '${orgUnitId}' and duc_hidden eq false&$orderby=msdyn_name`
             );
 
             return (results?.entities || []).map((e: any) => ({
@@ -38,6 +38,9 @@ export class IncidentTypeHelpers {
                     <attribute name='msdyn_incidenttypeid' />
                     <attribute name='msdyn_name' />
                     <order attribute='msdyn_name' descending='false' />
+                    <filter type='and'>
+                        <condition attribute='duc_hidden' operator='eq' value='0' />
+                    </filter>
                     <link-entity name='duc_msdyn_incidenttype_msdyn_organizational' from='msdyn_incidenttypeid' to='msdyn_incidenttypeid' visible='false' intersect='true'>
                         <link-entity name='msdyn_organizationalunit' from='msdyn_organizationalunitid' to='msdyn_organizationalunitid' alias='ae'>
                             <link-entity name='systemuser' from='duc_organizationalunitid' to='msdyn_organizationalunitid' link-type='inner' alias='af'>

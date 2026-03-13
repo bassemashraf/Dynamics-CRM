@@ -86,6 +86,7 @@ interface LocalizedStrings {
   CreatingBooking: string;
   ScanBarcode: string;
   Clear: string;
+  PlateNumber: string;
 }
 
 // Cache constants
@@ -196,6 +197,8 @@ export class MultiTypeInspection extends React.Component<
       ScanBarcode:
         props.context.resources.getString("ScanBarcode") || "Scan Barcode",
       Clear: props.context.resources.getString("Clear") || "Clear",
+      PlateNumber:
+        props.context.resources.getString("PlateNumber") || "Plate Number",
     };
 
     this.state = {
@@ -1627,7 +1630,7 @@ export class MultiTypeInspection extends React.Component<
             React.createElement(
               "label",
               { style: styles.labelStyle },
-              this.strings.IncidentType,
+              this.strings.IncidentType + " *",
             ),
             this.renderSelectWithClear(
               selectedIncidentTypeId || "",
@@ -1703,7 +1706,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement(
             "label",
             { style: styles.labelStyle },
-            this.strings.InspectionType,
+            this.strings.InspectionType + " *",
           ),
           this.renderSelectWithClear(
             this.state.accountTypeRecord?.duc_organizationunitaccounttypesid || this.state.accountTypeRecord?.duc_accounttypeid || "",
@@ -1760,7 +1763,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement(
             "label",
             { style: styles.labelStyle },
-            this.strings.ID,
+            this.strings.PlateNumber + " *",
           ),
           React.createElement("input", {
             type: "text",
@@ -1826,7 +1829,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement(
             "label",
             { style: styles.labelStyle },
-            this.strings.QataryID,
+            this.strings.QataryID + " *",
           ),
           React.createElement(
             "div",
@@ -1879,7 +1882,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement(
             "label",
             { style: styles.labelStyle },
-            this.strings.Name,
+            this.strings.Name + " *",
           ),
           React.createElement("input", {
             type: "text",
@@ -1898,9 +1901,9 @@ export class MultiTypeInspection extends React.Component<
           React.createElement(
             "label",
             { style: styles.labelStyle },
-            selectedInspectionType === 7
+            (selectedInspectionType === 7
               ? this.strings.MonourNumber
-              : this.strings.CRNumber,
+              : this.strings.CRNumber) + " *",
           ),
           React.createElement(
             "div",
