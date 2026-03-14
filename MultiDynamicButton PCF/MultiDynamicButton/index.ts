@@ -223,7 +223,8 @@ export class MultiDynamicButton implements ComponentFramework.StandardControl<II
         try {
             console.log("MultiDynamicButton: Retrieving action type data:", actionTypeName);
 
-            const filter = `?$select=duc_actioncommand,duc_color,duc_icon&$filter=duc_name eq '${actionTypeName}'&$top=1`;
+            const escapedName = actionTypeName.replace(/'/g, "''");
+            const filter = `?$select=duc_actioncommand,duc_color,duc_icon&$filter=duc_name eq '${escapedName}'&$top=1`;
             const result = await this._context.webAPI.retrieveMultipleRecords("duc_actiontype", filter);
 
             if (result && result.entities && result.entities.length > 0) {
@@ -240,8 +241,13 @@ export class MultiDynamicButton implements ComponentFramework.StandardControl<II
                 console.log("MultiDynamicButton: No action type found:", actionTypeName);
                 return null;
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("MultiDynamicButton: Error retrieving action type:", error);
+            const errorMessage = error?.message || String(error);
+            await this._context.navigation.openAlertDialog({
+                text: "Error retrieving action type: " + errorMessage,
+                confirmButtonLabel: "OK"
+            });
             return null;
         }
     }
@@ -265,6 +271,19 @@ export class MultiDynamicButton implements ComponentFramework.StandardControl<II
         let actionTypeData: IActionTypeData | null = null;
         if (actionTypeName) {
             actionTypeData = await this.getActionTypeData(actionTypeName);
+        }
+
+        // Debug alert for button 3
+        if (config.actionTypeIdParam === "button3ActionTypeId") {
+            await this._context.navigation.openAlertDialog({
+                text: `[DEBUG Button 3]\n` +
+                    `actionTypeName: "${actionTypeName}"\n` +
+                    `actionTypeData found: ${actionTypeData !== null}\n` +
+                    `code: "${actionTypeData?.code ?? "N/A"}"\n` +
+                    `color: "${actionTypeData?.color ?? "N/A"}"\n` +
+                    `icon: "${actionTypeData?.icon ?? "N/A"}"`,
+                confirmButtonLabel: "OK"
+            });
         }
 
         // Resolve color: action type color → default blue
