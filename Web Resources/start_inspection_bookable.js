@@ -33,6 +33,10 @@ function getMSG() {
     };
 }
 
+function isOffline() {
+    return Xrm.Utility.getGlobalContext().client.isOffline();
+}
+
 function IsFromMobile() {
     try {
         return (Xrm.Page.context.client.getClient() === "Mobile" &&
@@ -178,11 +182,14 @@ async function createDailyInspection_FromBooking(workOrderId) {
         }
 
         const createdBy = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+        const offline = isOffline();
 
-        const resourceRes = await Xrm.WebApi.retrieveMultipleRecords(
-            "bookableresource",
-            `?$select=bookableresourceid&$filter=_userid_value eq ${createdBy} and resourcetype eq 3&$top=1`
-        );
+        // Bookable resource query — offline uses 'userid', online uses '_userid_value'
+        const resourceFilter = offline
+            ? `?$select=bookableresourceid&$filter=userid eq ${createdBy} and resourcetype eq 3&$top=1`
+            : `?$select=bookableresourceid&$filter=_userid_value eq ${createdBy} and resourcetype eq 3&$top=1`;
+
+        const resourceRes = await Xrm.WebApi.retrieveMultipleRecords("bookableresource", resourceFilter);
 
         if (!resourceRes.entities || resourceRes.entities.length === 0) {
             Xrm.Utility.closeProgressIndicator();
@@ -194,10 +201,17 @@ async function createDailyInspection_FromBooking(workOrderId) {
         const currentDateTime = new Date();
         const todayStart = new Date(currentDateTime.getFullYear(), currentDateTime.getMonth(), currentDateTime.getDate());
 
-        const attendanceRes = await Xrm.WebApi.retrieveMultipleRecords(
-            "duc_attendance",
-            `?$select=duc_attendanceid&$filter=_duc_user_value eq ${createdBy} and Microsoft.Dynamics.CRM.On(PropertyName='createdon',PropertyValue='${todayStart.toISOString()}')&$top=1`
-        );
+        // Attendance query — offline uses 'duc_user' + ge/lt date range, online uses '_duc_user_value' + Microsoft.Dynamics.CRM.On
+        let attendanceFilter;
+        if (offline) {
+            const tomorrowStart = new Date(todayStart);
+            tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+            attendanceFilter = `?$select=duc_attendanceid&$filter=duc_user eq ${createdBy} and createdon ge ${todayStart.toISOString()} and createdon lt ${tomorrowStart.toISOString()}&$top=1`;
+        } else {
+            attendanceFilter = `?$select=duc_attendanceid&$filter=_duc_user_value eq ${createdBy} and Microsoft.Dynamics.CRM.On(PropertyName='createdon',PropertyValue='${todayStart.toISOString()}')&$top=1`;
+        }
+
+        const attendanceRes = await Xrm.WebApi.retrieveMultipleRecords("duc_attendance", attendanceFilter);
 
         let attendanceId;
 
@@ -205,7 +219,8 @@ async function createDailyInspection_FromBooking(workOrderId) {
             attendanceId = attendanceRes.entities[0].duc_attendanceid;
         } else {
             const attendanceResult = await Xrm.WebApi.createRecord("duc_attendance", {
-                "duc_User@odata.bind": `/systemusers(${createdBy})`
+                "duc_User@odata.bind": `/systemusers(${createdBy})`,
+                "duc_createdoffline": offline
             });
             attendanceId = attendanceResult.id;
         }
@@ -214,7 +229,8 @@ async function createDailyInspection_FromBooking(workOrderId) {
             "duc_WorkOrder@odata.bind": `/msdyn_workorders(${workOrderId})`,
             "duc_BookableResource@odata.bind": `/bookableresources(${resourceId})`,
             "duc_Attendance@odata.bind": `/duc_attendances(${attendanceId})`,
-            "duc_startinspectiontime": currentDateTime.toISOString()
+            "duc_startinspectiontime": currentDateTime.toISOString(),
+            "duc_createdoffline": offline
         };
 
         await Xrm.WebApi.createRecord("duc_dailyinspectorinspections", recordData);

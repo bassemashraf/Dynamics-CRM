@@ -243,11 +243,6 @@ export class MultiDynamicButton implements ComponentFramework.StandardControl<II
             }
         } catch (error: any) {
             console.error("MultiDynamicButton: Error retrieving action type:", error);
-            const errorMessage = error?.message || String(error);
-            await this._context.navigation.openAlertDialog({
-                text: "Error retrieving action type: " + errorMessage,
-                confirmButtonLabel: "OK"
-            });
             return null;
         }
     }
@@ -273,18 +268,6 @@ export class MultiDynamicButton implements ComponentFramework.StandardControl<II
             actionTypeData = await this.getActionTypeData(actionTypeName);
         }
 
-        // Debug alert for button 3
-        if (config.actionTypeIdParam === "button3ActionTypeId") {
-            await this._context.navigation.openAlertDialog({
-                text: `[DEBUG Button 3]\n` +
-                    `actionTypeName: "${actionTypeName}"\n` +
-                    `actionTypeData found: ${actionTypeData !== null}\n` +
-                    `code: "${actionTypeData?.code ?? "N/A"}"\n` +
-                    `color: "${actionTypeData?.color ?? "N/A"}"\n` +
-                    `icon: "${actionTypeData?.icon ?? "N/A"}"`,
-                confirmButtonLabel: "OK"
-            });
-        }
 
         // Resolve color: action type color → default blue
         const buttonColor = (actionTypeData && actionTypeData.color) ? actionTypeData.color : "#0078d4";

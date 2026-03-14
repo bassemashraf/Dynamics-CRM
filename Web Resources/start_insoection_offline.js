@@ -260,7 +260,8 @@ async function createDailyInspection() {
         } else {
             // Create new attendance record
             const attendanceData = {
-                "duc_User@odata.bind": `/systemusers(${createdBy})`
+                "duc_User@odata.bind": `/systemusers(${createdBy})`,
+                "duc_createdoffline": offline
             };
 
             const attendanceResult = await Xrm.WebApi.createRecord("duc_attendance", attendanceData);
@@ -273,7 +274,8 @@ async function createDailyInspection() {
             "duc_WorkOrder@odata.bind": `/msdyn_workorders(${workOrderId})`,
             "duc_BookableResource@odata.bind": `/bookableresources(${resourceId})`,
             "duc_Attendance@odata.bind": `/duc_attendances(${attendanceId})`,
-            "duc_startinspectiontime": currentDateTime.toISOString()
+            "duc_startinspectiontime": currentDateTime.toISOString(),
+            "duc_createdoffline": offline
         };
 
         const result = await Xrm.WebApi.createRecord("duc_dailyinspectorinspections", recordData);
