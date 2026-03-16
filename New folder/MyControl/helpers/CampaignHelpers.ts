@@ -24,7 +24,7 @@ export class CampaignHelpers {
     ): Promise<Array<{ id: string; name: string; status?: number; type?: number }>> {
         try {
             const today = new Date().toISOString().split('T')[0];
-            let filter = `_duc_organizationalunitid_value eq '${orgUnitId}'`;
+            let filter = `duc_organizationalunitid eq '${orgUnitId}'`;
 
             if (options?.status !== undefined) {
                 filter += ` and duc_campaignstatus eq ${options.status}`;
@@ -39,7 +39,7 @@ export class CampaignHelpers {
             }
 
             if (options?.ownerId) {
-                filter += ` and _ownerid_value eq '${options.ownerId}'`;
+                filter += ` and ownerid eq '${options.ownerId}'`;
             }
 
             if (options?.includeActivePatrols) {

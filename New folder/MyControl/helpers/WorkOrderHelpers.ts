@@ -336,9 +336,11 @@ export class WorkOrderHelpers {
             };
             const result = await this.xrm.WebApi.createRecord("bookableresourcebooking", bookingData);
             console.log("Booking created successfully. Booking ID:", result.id);
+            alert("Booking created successfully. ID: " + result.id);
             return result.id;
         } catch (error: any) {
             console.error("Error creating auto booking:", error);
+            alert("Error creating auto booking: " + (error?.message || error));
             throw error;
         }
     }
@@ -403,8 +405,8 @@ export class WorkOrderHelpers {
     static async getActivePatrolCampaign(userId: string, orgUnitId: string): Promise<{ id: string; name: string } | null> {
         try {
             const filter = `duc_campaignstatus eq 2 and duc_campaigninternaltype eq 100000004 ` +
-                `and duc_campaigntype eq 100000004 and _ownerid_value eq ${userId} ` +
-                `and _duc_organizationalunitid_value eq ${orgUnitId}`;
+                `and duc_campaigntype eq 100000004 and ownerid eq ${userId} ` +
+                `and duc_organizationalunitid eq ${orgUnitId}`;
 
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -499,10 +501,12 @@ export class WorkOrderHelpers {
 
             const result = await this.xrm.WebApi.createRecord('msdyn_workorder', workOrderData);
             console.log('Work order created successfully:', result.id);
+            alert('Work order created successfully. ID: ' + result.id);
 
             return result.id;
         } catch (error: any) {
             console.error('Error creating work order:', error);
+            alert('Error creating work order: ' + (error?.message || error));
             throw error;
         }
     }

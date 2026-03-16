@@ -26,7 +26,12 @@ interface IMultiTypeInspectionProps {
 
 interface IMultiTypeInspectionState {
   isRTL: boolean;
-  inspectionTypes: Array<{ value: number; label: string }>;
+  inspectionTypes: Array<{
+    value: number;
+    label: string;
+    accountTypeId: string;
+    orgUnitAccountTypeId?: string;
+  }>;
   selectedInspectionType: number | null;
   qataryId: string;
   name: string;
@@ -87,7 +92,7 @@ interface LocalizedStrings {
 }
 
 // Cache constants
-const INSPECTION_TYPES_CACHE_KEY = "MOCI_InspectionTypes_Cache";
+const INSPECTION_TYPES_CACHE_KEY = "MOCI_OrgUnit_InspectionTypes_Cache";
 const VEHICLE_TYPES_CACHE_KEY = "MOCI_VehicleTypes_Cache";
 const CAMPAIGNS_CACHE_KEY = "MOCI_Campaigns_Cache";
 const INCIDENT_TYPES_CACHE_KEY = "MOCI_IncidentTypes_Cache";
@@ -236,23 +241,31 @@ export class MultiTypeInspection extends React.Component<
           "",
         );
 
-      // Parallel loading
+      // Parallel loading — includes InitCache
       await Promise.all([
-        this.loadInspectionTypes(),
+        this.loadInspectionTypesFromOrgUnit(),
         this.loadVehicleTypes(),
         this.preloadCampaignsAndIncidentTypes(),
         InitCache.load(userId),
       ]);
 
-      // If default inspection type is provided, retrieve account type
+      // If default inspection type is provided, set account type from loaded data
       if (this.props.defaultInspectionType) {
-        const accountTypeRecord = await this.retrieveAccountTypeByOptionSet(
-          this.props.defaultInspectionType,
+        const inspectionType = this.state.inspectionTypes.find(
+          (t) => t.value === this.props.defaultInspectionType,
         );
-        this.setState({ accountTypeRecord });
+        if (inspectionType?.accountTypeId) {
+          const accountTypeRecord = {
+            duc_accounttypeid: inspectionType.accountTypeId,
+            duc_accounttype: this.props.defaultInspectionType,
+            duc_name: inspectionType.label,
+          };
+          this.setState({ accountTypeRecord });
+        }
       }
     } catch (error: any) {
       console.error("Error in componentDidMount:", error);
+      alert("Error in componentDidMount: " + (error?.message || error));
     }
   }
 
@@ -261,23 +274,24 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private getFromCache = <T>(key: string): T | null => {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) return null;
+    // try {
+    //   const cached = localStorage.getItem(key);
+    //   if (!cached) return null;
 
-      const cacheData: CacheData<T> = JSON.parse(cached);
-      const now = Date.now();
+    //   const cacheData: CacheData<T> = JSON.parse(cached);
+    //   const now = Date.now();
 
-      if (now - cacheData.timestamp > CACHE_DURATION) {
-        localStorage.removeItem(key);
-        return null;
-      }
+    //   if (now - cacheData.timestamp > CACHE_DURATION) {
+    //     localStorage.removeItem(key);
+    //     return null;
+    //   }
 
-      return cacheData.data;
-    } catch (error: any) {
-      console.error(`Error reading cache for ${key}:`, error);
-      return null;
-    }
+    //   return cacheData.data;
+    // } catch (error: any) {
+    //   console.error(`Error reading cache for ${key}:`, error);
+    //   return null;
+    // }
+    return null;
   };
 
   private saveToCache = <T>(key: string, data: T): void => {
@@ -293,38 +307,91 @@ export class MultiTypeInspection extends React.Component<
   };
 
   // =====================================================================
-  // INSPECTION TYPES
+  // INSPECTION TYPES FROM ORGANIZATION UNIT
   // =====================================================================
 
-  private loadInspectionTypes = async (): Promise<void> => {
+  private loadInspectionTypesFromOrgUnit = async (): Promise<void> => {
+    if (!this.props.organizationUnitId) {
+      console.warn("No organization unit ID provided");
+      alert("loadInspectionTypesFromOrgUnit: No organization unit ID provided");
+      return;
+    }
+
     try {
-      const cachedTypes = this.getFromCache<
-        Array<{ value: number; label: string }>
-      >(INSPECTION_TYPES_CACHE_KEY);
+      const cacheKey = `${INSPECTION_TYPES_CACHE_KEY}_${this.props.organizationUnitId}`;
+      const cachedTypes =
+        this.getFromCache<
+          Array<{ value: number; label: string; accountTypeId: string }>
+        >(cacheKey);
+
       if (cachedTypes) {
         this.setState({ inspectionTypes: cachedTypes });
         return;
       }
 
-      const entityMetadata = await this.xrm.Utility.getEntityMetadata(
-        "account",
-        ["duc_accountinspectiontype"],
-      );
-      const attribute = (entityMetadata as any).Attributes.get(
-        "duc_accountinspectiontype",
+      // Fetch junction records — NO $expand (not supported offline)
+      // Step 1: Get org-unit ↔ account-type junction records
+      const junctionQuery =
+        `?$filter=duc_organizationunit eq '${this.props.organizationUnitId}'` +
+        `&$select=duc_organizationunitaccounttypesid,duc_name,duc_namear,duc_accounttype`;
+
+      const junctionResults = await this.xrm.WebApi.retrieveMultipleRecords(
+        "duc_organizationunitaccounttypes",
+        junctionQuery,
       );
 
-      if (attribute?.OptionSet) {
-        const types = Object.values(attribute.OptionSet).map((opt: any) => ({
-          value: opt.value,
-          label: opt.text,
-        }));
-
-        this.saveToCache(INSPECTION_TYPES_CACHE_KEY, types);
-        this.setState({ inspectionTypes: types });
+      if (!junctionResults?.entities || junctionResults.entities.length === 0) {
+        console.warn("No account types found for organization unit");
+        alert("loadInspectionTypesFromOrgUnit: No account types found for org unit");
+        return;
       }
+
+      // Step 2: For each junction record, fetch the linked account type separately
+      const types: Array<{
+        value: number;
+        label: string;
+        accountTypeId: string;
+        orgUnitAccountTypeId?: string;
+      }> = [];
+
+      for (const entity of junctionResults.entities) {
+        const accountTypeId = entity._duc_accounttype_value;
+        if (!accountTypeId) continue;
+
+        try {
+          const accountType = await this.xrm.WebApi.retrieveRecord(
+            "duc_accounttype",
+            accountTypeId,
+            "?$select=duc_accounttypeid,duc_name,duc_accounttype",
+          );
+
+          if (accountType?.duc_accounttype !== undefined) {
+            const optionValue = accountType.duc_accounttype;
+            // Pick label based on language direction
+            const label = this.state.isRTL
+              ? (entity.duc_namear || entity.duc_name || `Type ${optionValue}`)
+              : (entity.duc_name || entity.duc_namear || `Type ${optionValue}`);
+
+            types.push({
+              value: optionValue,
+              label: label,
+              accountTypeId: accountType.duc_accounttypeid,
+              orgUnitAccountTypeId: entity.duc_organizationunitaccounttypesid,
+            });
+          }
+        } catch (innerError: any) {
+          console.warn("Error fetching account type for junction record:", innerError);
+          alert("Error fetching account type (" + accountTypeId + "): " + (innerError?.message || innerError));
+        }
+      }
+
+      // Sort by value
+      types.sort((a, b) => a.value - b.value);
+
+      this.saveToCache(cacheKey, types);
+      this.setState({ inspectionTypes: types });
     } catch (error: any) {
-      console.error("Error loading inspection types:", error);
+      console.error("Error loading inspection types from org unit:", error);
       this.setState({ error: "Failed to load inspection types" });
     }
   };
@@ -362,29 +429,6 @@ export class MultiTypeInspection extends React.Component<
       }
     } catch (error: any) {
       console.error("Error loading vehicle types:", error);
-    }
-  };
-
-  // =====================================================================
-  // ACCOUNT TYPE LOOKUP
-  // =====================================================================
-
-  private retrieveAccountTypeByOptionSet = async (
-    optionSetValue: number,
-  ): Promise<any | null> => {
-    try {
-      const result = await this.xrm.WebApi.retrieveMultipleRecords(
-        "duc_accounttype",
-        `?$select=duc_accounttypeid,duc_name,duc_accounttype&$filter=duc_accounttype eq ${optionSetValue}&$top=1`,
-      );
-
-      if (result?.entities?.length > 0) {
-        return result.entities[0];
-      }
-      return null;
-    } catch (error: any) {
-      console.error("Error retrieving account type:", error);
-      return null;
     }
   };
 
@@ -451,7 +495,7 @@ export class MultiTypeInspection extends React.Component<
     if (cached) return cached;
 
     try {
-      const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000 and statecode eq 0&$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
+      const query = `?$filter=duc_organizationalunitid eq '${this.props.organizationUnitId}' and duc_campaigntype eq 100000000 and statecode eq 0&$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
       const results = await this.xrm.WebApi.retrieveMultipleRecords(
         "new_inspectioncampaign",
         query,
@@ -481,7 +525,7 @@ export class MultiTypeInspection extends React.Component<
     if (cached) return cached;
 
     try {
-      const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$orderby=msdyn_name asc`;
+      const query = `?$filter=duc_organizationalunitid eq '${this.props.organizationUnitId}'&$select=msdyn_incidenttypeid,msdyn_name&$orderby=msdyn_name asc`;
       const results = await this.xrm.WebApi.retrieveMultipleRecords(
         "msdyn_incidenttype",
         query,
@@ -504,13 +548,33 @@ export class MultiTypeInspection extends React.Component<
   // HANDLERS
   // =====================================================================
 
-  private handleInspectionTypeChange = async (
+  private handleInspectionTypeChange = (
     e: React.ChangeEvent<HTMLSelectElement>,
-  ): Promise<void> => {
-    const value = e.target.value ? parseInt(e.target.value, 10) : null;
+  ): void => {
+    const selectedGuid = e.target.value || null;
+
+    let accountTypeRecord: any = null;
+    let optionValue: number | null = null;
+
+    if (selectedGuid) {
+      const inspectionType = this.state.inspectionTypes.find(
+        (t) => t.orgUnitAccountTypeId === selectedGuid || t.accountTypeId === selectedGuid,
+      );
+      if (inspectionType) {
+        optionValue = inspectionType.value;
+        if (inspectionType.accountTypeId) {
+          accountTypeRecord = {
+            duc_accounttypeid: inspectionType.accountTypeId,
+            duc_accounttype: optionValue,
+            duc_name: inspectionType.label,
+            duc_organizationunitaccounttypesid: inspectionType.orgUnitAccountTypeId,
+          };
+        }
+      }
+    }
 
     this.setState({
-      selectedInspectionType: value,
+      selectedInspectionType: optionValue,
       qataryId: "",
       name: "",
       crNumber: "",
@@ -518,15 +582,9 @@ export class MultiTypeInspection extends React.Component<
       carColor: "",
       vehicleBrand: null,
       error: null,
-      accountTypeRecord: null,
+      accountTypeRecord: accountTypeRecord,
       isAnonymous: false,
     });
-
-    if (value !== null) {
-      const accountTypeRecord =
-        await this.retrieveAccountTypeByOptionSet(value);
-      this.setState({ accountTypeRecord });
-    }
   };
 
   private handleInputChange = (
@@ -696,7 +754,7 @@ export class MultiTypeInspection extends React.Component<
       const brandLabel =
         vehicleBrand !== null
           ? vehicleBrands.find((v) => v.value === vehicleBrand)?.label ||
-            String(vehicleBrand)
+          String(vehicleBrand)
           : "";
       return `Vehicle ${id} ${carColor} ${brandLabel}`.trim();
     }
@@ -790,7 +848,7 @@ export class MultiTypeInspection extends React.Component<
       // Search for existing account by identifier AND account type
       let filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
       if (accountTypeRecord?.duc_accounttypeid) {
-        filterQuery += ` and _duc_newaccounttype_value eq ${accountTypeRecord.duc_accounttypeid}`;
+        filterQuery += ` and duc_newaccounttype eq ${accountTypeRecord.duc_accounttypeid}`;
       }
 
       const searchResults = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -857,6 +915,7 @@ export class MultiTypeInspection extends React.Component<
       return newAccountId;
     } catch (error: any) {
       console.error("Error searching/creating account:", error);
+      alert("Error searching/creating account: " + (error?.message || error));
       throw error;
     }
   };
@@ -867,6 +926,7 @@ export class MultiTypeInspection extends React.Component<
 
   private createWorkOrder = async (accountId: string): Promise<void> => {
     try {
+      alert("createWorkOrder: Starting with accountId: " + accountId);
       const userId =
         this.xrm.Utility.getGlobalContext().userSettings.userId.replace(
           /[{}]/g,
@@ -1035,6 +1095,7 @@ export class MultiTypeInspection extends React.Component<
       }
 
       console.log("Work order created successfully:", workOrderId);
+      alert("createWorkOrder: Work order created: " + workOrderId);
 
       // STEP 9.5: Create process extension record with defaults
       try {
@@ -1090,6 +1151,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error creating work order:", error);
+      alert("Error in createWorkOrder: " + (error?.message || error));
       throw error;
     }
   };
@@ -1108,8 +1170,10 @@ export class MultiTypeInspection extends React.Component<
 
       // Get or create account with progress indicator
       this.xrm.Utility.showProgressIndicator(this.strings.CreatingAccount);
+      alert("handleStart: Searching/creating account...");
       const accountId = await this.searchOrCreateAccount();
       this.xrm.Utility.closeProgressIndicator();
+      alert("handleStart: Account resolved: " + accountId);
 
       if (!accountId) {
         throw new Error("Failed to get account");
@@ -1152,6 +1216,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error in handleStart:", error);
+      alert("Error in handleStart: " + (error?.message || error));
       this.setState({
         error: error.message || "Error starting inspection",
         loading: false,
@@ -1190,6 +1255,7 @@ export class MultiTypeInspection extends React.Component<
         "Error creating work order (handleContinueWithSelections):",
         error,
       );
+      alert("Error in handleContinueWithSelections: " + (error?.message || error));
       this.setState({
         error: error.message || "Error creating work order",
         loading: false,
@@ -1493,17 +1559,17 @@ export class MultiTypeInspection extends React.Component<
         ),
       ),
       value &&
-        !disabled &&
-        React.createElement(
-          "button",
-          {
-            onClick: () => onChange(""),
-            style: styles.clearButtonStyle,
-            title: this.strings.Clear,
-            type: "button",
-          },
-          this.strings.Clear,
-        ),
+      !disabled &&
+      React.createElement(
+        "button",
+        {
+          onClick: () => onChange(""),
+          style: styles.clearButtonStyle,
+          title: this.strings.Clear,
+          type: "button",
+        },
+        this.strings.Clear,
+      ),
     );
   };
 
@@ -1563,55 +1629,55 @@ export class MultiTypeInspection extends React.Component<
           React.createElement("h2", { style: styles.titleStyle }, popupTitle),
 
           error &&
-            React.createElement("div", { style: styles.errorStyle }, error),
+          React.createElement("div", { style: styles.errorStyle }, error),
 
           // Campaign Selection
           showCampaignField &&
+          React.createElement(
+            "div",
+            { style: styles.fieldStyle },
             React.createElement(
-              "div",
-              { style: styles.fieldStyle },
-              React.createElement(
-                "label",
-                { style: styles.labelStyle },
-                this.strings.Campaign,
-              ),
-              this.renderSelectWithClear(
-                selectedCampaignId || "",
-                (val) => this.handleCampaignChange(val),
-                campaigns.map((c) => ({
-                  key: c.id,
-                  value: c.id,
-                  label: c.name,
-                })),
-                "--",
-                loading,
-                styles,
-              ),
+              "label",
+              { style: styles.labelStyle },
+              this.strings.Campaign,
             ),
+            this.renderSelectWithClear(
+              selectedCampaignId || "",
+              (val) => this.handleCampaignChange(val),
+              campaigns.map((c) => ({
+                key: c.id,
+                value: c.id,
+                label: c.name,
+              })),
+              "--",
+              loading,
+              styles,
+            ),
+          ),
 
           // Incident Type Selection
           showIncidentField &&
+          React.createElement(
+            "div",
+            { style: styles.fieldStyle },
             React.createElement(
-              "div",
-              { style: styles.fieldStyle },
-              React.createElement(
-                "label",
-                { style: styles.labelStyle },
-                this.strings.IncidentType,
-              ),
-              this.renderSelectWithClear(
-                selectedIncidentTypeId || "",
-                (val) => this.handleIncidentTypeChange(val),
-                incidentTypes.map((it) => ({
-                  key: it.id,
-                  value: it.id,
-                  label: it.name,
-                })),
-                "--",
-                loading || incidentTypeReadOnly,
-                styles,
-              ),
+              "label",
+              { style: styles.labelStyle },
+              this.strings.IncidentType,
             ),
+            this.renderSelectWithClear(
+              selectedIncidentTypeId || "",
+              (val) => this.handleIncidentTypeChange(val),
+              incidentTypes.map((it) => ({
+                key: it.id,
+                value: it.id,
+                label: it.name,
+              })),
+              "--",
+              loading || incidentTypeReadOnly,
+              styles,
+            ),
+          ),
 
           React.createElement(
             "div",
@@ -1661,7 +1727,7 @@ export class MultiTypeInspection extends React.Component<
         ),
 
         error &&
-          React.createElement("div", { style: styles.errorStyle }, error),
+        React.createElement("div", { style: styles.errorStyle }, error),
 
         // Inspection Type
         React.createElement(
@@ -1673,9 +1739,7 @@ export class MultiTypeInspection extends React.Component<
             this.strings.InspectionType,
           ),
           this.renderSelectWithClear(
-            selectedInspectionType !== null
-              ? String(selectedInspectionType)
-              : "",
+            this.state.accountTypeRecord?.duc_organizationunitaccounttypesid || this.state.accountTypeRecord?.duc_accounttypeid || "",
             (val) => {
               const syntheticEvent = {
                 target: { value: val },
@@ -1683,8 +1747,8 @@ export class MultiTypeInspection extends React.Component<
               this.handleInspectionTypeChange(syntheticEvent);
             },
             inspectionTypes.map((t) => ({
-              key: String(t.value),
-              value: String(t.value),
+              key: t.orgUnitAccountTypeId || t.accountTypeId,
+              value: t.orgUnitAccountTypeId || t.accountTypeId || "",
               label: t.label,
             })),
             this.strings.chooseInspectionType,
@@ -1695,205 +1759,205 @@ export class MultiTypeInspection extends React.Component<
 
         // Anonymous Checkbox (types 3, 6, 7)
         this.shouldShowAnonymousCheckbox() &&
+        React.createElement(
+          "div",
+          { style: styles.checkboxContainerStyle },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: isAnonymous,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              this.setState({ isAnonymous: e.target.checked }),
+            disabled: loading,
+            style: styles.checkboxStyle,
+          }),
           React.createElement(
-            "div",
-            { style: styles.checkboxContainerStyle },
-            React.createElement("input", {
-              type: "checkbox",
-              checked: isAnonymous,
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                this.setState({ isAnonymous: e.target.checked }),
-              disabled: loading,
-              style: styles.checkboxStyle,
-            }),
-            React.createElement(
-              "label",
-              {
-                style: {
-                  ...styles.labelStyle,
-                  marginBottom: 0,
-                  cursor: loading ? "not-allowed" : "pointer",
-                },
-                onClick: () =>
-                  !loading && this.setState({ isAnonymous: !isAnonymous }),
+            "label",
+            {
+              style: {
+                ...styles.labelStyle,
+                marginBottom: 0,
+                cursor: loading ? "not-allowed" : "pointer",
               },
-              this.strings.Anonymous,
-            ),
+              onClick: () =>
+                !loading && this.setState({ isAnonymous: !isAnonymous }),
+            },
+            this.strings.Anonymous,
           ),
+        ),
 
         // ID (Vehicle)
         this.shouldShowField("id") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.ID,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: id,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleInputChange("id", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
             React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.ID,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: id,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  this.handleInputChange("id", e.target.value),
+              "button",
+              {
+                onClick: () => this.handleScanBarcode("id"),
                 disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
-              React.createElement(
-                "button",
-                {
-                  onClick: () => this.handleScanBarcode("id"),
-                  disabled: loading,
-                  style: styles.scanButtonStyle,
-                  type: "button",
-                  title: this.strings.ScanBarcode,
-                },
-                this.renderBarcodeIcon(),
-              ),
+                style: styles.scanButtonStyle,
+                type: "button",
+                title: this.strings.ScanBarcode,
+              },
+              this.renderBarcodeIcon(),
             ),
           ),
+        ),
 
         // Car Color
         this.shouldShowField("carColor") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.CarColor,
-            ),
-            React.createElement("input", {
-              type: "text",
-              value: carColor,
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                this.handleInputChange("carColor", e.target.value),
-              disabled: loading,
-              style: styles.inputStyle,
-            }),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.CarColor,
           ),
+          React.createElement("input", {
+            type: "text",
+            value: carColor,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              this.handleInputChange("carColor", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
 
         // Vehicle Brand
         this.shouldShowField("vehicleBrand") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.VehicleBrand,
-            ),
-            this.renderSelectWithClear(
-              vehicleBrand !== null ? String(vehicleBrand) : "",
-              (val) => {
-                const parsed = val ? parseInt(val, 10) : null;
-                this.setState({ vehicleBrand: parsed });
-              },
-              vehicleBrands.map((vb) => ({
-                key: String(vb.value),
-                value: String(vb.value),
-                label: vb.label,
-              })),
-              "--",
-              loading,
-              styles,
-            ),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.VehicleBrand,
           ),
+          this.renderSelectWithClear(
+            vehicleBrand !== null ? String(vehicleBrand) : "",
+            (val) => {
+              const parsed = val ? parseInt(val, 10) : null;
+              this.setState({ vehicleBrand: parsed });
+            },
+            vehicleBrands.map((vb) => ({
+              key: String(vb.value),
+              value: String(vb.value),
+              label: vb.label,
+            })),
+            "--",
+            loading,
+            styles,
+          ),
+        ),
 
         // Qatary ID with Barcode Scanner
         this.shouldShowField("qataryId") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.QataryID,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: qataryId,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleInputChange("qataryId", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
             React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.QataryID,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: qataryId,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  this.handleInputChange("qataryId", e.target.value),
+              "button",
+              {
+                onClick: () => this.handleScanBarcode("qataryId"),
                 disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
-              React.createElement(
-                "button",
-                {
-                  onClick: () => this.handleScanBarcode("qataryId"),
-                  disabled: loading,
-                  style: styles.scanButtonStyle,
-                  type: "button",
-                  title: this.strings.ScanBarcode,
-                },
-                this.renderBarcodeIcon(),
-              ),
+                style: styles.scanButtonStyle,
+                type: "button",
+                title: this.strings.ScanBarcode,
+              },
+              this.renderBarcodeIcon(),
             ),
           ),
+        ),
 
         // Name
         this.shouldShowField("name") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
           React.createElement(
-            "div",
-            { style: styles.fieldStyle },
-            React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              this.strings.Name,
-            ),
-            React.createElement("input", {
-              type: "text",
-              value: name,
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                this.handleInputChange("name", e.target.value),
-              disabled: loading,
-              style: styles.inputStyle,
-            }),
+            "label",
+            { style: styles.labelStyle },
+            this.strings.Name,
           ),
+          React.createElement("input", {
+            type: "text",
+            value: name,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              this.handleInputChange("name", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
 
         // CR Number / Monour Number with Barcode Scanner
         this.shouldShowField("crNumber") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            selectedInspectionType === 7
+              ? this.strings.MonourNumber
+              : this.strings.CRNumber,
+          ),
           React.createElement(
             "div",
-            { style: styles.fieldStyle },
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: crNumber,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleInputChange("crNumber", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
             React.createElement(
-              "label",
-              { style: styles.labelStyle },
-              selectedInspectionType === 7
-                ? this.strings.MonourNumber
-                : this.strings.CRNumber,
-            ),
-            React.createElement(
-              "div",
-              { style: { display: "flex", alignItems: "center", gap: 6 } },
-              React.createElement("input", {
-                type: "text",
-                value: crNumber,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  this.handleInputChange("crNumber", e.target.value),
+              "button",
+              {
+                onClick: () => this.handleScanBarcode("crNumber"),
                 disabled: loading,
-                style: { ...styles.inputStyle, flex: 1 },
-              }),
-              React.createElement(
-                "button",
-                {
-                  onClick: () => this.handleScanBarcode("crNumber"),
-                  disabled: loading,
-                  style: styles.scanButtonStyle,
-                  type: "button",
-                  title: this.strings.ScanBarcode,
-                },
-                this.renderBarcodeIcon(),
-              ),
+                style: styles.scanButtonStyle,
+                type: "button",
+                title: this.strings.ScanBarcode,
+              },
+              this.renderBarcodeIcon(),
             ),
           ),
+        ),
 
         // Buttons
         React.createElement(

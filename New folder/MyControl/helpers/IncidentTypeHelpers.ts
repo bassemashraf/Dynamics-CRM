@@ -16,7 +16,7 @@ export class IncidentTypeHelpers {
         try {
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 'msdyn_incidenttype',
-                `?$select=msdyn_incidenttypeid,msdyn_name&$filter=_duc_organizationalunitid_value eq '${orgUnitId}'&$orderby=msdyn_name`
+                `?$select=msdyn_incidenttypeid,msdyn_name&$filter=duc_organizationalunitid eq '${orgUnitId}'&$orderby=msdyn_name`
             );
 
             const entities = results?.entities || [];

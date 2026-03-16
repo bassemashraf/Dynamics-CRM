@@ -403,7 +403,7 @@ export const Main = (props: IProps) => {
             const today = new Date().toISOString().split('T')[0];
 
             // Check for active patrol (status = 2)
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+            const activePatrolQuery = `?$filter=owninguser eq '${userId}' and duc_organizationalunitid eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const activePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -411,6 +411,7 @@ export const Main = (props: IProps) => {
             );
 
             if (activePatrolResults.entities.length > 0) {
+                alert("checkPatrolStatus: Active patrol found - " + activePatrolResults.entities[0].new_name);
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'end',
@@ -421,7 +422,7 @@ export const Main = (props: IProps) => {
             }
 
             // Check for available patrol to start (status = 1 or 100000004)
-            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+            const availablePatrolQuery = `?$filter=owninguser eq '${userId}' and duc_organizationalunitid eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
 
             const availablePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -446,6 +447,7 @@ export const Main = (props: IProps) => {
 
         } catch (error: any) {
             console.error("Error checking patrol status:", error);
+            alert("Error checking patrol status: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 patrolStatus: 'none',
@@ -495,12 +497,12 @@ export const Main = (props: IProps) => {
                 const todayStartISO = todayStart.toISOString();
                 const todayEndISO = todayEnd.toISOString();
 
-                const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and duc_completiondate ge ${todayStartISO} and duc_completiondate le ${todayEndISO}`;
+                const completedQuery = `?$select=msdyn_workorderid&$filter=duc_assignedresource eq '${resourceId}' and duc_completiondate ge ${todayStartISO} and duc_completiondate le ${todayEndISO}`;
                 const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
                 completedToday = completedResults.entities.length;
 
                 const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
-                const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and _bookingstatus_value eq '${bookingStatusGuid}' and starttime ge ${todayStartISO} and starttime le ${todayEndISO}`;
+                const remainingQuery = `?$select=bookableresourcebookingid&$filter=resource eq '${resourceId}' and bookingstatus eq '${bookingStatusGuid}' and starttime ge ${todayStartISO} and starttime le ${todayEndISO}`;
                 const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                 remainingToday = remainingResults.entities.length;
 
@@ -765,6 +767,7 @@ export const Main = (props: IProps) => {
 
         } catch (error: any) {
             console.error("Error starting patrol:", error);
+            alert("Error starting patrol: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 isLoading: false,
@@ -788,7 +791,7 @@ export const Main = (props: IProps) => {
             const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
             const today = new Date().toISOString().split('T')[0];
 
-            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+            const activePatrolQuery = `?$filter=owninguser eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
 
             const activePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -828,6 +831,7 @@ export const Main = (props: IProps) => {
 
         } catch (error: any) {
             console.error("Error ending patrol:", error);
+            alert("Error ending patrol: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 isLoading: false,

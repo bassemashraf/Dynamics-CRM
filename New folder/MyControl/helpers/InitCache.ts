@@ -36,7 +36,7 @@ export class InitCache {
             const [resourceResult, statusResult] = await Promise.all([
                 this.xrm.WebApi.retrieveMultipleRecords(
                     'bookableresource',
-                    `?$select=bookableresourceid&$filter=_userid_value eq ${userId} and resourcetype eq 3&$top=1`
+                    `?$select=bookableresourceid&$filter=userid eq ${userId} and resourcetype eq 3&$top=1`
                 ),
                 this.xrm.WebApi.retrieveMultipleRecords(
                     'bookingstatus',
@@ -51,7 +51,6 @@ export class InitCache {
             this._bookingStatusId = statusResult?.entities?.length > 0
                 ? statusResult.entities[0].bookingstatusid
                 : null;
-
 
             this._loaded = true;
         } catch (error: any) {
