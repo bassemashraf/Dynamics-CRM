@@ -35,6 +35,7 @@ interface IMultiTypeInspectionState {
   qataryId: string;
   name: string;
   crNumber: string;
+  registrationNumber: string;
   id: string;
   carColor: string;
   vehicleBrand: number | null;
@@ -87,6 +88,7 @@ interface LocalizedStrings {
   ScanBarcode: string;
   Clear: string;
   PlateNumber: string;
+  RegistrationNumber: string;
 }
 
 // Cache constants
@@ -199,6 +201,8 @@ export class MultiTypeInspection extends React.Component<
       Clear: props.context.resources.getString("Clear") || "Clear",
       PlateNumber:
         props.context.resources.getString("PlateNumber") || "Plate Number",
+      RegistrationNumber: props.context.resources.getString("RegistrationNumber")
+        || "Registration Number",
     };
 
     this.state = {
@@ -227,6 +231,7 @@ export class MultiTypeInspection extends React.Component<
       popupShowIncidentType: false,
       incidentTypeReadOnly: false,
       campaignIncidentTypeMap: {},
+      registrationNumber: "",
     };
   }
 
@@ -482,6 +487,8 @@ export class MultiTypeInspection extends React.Component<
     if (cached) return cached;
 
     try {
+
+      // Campaign status: Active = 2, Campaign type: AdHoc = 100000000
       const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaignstatus eq 2 and  duc_campaigntype eq 100000000 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
 
       const results = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -590,7 +597,7 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private handleScanBarcode = async (
-    field: "qataryId" | "crNumber",
+    field: "qataryId" | "crNumber" | "registrationNumber",
   ): Promise<void> => {
     try {
       if (this.xrm?.Device?.getBarcodeValue) {
@@ -719,16 +726,17 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private getIdentifierValue = (): string => {
-    const { selectedInspectionType, qataryId, crNumber, id } = this.state;
+    const { selectedInspectionType, qataryId, crNumber, id, registrationNumber } = this.state;
 
     if (selectedInspectionType === 1) return id;
     if ([2, 3, 6].includes(selectedInspectionType!)) return qataryId;
     if ([5, 7].includes(selectedInspectionType!)) return crNumber;
+    if ([10].includes(selectedInspectionType!)) return registrationNumber;
 
     return "";
   };
 
-  private getAccountName = (): string => {
+  private getAccountName = async (): Promise<string> => {
     const {
       selectedInspectionType,
       name,
@@ -738,24 +746,58 @@ export class MultiTypeInspection extends React.Component<
       carColor,
       vehicleBrand,
       vehicleBrands,
+      registrationNumber
     } = this.state;
 
-    if (selectedInspectionType === 1) {
-      const brandLabel =
-        vehicleBrand !== null
-          ? vehicleBrands.find((v) => v.value === vehicleBrand)?.label ||
-          vehicleBrand
-          : "";
-      return `Vehicle ${id} ${carColor} ${brandLabel}`.trim();
+    if (!selectedInspectionType)
+      return "Account";
+
+    var prefixResult = await Xrm.WebApi.retrieveMultipleRecords('duc_organizationunitaccounttypes',
+      `?$top=1&$select=duc_name,duc_namear&$filter=duc_AccountType/duc_accounttype eq ${selectedInspectionType}`);
+
+    var prefixEn = '';
+    var prefixAr = '';
+
+    if (prefixResult.entities.length > 0) {
+      const record = prefixResult.entities[0];
+
+      if (record.duc_name) {
+        prefixEn = `${record.duc_name} | `;
+      }
+
+      if (record.duc_namear) {
+        prefixAr = ` | ${record.duc_namear}`;
+      }
     }
-    if (selectedInspectionType === 2)
-      return `Individual ${qataryId} ${name}`.trim();
-    if (selectedInspectionType === 3) return name || `Cabin ${qataryId}`;
-    if (selectedInspectionType === 6)
-      return name || `Wilderness Camp ${qataryId}`;
-    if (selectedInspectionType === 5) return `Company ${crNumber}`.trim();
-    if (selectedInspectionType === 7) return `Manor ${crNumber}`.trim();
-    if (selectedInspectionType === 4) return "Anonymous Account";
+
+    switch (selectedInspectionType) {
+      case 1: // Vehicle
+        const brandLabel =
+          vehicleBrand !== null
+            ? vehicleBrands.find((v) => v.value === vehicleBrand)?.label ||
+            vehicleBrand
+            : "";
+        return `${prefixEn}${id} ${carColor} ${brandLabel}${prefixAr}`.trim();
+
+      case 2: // Individual
+        return `${prefixEn}${qataryId} ${name}${prefixAr}`.trim();
+
+      case 3: // Cabin
+        return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
+
+      case 4: // Anonymous
+        return `${prefixEn}Account${prefixAr}`.trim();
+
+      case 6: // Wilderness Camp
+        return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
+
+      case 5: // Company
+      case 7: // Manor
+        return `${prefixEn}${crNumber}${prefixAr}`.trim();
+
+      case 10: // Establishment
+        return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
+    }
 
     return "Account";
   };
@@ -838,7 +880,13 @@ export class MultiTypeInspection extends React.Component<
       }
 
       // Search for existing account
-      let filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
+      var filterQuery;
+      if (selectedInspectionType === 10) {
+        filterQuery = `duc_moinumber eq '${identifierValue}'`;
+      } else {
+        filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
+      }
+
       if (accountTypeRecord?.duc_accounttypeid) {
         filterQuery += ` and _duc_newaccounttype_value eq ${accountTypeRecord.duc_accounttypeid}`;
       }
@@ -873,12 +921,18 @@ export class MultiTypeInspection extends React.Component<
       }
 
       // Create new account
-      const accountName = this.getAccountName();
+      const accountName = await this.getAccountName();
       const newAccount: any = {
         name: accountName,
-        duc_accountidentifier: identifierValue,
         duc_accountinspectiontype: selectedInspectionType,
       };
+
+      // Establishment
+      if (selectedInspectionType === 10) {
+        newAccount.duc_moinumber = identifierValue;
+      } else {
+        newAccount.duc_accountidentifier = identifierValue;
+      }
 
       if (accountTypeRecord?.duc_accounttypeid) {
         newAccount["duc_NewAccountType@odata.bind"] =
@@ -1238,6 +1292,7 @@ export class MultiTypeInspection extends React.Component<
       | "qataryId"
       | "name"
       | "crNumber"
+      | "registrationNumber"
       | "id"
       | "carColor"
       | "vehicleBrand",
@@ -1259,6 +1314,11 @@ export class MultiTypeInspection extends React.Component<
 
     if (field === "crNumber") {
       return [5, 7].includes(selectedInspectionType);
+    }
+
+    if (field === "registrationNumber") {
+      // 10 = Establishment
+      return [10].includes(selectedInspectionType);
     }
 
     return false;
@@ -1552,6 +1612,7 @@ export class MultiTypeInspection extends React.Component<
       qataryId,
       name,
       crNumber,
+      registrationNumber,
       id,
       carColor,
       vehicleBrand,
@@ -1920,6 +1981,58 @@ export class MultiTypeInspection extends React.Component<
               "button",
               {
                 onClick: () => this.handleScanBarcode("crNumber"),
+                disabled: loading,
+                style: styles.scanButtonStyle,
+                type: "button",
+                title: this.strings.ScanBarcode,
+              },
+              // SVG Barcode Icon
+              React.createElement(
+                "svg",
+                {
+                  width: "20",
+                  height: "20",
+                  viewBox: "0 0 24 24",
+                  fill: "none",
+                  stroke: "currentColor",
+                  strokeWidth: "2",
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
+                },
+                React.createElement("path", { d: "M3 5v14" }),
+                React.createElement("path", { d: "M8 5v14" }),
+                React.createElement("path", { d: "M12 5v14" }),
+                React.createElement("path", { d: "M17 5v14" }),
+                React.createElement("path", { d: "M21 5v14" }),
+              ),
+            ),
+          ),
+        ),
+
+        this.shouldShowField("registrationNumber") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.RegistrationNumber + " *",
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("input", {
+              type: "text",
+              value: registrationNumber,
+              onChange: (e) =>
+                this.handleInputChange("registrationNumber", e.target.value),
+              disabled: loading,
+              style: { ...styles.inputStyle, flex: 1 },
+            }),
+            React.createElement(
+              "button",
+              {
+                onClick: () => this.handleScanBarcode("registrationNumber"),
                 disabled: loading,
                 style: styles.scanButtonStyle,
                 type: "button",
