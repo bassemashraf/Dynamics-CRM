@@ -46,6 +46,14 @@ function onLoad(executionContext) {
     ctrl.addPreSearch(addPermitCitesFilter);
 }
 
+function isOffline() {
+    try {
+        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
+}
+
 
 async function toggleNextButtonFromInspectionResult(executionContext) {
     var formContext = executionContext.getFormContext();
@@ -77,9 +85,12 @@ async function toggleNextButtonFromInspectionResult(executionContext) {
         // This assumes the lookup on Inspection Survey Result to Work Order is ALSO named "msdyn_workorder"
         // so the Web API field is: _msdyn_workorder_value
         // If different, replace _msdyn_workorder_value with _<yourlookup>_value
+        var isOff = isOffline();
+        var woFilterField = isOff ? "duc_workorder" : "_duc_workorder_value";
+
         var query =
             "?$select=duc_answer1" +
-            "&$filter=_duc_workorder_value eq " + woId +
+            "&$filter=" + woFilterField + " eq " + woId +
             "&$orderby=createdon desc" +
             "&$top=1";
 
@@ -95,7 +106,11 @@ async function toggleNextButtonFromInspectionResult(executionContext) {
 
         nextCtrl.setVisible(isFilled);
     } catch (e) {
-        console.error("toggleNextButtonFromInspectionResult error:", e);
+        var errMsg = "[toggleNextButtonFromInspectionResult] Error."
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
         // keep hidden on error
     }
 }
@@ -136,10 +151,13 @@ function toggleSectionFromConfigByCode(executionContext, tabName, sectionName, c
             }
 
             // 3) config by code + incident type
+            var isOff = isOffline();
+            var incTypeFilterField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
+
             var query =
                 "?$select=" + visibilityField +
                 "&$filter=" + codeField + " eq '" + configCode + "'" +
-                " and _duc_incidenttype_value eq " + incidentTypeId;
+                " and " + incTypeFilterField + " eq " + incidentTypeId;
 
             Xrm.WebApi.retrieveMultipleRecords(configEntity, query).then(
                 function success(result) {
@@ -163,16 +181,32 @@ function toggleSectionFromConfigByCode(executionContext, tabName, sectionName, c
                     setSectionVisible(formContext, tabName, sectionName, show);
                 },
                 function error(err) {
-                    console.error("Config retrieve error:", err.message);
+                    var errMsg = "[toggleSectionFromConfigByCode] Error retrieving config."
+                        + "\nCode: " + configCode
+                        + "\nIncidentTypeId: " + incidentTypeId
+                        + "\nOffline: " + isOffline()
+                        + "\nError: " + (err.message || JSON.stringify(err));
+                    console.error(errMsg, err);
+                    Xrm.Navigation.openAlertDialog({ text: errMsg });
                 }
             );
 
         }, function (error) {
-            console.error("WOI retrieve error:", error.message);
+            var errMsg = "[toggleSectionFromConfigByCode] Error retrieving WOI."
+                + "\nWOI Id: " + woiId
+                + "\nOffline: " + isOffline()
+                + "\nError: " + (error.message || JSON.stringify(error));
+            console.error(errMsg, error);
+            Xrm.Navigation.openAlertDialog({ text: errMsg });
         });
 
     } catch (e) {
-        console.error("toggleSectionFromConfigByCode error:", e);
+        var errMsg = "[toggleSectionFromConfigByCode] Error."
+            + "\nTab: " + tabName + ", Section: " + sectionName + ", Code: " + configCode
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -450,9 +484,12 @@ function toggleSectionFromConfig(executionContext, sectionName, tabName) {
         console.log("Incident type ID:", incidentTypeId);
 
         // Retrieve the configuration for this incident type
+        var isOff = isOffline();
+        var incTypeFilterField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
+
         Xrm.WebApi.retrieveMultipleRecords(
             configEntity,
-            "?$select=duc_actionvalue&$filter=_duc_incidenttype_value eq " + incidentTypeId
+            "?$select=duc_actionvalue&$filter=" + incTypeFilterField + " eq " + incidentTypeId
         )
             .then(function (result) {
                 console.log("Configuration query returned:", result.entities.length, "records");
@@ -466,11 +503,21 @@ function toggleSectionFromConfig(executionContext, sectionName, tabName) {
                 }
             })
             .catch(function (error) {
-                console.error("Error retrieving configuration:", error);
+                var errMsg = "[toggleSectionFromConfig] Error retrieving configuration."
+                    + "\nIncidentTypeId: " + incidentTypeId
+                    + "\nOffline: " + isOffline()
+                    + "\nError: " + (error.message || JSON.stringify(error));
+                console.error(errMsg, error);
+                Xrm.Navigation.openAlertDialog({ text: errMsg });
             });
 
     } catch (e) {
-        console.error("toggleSectionFromConfig_OnLoad error:", e);
+        var errMsg = "[toggleSectionFromConfig] Error."
+            + "\nTab: " + tabName + ", Section: " + sectionName
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -492,7 +539,11 @@ function setSectionVisible(formContext, tabName, sectionName, isVisible) {
         section.setVisible(!!isVisible);
     }
     catch (e) {
-        console.error("setSectionVisible error:", e);
+        var errMsg = "[setSectionVisible] Error."
+            + "\nTab: " + tabName + ", Section: " + sectionName
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -660,7 +711,7 @@ function getIncidentTypeAutoStatusCalculation(executionContext) {
     try {
         var formContext = executionContext.getFormContext();
 
-        var lookupFieldName = "msdyn_workorderincident";     // lookup on current form
+        var lookupFieldName = "duc_incidenttype";     // lookup on current form
         var incidentTypeEntity = "msdyn_incidenttype";       // entity logical name
         var booleanFieldName = "duc_autostatuscalculation";  // boolean on Incident Type
 
@@ -692,12 +743,21 @@ function getIncidentTypeAutoStatusCalculation(executionContext) {
             console.log(booleanFieldName + ":", val);
             return val;
         }).catch(function (error) {
-            console.error("Error retrieving Incident Type:", error);
+            var errMsg = "[getIncidentTypeAutoStatusCalculation] Error retrieving Incident Type."
+                + "\nIncidentTypeId: " + incidentTypeId
+                + "\nOffline: " + isOffline()
+                + "\nError: " + (error.message || JSON.stringify(error));
+            console.error(errMsg, error);
+            Xrm.Navigation.openAlertDialog({ text: errMsg });
             return null;
         });
 
     } catch (e) {
-        console.error("getIncidentTypeAutoStatusCalculation error:", e);
+        var errMsg = "[getIncidentTypeAutoStatusCalculation] Error."
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
         return null;
     }
 }

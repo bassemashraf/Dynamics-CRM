@@ -71,30 +71,59 @@ async function waitForWorkOrderServiceTask(workOrderId, maxWaitMs, intervalMs) {
     maxWaitMs = maxWaitMs || 30000;
     intervalMs = intervalMs || 2000;
 
-    const start = Date.now();
-    const MSG = getMSG();
+    try {
+        const start = Date.now();
+        const MSG = getMSG();
+        const isOff = isOffline();
+        const woFilterField = isOff ? "msdyn_workorder" : "_msdyn_workorder_value";
 
-    Xrm.Utility.showProgressIndicator(MSG.waitingTask);
+        Xrm.Utility.showProgressIndicator(MSG.waitingTask);
 
-    while ((Date.now() - start) < maxWaitMs) {
-        const result = await Xrm.WebApi.retrieveMultipleRecords(
-            "msdyn_workorderservicetask",
-            `?$select=msdyn_workorderservicetaskid
-             &$filter=_msdyn_workorder_value eq ${workOrderId}
-             &$orderby=createdon asc
-             &$top=1`
-        );
-
-        if (result.entities && result.entities.length > 0) {
+        // Offline: tasks are either already on device or not — no point polling
+        if (isOff) {
+            const result = await Xrm.WebApi.retrieveMultipleRecords(
+                "msdyn_workorderservicetask",
+                `?$select=msdyn_workorderservicetaskid
+                 &$filter=${woFilterField} eq ${workOrderId}
+                 &$orderby=createdon asc
+                 &$top=1`
+            );
             Xrm.Utility.closeProgressIndicator();
-            return result.entities[0].msdyn_workorderservicetaskid;
+            return (result.entities && result.entities.length > 0)
+                ? result.entities[0].msdyn_workorderservicetaskid
+                : null;
         }
 
-        await new Promise(function (r) { setTimeout(r, intervalMs); });
-    }
+        // Online: poll until tasks are created by server plugin
+        while ((Date.now() - start) < maxWaitMs) {
+            const result = await Xrm.WebApi.retrieveMultipleRecords(
+                "msdyn_workorderservicetask",
+                `?$select=msdyn_workorderservicetaskid
+                 &$filter=${woFilterField} eq ${workOrderId}
+                 &$orderby=createdon asc
+                 &$top=1`
+            );
 
-    Xrm.Utility.closeProgressIndicator();
-    return null;
+            if (result.entities && result.entities.length > 0) {
+                Xrm.Utility.closeProgressIndicator();
+                return result.entities[0].msdyn_workorderservicetaskid;
+            }
+
+            await new Promise(function (r) { setTimeout(r, intervalMs); });
+        }
+
+        Xrm.Utility.closeProgressIndicator();
+        return null;
+    } catch (e) {
+        Xrm.Utility.closeProgressIndicator();
+        var errMsg = "[waitForWorkOrderServiceTask] Error retrieving service tasks."
+            + "\nWorkOrderId: " + workOrderId
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        return null;
+    }
 }
 
 // ==================================================
@@ -131,7 +160,12 @@ async function oFST_FromBooking(workOrderId) {
         );
 
     } catch (e) {
-        console.error("oFST_FromBooking error:", e);
+        var errMsg = "[oFST_FromBooking] Error navigating to service task."
+            + "\nWorkOrderId: " + workOrderId
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -140,9 +174,11 @@ async function oFST_FromBooking(workOrderId) {
 // ==================================================
 async function setCurrentBookingInProgress() {
     const MSG = getMSG();
+    var step = "";
     try {
         var bookingId = Xrm.Page.data.entity.getId().replace(/[{}]/g, "");
 
+        step = "Retrieving booking status 'In Progress'";
         var statusResult = await Xrm.WebApi.retrieveMultipleRecords(
             "bookingstatus",
             `?$select=bookingstatusid&$filter=name eq 'In Progress'&$top=1`
@@ -155,6 +191,7 @@ async function setCurrentBookingInProgress() {
 
         var statusId = statusResult.entities[0].bookingstatusid;
 
+        step = "Updating booking record with 'In Progress' status";
         await Xrm.WebApi.updateRecord("bookableresourcebooking", bookingId, {
             "BookingStatus@odata.bind": `/bookingstatuses(${statusId})`
         });
@@ -162,7 +199,11 @@ async function setCurrentBookingInProgress() {
         return true;
 
     } catch (e) {
-        console.warn("setCurrentBookingInProgress error:", e);
+        var errMsg = "[setCurrentBookingInProgress] Error at step: " + step
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.warn(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
         return false;
     }
 }
@@ -172,6 +213,7 @@ async function setCurrentBookingInProgress() {
 // ==================================================
 async function createDailyInspection_FromBooking(workOrderId) {
     const MSG = getMSG();
+    var step = "";
     try {
         Xrm.Utility.showProgressIndicator(MSG.creatingInspection);
 
@@ -185,6 +227,7 @@ async function createDailyInspection_FromBooking(workOrderId) {
         const offline = isOffline();
 
         // Bookable resource query — offline uses 'userid', online uses '_userid_value'
+        step = "Retrieving bookable resource for current user (userId=" + createdBy + ")";
         const resourceFilter = offline
             ? `?$select=bookableresourceid&$filter=userid eq ${createdBy} and resourcetype eq 3&$top=1`
             : `?$select=bookableresourceid&$filter=_userid_value eq ${createdBy} and resourcetype eq 3&$top=1`;
@@ -193,7 +236,11 @@ async function createDailyInspection_FromBooking(workOrderId) {
 
         if (!resourceRes.entities || resourceRes.entities.length === 0) {
             Xrm.Utility.closeProgressIndicator();
-            await Xrm.Navigation.openAlertDialog({ text: MSG.noBookableResource });
+            await Xrm.Navigation.openAlertDialog({
+                text: "[createDailyInspection_FromBooking] " + MSG.noBookableResource
+                    + "\nUserId: " + createdBy
+                    + "\nOffline: " + offline
+            });
             return;
         }
 
@@ -202,6 +249,7 @@ async function createDailyInspection_FromBooking(workOrderId) {
         const todayStart = new Date(currentDateTime.getFullYear(), currentDateTime.getMonth(), currentDateTime.getDate());
 
         // Attendance query — offline uses 'duc_user' + ge/lt date range, online uses '_duc_user_value' + Microsoft.Dynamics.CRM.On
+        step = "Retrieving attendance record for today";
         let attendanceFilter;
         if (offline) {
             const tomorrowStart = new Date(todayStart);
@@ -218,6 +266,7 @@ async function createDailyInspection_FromBooking(workOrderId) {
         if (attendanceRes.entities && attendanceRes.entities.length > 0) {
             attendanceId = attendanceRes.entities[0].duc_attendanceid;
         } else {
+            step = "Creating new attendance record";
             const attendanceResult = await Xrm.WebApi.createRecord("duc_attendance", {
                 "duc_User@odata.bind": `/systemusers(${createdBy})`,
                 "duc_createdoffline": offline
@@ -225,11 +274,12 @@ async function createDailyInspection_FromBooking(workOrderId) {
             attendanceId = attendanceResult.id;
         }
 
+        step = "Creating daily inspection record";
         const recordData = {
             "duc_WorkOrder@odata.bind": `/msdyn_workorders(${workOrderId})`,
             "duc_BookableResource@odata.bind": `/bookableresources(${resourceId})`,
             "duc_Attendance@odata.bind": `/duc_attendances(${attendanceId})`,
-            "duc_startinspectiontime": currentDateTime.toISOString(),
+            "duc_startinspectiontime": currentDateTime,
             "duc_createdoffline": offline
         };
 
@@ -243,8 +293,11 @@ async function createDailyInspection_FromBooking(workOrderId) {
 
     } catch (error) {
         Xrm.Utility.closeProgressIndicator();
-        await Xrm.Navigation.openAlertDialog({ text: "Error creating daily inspection record: " + error.message });
-        console.error("createDailyInspection_FromBooking error:", error);
+        var errMsg = "[createDailyInspection_FromBooking] Error at step: " + step
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (error.message || JSON.stringify(error));
+        console.error(errMsg, error);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -252,9 +305,13 @@ async function createDailyInspection_FromBooking(workOrderId) {
 // 5) uLA (from Booking -> WorkOrderId)
 // ==================================================
 async function uLA_FromBooking(workOrderId) {
+    var step = "";
     try {
         if (!workOrderId) return;
 
+        var isOff = isOffline();
+
+        step = "Retrieving work order process extension";
         var woRecord = await Xrm.WebApi.retrieveRecord(
             "msdyn_workorder",
             workOrderId,
@@ -265,6 +322,7 @@ async function uLA_FromBooking(workOrderId) {
 
         var peId = woRecord._duc_processextension_value;
 
+        step = "Retrieving process extension record";
         var peRecord = await Xrm.WebApi.retrieveRecord(
             "duc_processextension",
             peId,
@@ -276,17 +334,22 @@ async function uLA_FromBooking(workOrderId) {
         var processDefinitionId = peRecord._duc_processdefinition_value;
         var currentStageId = peRecord._duc_currentstage_value;
 
+        step = "Retrieving stage actions";
+        var processField = isOff ? "duc_process" : "_duc_process_value";
+        var relatedStageField = isOff ? "duc_relatedstage" : "_duc_relatedstage_value";
+
         var stageActions = await Xrm.WebApi.retrieveMultipleRecords(
             "duc_stageaction",
             `?$select=duc_stageactionid,_duc_defaultstatus_value
               &$filter=duc_canbetriggeredbytarget eq true
-              and _duc_process_value eq ${processDefinitionId}
-              and _duc_relatedstage_value eq ${currentStageId}
+              and ${processField} eq ${processDefinitionId}
+              and ${relatedStageField} eq ${currentStageId}
               &$top=10`
         );
 
         var actionIdToSet = null;
 
+        step = "Looping stage actions to find matching status";
         for (let item of stageActions.entities) {
             let statusId = item._duc_defaultstatus_value;
 
@@ -306,13 +369,19 @@ async function uLA_FromBooking(workOrderId) {
 
         if (!actionIdToSet) return;
 
+        step = "Updating process extension with LastActionTaken";
         await Xrm.WebApi.updateRecord("duc_processextension", peId, {
             "duc_LastActionTaken_duc_ProcessExtension@odata.bind":
                 `/duc_stageactions(${actionIdToSet})`
         });
 
     } catch (e) {
-        console.warn("uLA_FromBooking error:", e);
+        var errMsg = "[uLA_FromBooking] Error at step: " + step
+            + "\nWorkOrderId: " + workOrderId
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.warn(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -321,13 +390,10 @@ async function uLA_FromBooking(workOrderId) {
 // ==================================================
 async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
     var MSG = getMSG();
+    var isOff = isOffline();
     Xrm.Utility.showProgressIndicator(MSG.checking);
 
     try {
-        // IMPORTANT: these fields are on Work Order (NOT on Booking form)
-        // Adjust if your schema names differ:
-        // duc_address    => _duc_address_value
-        // duc_subaccount => _duc_subaccount_value
         var workOrder = await Xrm.WebApi.retrieveRecord(
             "msdyn_workorder",
             workOrderId,
@@ -348,7 +414,13 @@ async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
             try {
                 var ou = await Xrm.WebApi.retrieveRecord("msdyn_organizationalunit", ouId, "?$select=" + fieldName);
                 allowedDist = (ou[fieldName] != null) ? (ou[fieldName] - 100000000) : 0;
-            } catch (e) {
+            } catch (ouErr) {
+                var errMsg = "[WO_CheckAllowedDistance_FromBooking] Error retrieving organizational unit."
+                    + "\nOU Id: " + ouId
+                    + "\nFieldName: " + fieldName
+                    + "\nOffline: " + isOff
+                    + "\nError: " + ((ouErr && ouErr.message) ? ouErr.message : JSON.stringify(ouErr));
+                console.error(errMsg, ouErr);
                 allowedDist = 0;
             }
         } else {
@@ -368,7 +440,12 @@ async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
                 if (addr.duc_latitude != null && addr.duc_longitude != null) {
                     return await updateWOWithCurrentLocation(workOrderId, addr.duc_latitude, addr.duc_longitude, allowedDist);
                 }
-            } catch (e) {
+            } catch (addrErr) {
+                var errMsg2 = "[WO_CheckAllowedDistance_FromBooking] Error retrieving address."
+                    + "\nAddressId: " + addressId
+                    + "\nOffline: " + isOff
+                    + "\nError: " + ((addrErr && addrErr.message) ? addrErr.message : JSON.stringify(addrErr));
+                console.error(errMsg2, addrErr);
                 // fallback to subaccount addresses
             }
         }
@@ -377,8 +454,9 @@ async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
         if (workOrder._duc_subaccount_value) {
             var accountId = workOrder._duc_subaccount_value.replace(/[{}]/g, "");
 
+            var accField = isOff ? "duc_account" : "_duc_account_value";
             var options = "?$select=duc_addressinformationid,duc_latitude,duc_longitude";
-            options += "&$filter=_duc_account_value eq " + accountId;
+            options += "&$filter=" + accField + " eq " + accountId;
             options += " and duc_latitude ne null and duc_longitude ne null";
 
             var addrList = await Xrm.WebApi.retrieveMultipleRecords("duc_addressinformation", options);
@@ -416,7 +494,12 @@ async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
 
     } catch (error) {
         Xrm.Utility.closeProgressIndicator();
-        await Xrm.Navigation.openAlertDialog({ text: (error && error.message) ? error.message : "Failed to read work order." });
+        var errMsg = "[WO_CheckAllowedDistance_FromBooking] Error."
+            + "\nWorkOrderId: " + workOrderId
+            + "\nOffline: " + isOff
+            + "\nError: " + ((error && error.message) ? error.message : JSON.stringify(error));
+        console.error(errMsg, error);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
         return false;
     }
 
@@ -440,7 +523,11 @@ async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
 
         } catch (e) {
             Xrm.Utility.closeProgressIndicator();
-            await Xrm.Navigation.openAlertDialog({ text: MSG.cannotGetLoc });
+            var errMsg = "[WO_CheckAllowedDistance_FromBooking > updateWOWithCurrentLocation] Cannot get position."
+                + "\nOffline: " + isOff
+                + "\nError: " + ((e && e.message) ? e.message : JSON.stringify(e));
+            console.error(errMsg, e);
+            Xrm.Navigation.openAlertDialog({ text: errMsg });
             return false;
         }
     }
@@ -457,7 +544,12 @@ async function WO_CheckAllowedDistance_FromBooking(workOrderId) {
 
         } catch (e) {
             Xrm.Utility.closeProgressIndicator();
-            await Xrm.Navigation.openAlertDialog({ text: MSG.updateError + "\n" + (e.message || "") });
+            var errMsg = "[WO_CheckAllowedDistance_FromBooking > updateWorkOrderLocationOnly] " + MSG.updateError
+                + "\nWorkOrderId: " + workOrderId
+                + "\nOffline: " + isOff
+                + "\nError: " + ((e && e.message) ? e.message : JSON.stringify(e));
+            console.error(errMsg, e);
+            Xrm.Navigation.openAlertDialog({ text: errMsg });
             return false;
         }
     }
@@ -495,7 +587,12 @@ async function Booking_RunFullFlow_SameAsWorkOrder() {
         }
 
     } catch (error) {
-        console.error("Execution stopped due to error:", error);
+        var errMsg = "[Booking_RunFullFlow_SameAsWorkOrder] Execution stopped due to error."
+            + "\nOffline: " + isOffline()
+            + "\nIsMobile: " + IsFromMobile()
+            + "\nError: " + (error.message || JSON.stringify(error));
+        console.error(errMsg, error);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
