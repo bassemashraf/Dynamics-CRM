@@ -839,7 +839,14 @@ export class MultiTypeInspection extends React.Component<
         "duc_Account@odata.bind": `/accounts(${accountId})`,
       };
 
-      await this.xrm.WebApi.createRecord("duc_addressinformation", addressData);
+      var results = await this.xrm.WebApi.createRecord("duc_addressinformation", addressData);
+
+      // associate address to account
+      await this.xrm.WebApi.updateRecord("account", accountId,
+        {
+          'duc_Address@odata.bind': `/duc_addressinformations(${results.id})`
+        });
+
     } catch (error: any) {
       console.error("Error creating address information:", error);
       // alert("Error creating address information: " + (error?.message || error));
@@ -925,13 +932,12 @@ export class MultiTypeInspection extends React.Component<
       const newAccount: any = {
         name: accountName,
         duc_accountinspectiontype: selectedInspectionType,
+        duc_accountidentifier: identifierValue,
       };
 
       // Establishment
       if (selectedInspectionType === 10) {
         newAccount.duc_moinumber = identifierValue;
-      } else {
-        newAccount.duc_accountidentifier = identifierValue;
       }
 
       if (accountTypeRecord?.duc_accounttypeid) {
