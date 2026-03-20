@@ -74,6 +74,15 @@ export const Actions: React.FC<IActionsProps> = ({
   const evaluatePermissions = async () => {
     setIsPermissionLoading(true);
     try {
+      // Offline: skip permission checks — system entities (teammembership, role, etc.) are not available
+      const isOffline = _context.client.isOffline?.() === true;
+      if (isOffline) {
+        console.log("[evaluatePermissions] Offline mode — auto-authorizing");
+        setIsAuthorized(true);
+        setIsPermissionLoading(false);
+        return;
+      }
+
       const currentUserId = _context.userSettings.userId
         .replace(/[{}]/g, "")
         .toLowerCase();
@@ -94,38 +103,25 @@ export const Actions: React.FC<IActionsProps> = ({
       let roles: string[] = [];
 
       try {
-        // Step 1: Query the many-to-many relationship entity to get role IDs
-        const userRolesRes = await _context.webAPI.retrieveMultipleRecords(
-          "systemuserrolescollection",
-          `?$filter=systemuserid eq '${currentUserId}'`,
+        const userRoles = await _context.webAPI.retrieveMultipleRecords(
+          "systemuser",
+          `?$filter=systemuserid eq ${currentUserId}&$expand=systemuserroles_association($select=name)`,
         );
 
-        const roleIds = userRolesRes.entities
-          .map((e: any) => e.roleid)
-          .filter(Boolean);
-
-        if (roleIds.length > 0) {
-          // Step 2: Query the roles entity to get role names
-          let roleFilter = "";
-          roleIds.forEach((id: string, index: number) => {
-            if (index > 0) roleFilter += " or ";
-            roleFilter += `roleid eq ${id}`;
-          });
-
-          const rolesRes = await _context.webAPI.retrieveMultipleRecords(
-            "role",
-            `?$filter=${roleFilter}&$select=name`,
-          );
-
-          roles = rolesRes.entities.map((r: any) => r.name).filter(Boolean);
+        if (userRoles.entities.length > 0) {
+          const roleAssociations: RoleAssociation[] =
+            (userRoles.entities[0] as any).systemuserroles_association ?? [];
+          roles = roleAssociations.map((r) => r.name).filter(Boolean);
         }
 
         isAdmin = roles.includes("System Administrator");
         console.log(
           `Case 2 - Is current user System Administrator? ${isAdmin}`,
         );
-      } catch (e) {
-        console.error("Error fetching roles", e);
+      } catch (e: any) {
+        const errMsg = `[evaluatePermissions] Error fetching roles.\nError: ${e?.message || JSON.stringify(e)}`;
+        console.error(errMsg, e);
+        void _context.navigation.openAlertDialog({ text: errMsg });
       }
 
       // Case 3: Record is owned by a team that current user is a member of
@@ -142,8 +138,10 @@ export const Actions: React.FC<IActionsProps> = ({
           console.log(
             `Case 3 - Is user member of owning team? ${isTeamMember}`,
           );
-        } catch (e) {
-          console.error("Error checking team membership", e);
+        } catch (e: any) {
+          const errMsg = `[evaluatePermissions] Error checking team membership.\nError: ${e?.message || JSON.stringify(e)}`;
+          console.error(errMsg, e);
+          void _context.navigation.openAlertDialog({ text: errMsg });
         }
       }
 
@@ -153,8 +151,10 @@ export const Actions: React.FC<IActionsProps> = ({
       console.log(
         `User is ${authorized ? "authorized" : "not authorized"} for actions`,
       );
-    } catch (error) {
-      console.error("Permission check failed:", error);
+    } catch (error: any) {
+      const errMsg = `[evaluatePermissions] Permission check failed.\nError: ${error?.message || JSON.stringify(error)}`;
+      console.error(errMsg, error);
+      void _context.navigation.openAlertDialog({ text: errMsg });
       setIsAuthorized(false);
     } finally {
       setIsPermissionLoading(false);
@@ -371,11 +371,9 @@ export const Actions: React.FC<IActionsProps> = ({
       });
       setDataSet(tempDataSet);
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error("Error occurred in API call:", error.message);
-      } else {
-        console.error("An unknown error occurred");
-      }
+      const errMsg = `[fetchData] Error occurred in API call.\nError: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
+      console.error(errMsg, error);
+      void _context.navigation.openAlertDialog({ text: errMsg });
     } finally {
       setIsLoading(false);
     }
@@ -615,7 +613,7 @@ export const Actions: React.FC<IActionsProps> = ({
         const codeFromField = action.entity?.duc_actiontype?.duc_actioncommand ?? ""; // e.g. "openScheduleBoard(formContext);"
 
         if (codeFromField) {
-          alert(`[DEBUG] About to run JS code from duc_actioncommand:\n\n${codeFromField}`);
+          console.log(`[DEBUG] About to run JS code from duc_actioncommand:`, codeFromField);
           try {
             //const recordId = (_context.mode as any).contextInfo.entityId;
             //const entityName = (_context.mode as any).contextInfo.entityTypeName;
@@ -642,13 +640,13 @@ export const Actions: React.FC<IActionsProps> = ({
               (_context.mode as any).contextInfo,
               action,
             );
-            alert("[DEBUG] JS code executed successfully.");
+            console.log("[DEBUG] JS code executed successfully.");
           } catch (error) {
-            alert(`[DEBUG] JS code execution FAILED:\n\n${error instanceof Error ? error.message : JSON.stringify(error)}`);
+            console.error(`[DEBUG] JS code execution FAILED:`, error);
             console.error("Error running dynamic code:", error);
           }
         } else {
-          alert("[DEBUG] No duc_actioncommand code found on this action.");
+          console.log("[DEBUG] No duc_actioncommand code found on this action.");
         }
       } else {
         try {

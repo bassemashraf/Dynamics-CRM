@@ -74,7 +74,7 @@ export class ProcessExtensionHelpers {
 
       const processDefName =
         incidentType[
-          "_duc_processdefinition_value@OData.Community.Display.V1.FormattedValue"
+        "_duc_processdefinition_value@OData.Community.Display.V1.FormattedValue"
         ];
       console.log(
         "[ProcessExtension] Incident type linked to process definition:",
@@ -87,13 +87,13 @@ export class ProcessExtensionHelpers {
         "duc_processdefinition",
         processDefId,
         "?$select=duc_processdefinitionid,duc_name" +
-          ",_duc_startstage_value" +
-          ",_duc_defaultstatus_value" +
-          ",_duc_defaultsubstatus_value" +
-          ",_duc_startaction_value" +
-          ",duc_targetentitycustomerlookupname" +
-          ",duc_targetentitysubjectname" +
-          ",duc_parentlookup",
+        ",_duc_startstage_value" +
+        ",_duc_defaultstatus_value" +
+        ",_duc_defaultsubstatus_value" +
+        ",_duc_startaction_value" +
+        ",duc_targetentitycustomerlookupname" +
+        ",duc_targetentitysubjectname" +
+        ",duc_parentlookup",
       );
 
       const result: ProcessDefinitionData = {
@@ -102,22 +102,22 @@ export class ProcessExtensionHelpers {
         startStageId: def["_duc_startstage_value"],
         startStageName:
           def[
-            "_duc_startstage_value@OData.Community.Display.V1.FormattedValue"
+          "_duc_startstage_value@OData.Community.Display.V1.FormattedValue"
           ],
         defaultStatusId: def["_duc_defaultstatus_value"],
         defaultStatusName:
           def[
-            "_duc_defaultstatus_value@OData.Community.Display.V1.FormattedValue"
+          "_duc_defaultstatus_value@OData.Community.Display.V1.FormattedValue"
           ],
         defaultSubStatusId: def["_duc_defaultsubstatus_value"],
         defaultSubStatusName:
           def[
-            "_duc_defaultsubstatus_value@OData.Community.Display.V1.FormattedValue"
+          "_duc_defaultsubstatus_value@OData.Community.Display.V1.FormattedValue"
           ],
         startActionId: def["_duc_startaction_value"],
         startActionName:
           def[
-            "_duc_startaction_value@OData.Community.Display.V1.FormattedValue"
+          "_duc_startaction_value@OData.Community.Display.V1.FormattedValue"
           ],
         customerLookupName: def.duc_targetentitycustomerlookupname,
         subjectFieldName: def.duc_targetentitysubjectname,
@@ -179,31 +179,33 @@ export class ProcessExtensionHelpers {
       // Current Stage (from Start Stage)
       // Nav prop: duc_CurrentStage_duc_ProcessExtension
       // if (processDef.startStageId) {
-        createData["duc_CurrentStage_duc_ProcessExtension@odata.bind"] =
-          `/duc_processstages(${processDef.startStageId})`;
-      
+      createData["duc_CurrentStage_duc_ProcessExtension@odata.bind"] =
+        `/duc_processstages(${processDef.startStageId})`;
+
 
 
       // Status
       // Nav prop: duc_Status_duc_ProcessExtension
       // if (processDef.defaultStatusId) {
-        createData["duc_Status_duc_ProcessExtension@odata.bind"] =
-          `/duc_processstatuses(${processDef.defaultStatusId})`;
+      createData["duc_Status_duc_ProcessExtension@odata.bind"] =
+        `/duc_processstatuses(${processDef.defaultStatusId})`;
       // }
 
       // SubStatus
       // Nav prop: duc_SubStatus_duc_ProcessExtension
       // if (processDef.defaultSubStatusId) {
-        createData["duc_SubStatus_duc_ProcessExtension@odata.bind"] =
-          `/duc_processsubstatuses(${processDef.defaultSubStatusId})`;
+      createData["duc_SubStatus_duc_ProcessExtension@odata.bind"] =
+        `/duc_processsubstatuses(${processDef.defaultSubStatusId})`;
       // }
 
       // Customer (account — polymorphic lookup)
       // Nav prop: duc_CustomerId_duc_ProcessExtension_account
       // if (customerId) {
-        createData["duc_CustomerId_duc_ProcessExtension_account@odata.bind"] =
-          `/accounts(${customerId})`;
+      createData["duc_CustomerId_duc_ProcessExtension_account@odata.bind"] =
+        `/accounts(${customerId})`;
       // }
+
+      createData["subject"] = "test";
 
       // Last Action Taken (from Start Action on process definition)
       // Nav prop: duc_LastActionTaken_duc_ProcessExtension
