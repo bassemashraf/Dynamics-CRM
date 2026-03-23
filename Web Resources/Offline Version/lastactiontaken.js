@@ -713,3 +713,104 @@ DUC.ProcessAutomation.Offline.runActionLogic = function (actionId, processExtens
             });
         });
 };
+
+// ///////////////////////////////////////////////////////////////////////////
+// MODULE 6: runActionLogic
+// Direct-call version — no executionContext/formContext needed.
+// Call this from button scripts AFTER duc_lastactiontaken is set via WebApi.
+//
+// Parameters:
+//   actionId           — duc_stageaction GUID that was set as last action
+//   processExtensionId — duc_processextension record GUID
+//   regarding          — { entityType: "msdyn_workorder", id: "..." } or null
+// ///////////////////////////////////////////////////////////////////////////
+
+DUC.ProcessAutomation.Offline.runActionLogic = function (actionId, processExtensionId, regarding) {
+    "use strict";
+
+    var Logger = DUC.ProcessAutomation.Offline.Logger;
+    var esn = DUC.ProcessAutomation.Offline._entitySetName;
+    var ActionService = DUC.ProcessAutomation.Offline.StepActionInfoService;
+    var Assignment = DUC.ProcessAutomation.Offline.Assignment;
+
+    var userId = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+    var ctx = {
+        author: { entityType: "systemuser", id: userId },
+        regarding: regarding || null
+    };
+
+    Logger.trace("runActionLogic: actionId=" + actionId + " peId=" + processExtensionId);
+
+    return ActionService.getActionInfo(actionId)
+        .then(function (actionInfo) {
+            if (!actionInfo) throw new Error("Action info not found for " + actionId);
+            ctx.actionInfo = actionInfo;
+            Logger.trace("Action info loaded: " + actionInfo.Action_Name);
+            return DUC.ProcessAutomation.Offline._getParentRegarding(processExtensionId)
+                .then(function (parentRegarding) {
+                    if (parentRegarding) ctx.regarding = parentRegarding;
+                });
+        })
+        .then(function () {
+            var logData = {
+                "subject": "Process Action",
+                "actualstart": new Date(),
+                "duc_sendtocustomer": ctx.actionInfo.ActionType_SendToCustomer || false,
+                "duc_islastactiontakenoffline": true
+            };
+            logData["ownerid_duc_processactionlog@odata.bind"] = "/systemusers(" + userId + ")";
+            logData["duc_AuthorId_duc_processActionLog_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
+            if (ctx.regarding)
+                logData["regardingobjectid_" + ctx.regarding.entityType + "_duc_processactionlog@odata.bind"]
+                    = "/" + esn(ctx.regarding.entityType) + "(" + ctx.regarding.id + ")";
+            if (ctx.actionInfo.Action_Id)
+                logData["duc_Action_duc_processActionLog@odata.bind"] = "/duc_stageactions(" + ctx.actionInfo.Action_Id + ")";
+            if (ctx.actionInfo.Action_ActionType_Id)
+                logData["duc_ActionType_duc_processActionLog@odata.bind"] = "/duc_actiontypes(" + ctx.actionInfo.Action_ActionType_Id + ")";
+            if (ctx.actionInfo.Action_RelatedStage_Id)
+                logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + ctx.actionInfo.Action_RelatedStage_Id + ")";
+            if (ctx.actionInfo.RelatedStage_RelatedProcess_Id)
+                logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + ctx.actionInfo.RelatedStage_RelatedProcess_Id + ")";
+
+            return Xrm.WebApi.offline.createRecord("duc_processactionlog", logData);
+        })
+        .then(function () {
+            Logger.trace("Action log created");
+            var updateData = { "duc_islastactiontakenoffline": true };
+            if (ctx.actionInfo.Action_NextStage_Id)
+                updateData["duc_CurrentStage_duc_ProcessExtension@odata.bind"]
+                    = "/duc_processstages(" + ctx.actionInfo.Action_NextStage_Id + ")";
+            updateData["duc_LastApprovedById_duc_ProcessExtension_systemuser@odata.bind"]
+                = "/systemusers(" + userId + ")";
+            if (ctx.actionInfo.Action_Status_Id)
+                updateData["duc_Status_duc_ProcessExtension@odata.bind"]
+                    = "/duc_processstatuses(" + ctx.actionInfo.Action_Status_Id + ")";
+            if (ctx.actionInfo.Action_SubStatus_Id)
+                updateData["duc_SubStatus_duc_ProcessExtension@odata.bind"]
+                    = "/duc_processsubstatuses(" + ctx.actionInfo.Action_SubStatus_Id + ")";
+
+            return Xrm.WebApi.offline.updateRecord("duc_processextension", processExtensionId, updateData);
+        })
+        .then(function () {
+            Logger.trace("Process extension updated");
+            if (!ctx.regarding) return Promise.resolve();
+            return DUC.ProcessAutomation.Offline._updateTargetEntityFields(ctx.regarding, ctx.actionInfo);
+        })
+        .then(function () {
+            Logger.trace("Target entity fields updated — running assignment");
+            if (!ctx.regarding) return Promise.resolve();
+            return Assignment.executeAssignmentLogic(processExtensionId, ctx.regarding);
+        })
+        .then(function () {
+            Logger.trace("runActionLogic complete for action: " + actionId);
+        })
+        .catch(function (error) {
+            var detail = DUC.ProcessAutomation.Offline._extractErrorDetail(error);
+            Logger.error("runActionLogic failed: " + detail);
+            Xrm.Navigation.openAlertDialog({
+                text: "Offline action processing error:\n" + detail,
+                title: "Process Automation"
+            });
+        });
+};
+
