@@ -797,9 +797,10 @@ export class MultiTypeInspection extends React.Component<
 
       case 10: // Establishment
         return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
-    }
 
-    return "Account";
+      default:
+        return `${prefixEn}${crNumber ?? registrationNumber ?? qataryId}${prefixAr}`.trim();
+    }
   };
 
   private getCurrentLocation = async (): Promise<{
