@@ -7,6 +7,7 @@ import {
   InitCache,
   ProcessExtensionHelpers,
 } from "../helpers";
+import { WOSTHelpers } from "../helpers/WOSTHelpers";
 
 interface IMultiTypeInspectionProps {
   context: ComponentFramework.Context<any>;
@@ -313,7 +314,7 @@ export class MultiTypeInspection extends React.Component<
   private loadInspectionTypesFromOrgUnit = async (): Promise<void> => {
     if (!this.props.organizationUnitId) {
       console.warn("No organization unit ID provided");
-      alert("loadInspectionTypesFromOrgUnit: No organization unit ID provided");
+      //alert("loadInspectionTypesFromOrgUnit: No organization unit ID provided");
       return;
     }
 
@@ -342,7 +343,7 @@ export class MultiTypeInspection extends React.Component<
 
       if (!junctionResults?.entities || junctionResults.entities.length === 0) {
         console.warn("No account types found for organization unit");
-        alert("loadInspectionTypesFromOrgUnit: No account types found for org unit");
+        //alert("loadInspectionTypesFromOrgUnit: No account types found for org unit");
         return;
       }
 
@@ -926,7 +927,7 @@ export class MultiTypeInspection extends React.Component<
 
   private createWorkOrder = async (accountId: string): Promise<void> => {
     try {
-      alert("createWorkOrder: Starting with accountId: " + accountId);
+      //alert("createWorkOrder: Starting with accountId: " + accountId);
       const userId =
         this.xrm.Utility.getGlobalContext().userSettings.userId.replace(
           /[{}]/g,
@@ -1087,6 +1088,7 @@ export class MultiTypeInspection extends React.Component<
         anonymousCustomer: anonymousCustomer,
         accountInspectionType: this.state.selectedInspectionType || undefined,
         createdFromMobile: createdFromMobile,
+        assignedInspectorId: userId,
       });
       this.xrm.Utility.closeProgressIndicator();
 
@@ -1095,7 +1097,7 @@ export class MultiTypeInspection extends React.Component<
       }
 
       console.log("Work order created successfully:", workOrderId);
-      alert("createWorkOrder: Work order created: " + workOrderId);
+      //alert("createWorkOrder: Work order created: " + workOrderId);
 
       // STEP 9.5: Create process extension record with defaults
       try {
@@ -1113,6 +1115,44 @@ export class MultiTypeInspection extends React.Component<
         this.xrm.Utility.closeProgressIndicator();
         console.warn("Process extension creation failed (non-blocking):", peError);
       }
+
+     // STEP 9.6: Create Work Order Incident + Service Tasks
+      try {
+        this.xrm.Utility.showProgressIndicator("Creating Service Tasks...");
+ 
+        //alert(`[STEP 9.6] Starting — WO: ${workOrderId} | IncidentType: ${incidentTypeData?.id} | IncidentName: ${incidentTypeData?.name}`);
+
+
+        // Create msdyn_workorderincident offline — OOB creates this server-side only.
+        const workOrderIncidentId = await WOSTHelpers.createWorkOrderIncident(
+          workOrderId,
+          incidentTypeData.id,
+          incidentTypeData.name
+        );
+
+          //alert(`[STEP 9.6] WorkOrderIncident result: ${workOrderIncidentId}`);
+ 
+        const wostResults = await WOSTHelpers.createWOSTsForWorkOrder(
+          workOrderId,
+          incidentTypeData.id,
+          workOrderIncidentId
+        );
+
+          //alert(`[STEP 9.6] WOST results: ${wostResults.length} | ${JSON.stringify(wostResults)}`);
+
+
+        this.xrm.Utility.closeProgressIndicator();
+        console.log(
+          `[WOST] Created ${wostResults.length} service task(s).`,
+          wostResults.map(r =>
+            `WOST: ${r.wostId} | Questions: ${r.questionsCreated} | Penalties: ${r.penaltiesCreated}`
+          )
+        );
+      } catch (wostError: any) {
+        this.xrm.Utility.closeProgressIndicator();
+        alert(`[STEP 9.6] CATCH ERROR: ${wostError?.message || JSON.stringify(wostError)}`);
+        console.warn("[WOST] Service task creation failed (non-blocking):", wostError);
+      }   
 
       // STEP 10: Create auto booking if from mobile
       if (createdFromMobile && InitCache.hasBookableResource) {
@@ -1170,10 +1210,10 @@ export class MultiTypeInspection extends React.Component<
 
       // Get or create account with progress indicator
       this.xrm.Utility.showProgressIndicator(this.strings.CreatingAccount);
-      alert("handleStart: Searching/creating account...");
+      //alert("handleStart: Searching/creating account...");
       const accountId = await this.searchOrCreateAccount();
       this.xrm.Utility.closeProgressIndicator();
-      alert("handleStart: Account resolved: " + accountId);
+      //alert("handleStart: Account resolved: " + accountId);
 
       if (!accountId) {
         throw new Error("Failed to get account");
@@ -1216,7 +1256,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error in handleStart:", error);
-      alert("Error in handleStart: " + (error?.message || error));
+      //alert("Error in handleStart: " + (error?.message || error));
       this.setState({
         error: error.message || "Error starting inspection",
         loading: false,

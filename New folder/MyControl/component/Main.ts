@@ -411,7 +411,7 @@ export const Main = (props: IProps) => {
             );
 
             if (activePatrolResults.entities.length > 0) {
-                alert("checkPatrolStatus: Active patrol found - " + activePatrolResults.entities[0].new_name);
+                //alert("checkPatrolStatus: Active patrol found - " + activePatrolResults.entities[0].new_name);
                 setState(prev => ({
                     ...prev,
                     patrolStatus: 'end',

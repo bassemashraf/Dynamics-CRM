@@ -336,11 +336,11 @@ export class WorkOrderHelpers {
             };
             const result = await this.xrm.WebApi.createRecord("bookableresourcebooking", bookingData);
             console.log("Booking created successfully. Booking ID:", result.id);
-            alert("Booking created successfully. ID: " + result.id);
+            //alert("Booking created successfully. ID: " + result.id);
             return result.id;
         } catch (error: any) {
             console.error("Error creating auto booking:", error);
-            alert("Error creating auto booking: " + (error?.message || error));
+            //alert("Error creating auto booking: " + (error?.message || error));
             throw error;
         }
     }
@@ -449,6 +449,7 @@ export class WorkOrderHelpers {
         anonymousCustomer?: boolean;
         accountInspectionType?: number;
         createdFromMobile?: boolean;
+        assignedInspectorId?: string;
     }): Promise<string | null> {
         try {
             const workOrderData: any = {
@@ -459,6 +460,11 @@ export class WorkOrderHelpers {
                 'duc_Department@odata.bind': `/msdyn_organizationalunits(${data.department.id})`,
                 'msdyn_systemstatus': 690970001
             };
+
+            // Assigned inspector — set to the signed-in mobile user
+            if (data.assignedInspectorId) {
+                workOrderData['duc_AssignedInspector@odata.bind'] = `/systemusers(${data.assignedInspectorId})`;
+            }            
 
             // Optional fields
             if (data.campaign) {
@@ -501,7 +507,7 @@ export class WorkOrderHelpers {
 
             const result = await this.xrm.WebApi.createRecord('msdyn_workorder', workOrderData);
             console.log('Work order created successfully:', result.id);
-            alert('Work order created successfully. ID: ' + result.id);
+            //alert('Work order created successfully. ID: ' + result.id);
 
             return result.id;
         } catch (error: any) {
