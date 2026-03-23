@@ -78,119 +78,132 @@ export const Main: React.FC<IMainProps> = ({
 
   //Check Permission
   const evaluatePermissions = async () => {
-    const currentUserId = _context.userSettings.userId
-      .replace(/[{}]/g, "")
-      .toLowerCase();
-    const ownerId =
-      _context.parameters.OwnerField.raw?.[0]?.id
-        ?.toLowerCase()
-        .replace(/[{}]/g, "") ?? "";
-    const ownerType = _context.parameters.OwnerField.raw?.[0]?.entityType ?? "";
-
-    console.log("Current User ID:", currentUserId);
-    console.log("Owner ID:", ownerId, "Owner Type:", ownerType);
-
-    let currentUserTeams: string[] = [];
     try {
-      const teamRes = await _context.webAPI.retrieveMultipleRecords(
-        "teammembership",
-        `?$filter=systemuserid eq ${currentUserId}`,
-      );
-      currentUserTeams = (teamRes.entities as TeamMembership[])
-        .map((t) => t.teamid?.toLowerCase().replace(/[{}]/g, ""))
-        .filter(Boolean);
-    } catch (e) {
-      console.error("Error fetching teams", e);
-    }
-    console.log("Current User Teams:", currentUserTeams);
-
-    let roles: string[] = [];
-    try {
-      // Step 1: Query the many-to-many relationship entity to get role IDs
-      const userRolesRes = await _context.webAPI.retrieveMultipleRecords(
-        "systemuserrolescollection",
-        `?$filter=systemuserid eq '${currentUserId}'`,
-      );
-
-      const roleIds = userRolesRes.entities
-        .map((e: any) => e.roleid)
-        .filter(Boolean);
-
-      if (roleIds.length > 0) {
-        // Step 2: Query the roles entity to get role names
-        let roleFilter = "";
-        roleIds.forEach((id: string, index: number) => {
-          if (index > 0) roleFilter += " or ";
-          roleFilter += `roleid eq ${id}`;
-        });
-
-        const rolesRes = await _context.webAPI.retrieveMultipleRecords(
-          "role",
-          `?$filter=${roleFilter}&$select=name`,
-        );
-
-        roles = rolesRes.entities.map((r: any) => r.name).filter(Boolean);
+      // Offline: skip permission checks — system entities (teammembership, role, etc.) are not available
+      const isOffline = _context.client.isOffline?.() === true;
+      if (isOffline) {
+        console.log("[evaluatePermissions] Offline mode — auto-granting permissions");
+        setCanShowAssignmentButton(!!_context.parameters.OwningTeam?.raw?.[0]?.id);
+        return;
       }
-    } catch (e) {
-      console.error("Error fetching roles", e);
-    }
-    console.log("User Roles:", roles);
 
-    // Case 1: Current user is the record owner
-    const isUserOwner = ownerType === "systemuser" && currentUserId === ownerId;
-    console.log(
-      `Case 1 - Is current user the record owner? ${isUserOwner} (User ID: ${currentUserId} vs Owner ID: ${ownerId})`,
-    );
+      const currentUserId = _context.userSettings.userId
+        .replace(/[{}]/g, "")
+        .toLowerCase();
+      const ownerId =
+        _context.parameters.OwnerField.raw?.[0]?.id
+          ?.toLowerCase()
+          .replace(/[{}]/g, "") ?? "";
+      const ownerType = _context.parameters.OwnerField.raw?.[0]?.entityType ?? "";
 
-    // Case 2: Current user is member of owning team
-    const isTeamMember =
-      ownerType === "team" && currentUserTeams.includes(ownerId);
-    console.log(
-      `Case 2 - Is current user member of owning team? ${isTeamMember} (Team ID: ${ownerId} in User Teams: [${currentUserTeams.join(", ")}])`,
-    );
+      console.log("Current User ID:", currentUserId);
+      console.log("Owner ID:", ownerId, "Owner Type:", ownerType);
 
-    // Case 3: Current user is System Administrator
-    const isAdmin = roles.includes("System Administrator");
-    console.log(
-      `Case 3 - Is current user System Administrator? ${isAdmin} (Roles: [${roles.join(", ")}])`,
-    );
-
-    // Case 4: Check if current user is administrator of owning team
-    let isTeamAdmin = false;
-    if (ownerType === "team") {
+      let currentUserTeams: string[] = [];
       try {
-        // Fetch team record with administrator information
-        const team = await _context.webAPI.retrieveRecord(
-          "team",
-          ownerId,
-          "?$select=administratorid",
+        const teamRes = await _context.webAPI.retrieveMultipleRecords(
+          "teammembership",
+          `?$filter=systemuserid eq ${currentUserId}`,
         );
-
-        const teamAdminId =
-          team.administratorid?.replace(/[{}]/g, "").toLowerCase() ?? "";
-        isTeamAdmin = teamAdminId === currentUserId;
-
-        console.log(
-          `Case 4 - Team Admin ID: ${teamAdminId}, Current User ID: ${currentUserId}`,
-        );
-        console.log(
-          `Case 4 - Is current user team administrator? ${isTeamAdmin}`,
-        );
+        currentUserTeams = (teamRes.entities as TeamMembership[])
+          .map((t) => t.teamid?.toLowerCase().replace(/[{}]/g, ""))
+          .filter(Boolean);
       } catch (e) {
-        console.error("Error fetching team administrator", e);
+        console.error("Error fetching teams", e);
       }
-    } else {
-      console.log("Case 4 - Not applicable (owner is not a team)");
-    }
+      console.log("Current User Teams:", currentUserTeams);
 
-    if (
-      (isUserOwner || isTeamMember || isAdmin || isTeamAdmin) &&
-      _context.parameters.OwningTeam?.raw?.[0]?.id
-    ) {
-      console.log("Permission granted: Showing assignment button");
-      setCanShowAssignmentButton(true);
-    } else {
-      console.log("Permission denied: Hiding assignment button");
+      let roles: string[] = [];
+      try {
+        // Step 1: Query the many-to-many relationship entity to get role IDs
+        const userRolesRes = await _context.webAPI.retrieveMultipleRecords(
+          "systemuserrolescollection",
+          `?$filter=systemuserid eq '${currentUserId}'`,
+        );
+
+        const roleIds = userRolesRes.entities
+          .map((e: any) => e.roleid)
+          .filter(Boolean);
+
+        if (roleIds.length > 0) {
+          // Step 2: Query the roles entity to get role names
+          let roleFilter = "";
+          roleIds.forEach((id: string, index: number) => {
+            if (index > 0) roleFilter += " or ";
+            roleFilter += `roleid eq ${id}`;
+          });
+
+          const rolesRes = await _context.webAPI.retrieveMultipleRecords(
+            "role",
+            `?$filter=${roleFilter}&$select=name`,
+          );
+
+          roles = rolesRes.entities.map((r: any) => r.name).filter(Boolean);
+        }
+      } catch (e) {
+        console.error("Error fetching roles", e);
+      }
+      console.log("User Roles:", roles);
+
+      // Case 1: Current user is the record owner
+      const isUserOwner = ownerType === "systemuser" && currentUserId === ownerId;
+      console.log(
+        `Case 1 - Is current user the record owner? ${isUserOwner} (User ID: ${currentUserId} vs Owner ID: ${ownerId})`,
+      );
+
+      // Case 2: Current user is member of owning team
+      const isTeamMember =
+        ownerType === "team" && currentUserTeams.includes(ownerId);
+      console.log(
+        `Case 2 - Is current user member of owning team? ${isTeamMember} (Team ID: ${ownerId} in User Teams: [${currentUserTeams.join(", ")}])`,
+      );
+
+      // Case 3: Current user is System Administrator
+      const isAdmin = roles.includes("System Administrator");
+      console.log(
+        `Case 3 - Is current user System Administrator? ${isAdmin} (Roles: [${roles.join(", ")}])`,
+      );
+
+      // Case 4: Check if current user is administrator of owning team
+      let isTeamAdmin = false;
+      if (ownerType === "team") {
+        try {
+          // Fetch team record with administrator information
+          const team = await _context.webAPI.retrieveRecord(
+            "team",
+            ownerId,
+            "?$select=administratorid",
+          );
+
+          const teamAdminId =
+            team.administratorid?.replace(/[{}]/g, "").toLowerCase() ?? "";
+          isTeamAdmin = teamAdminId === currentUserId;
+
+          console.log(
+            `Case 4 - Team Admin ID: ${teamAdminId}, Current User ID: ${currentUserId}`,
+          );
+          console.log(
+            `Case 4 - Is current user team administrator? ${isTeamAdmin}`,
+          );
+        } catch (e) {
+          console.error("Error fetching team administrator", e);
+        }
+      } else {
+        console.log("Case 4 - Not applicable (owner is not a team)");
+      }
+
+      if (
+        (isUserOwner || isTeamMember || isAdmin || isTeamAdmin) &&
+        _context.parameters.OwningTeam?.raw?.[0]?.id
+      ) {
+        console.log("Permission granted: Showing assignment button");
+        setCanShowAssignmentButton(true);
+      } else {
+        console.log("Permission denied: Hiding assignment button");
+        setCanShowAssignmentButton(false);
+      }
+    } catch (e) {
+      console.error("[evaluatePermissions] Unexpected error — defaulting to hide assignment", e);
       setCanShowAssignmentButton(false);
     }
   };
