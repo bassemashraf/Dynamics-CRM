@@ -96,7 +96,7 @@
 .main-pcf-flow-container>.step::before {
     position: absolute;
     content: "";
-    border-bottom: 4px solid #ccc;
+    /* border-bottom: 4px solid #ccc; */
     width: 100%;
     top: 20px;
     z-index: 2;

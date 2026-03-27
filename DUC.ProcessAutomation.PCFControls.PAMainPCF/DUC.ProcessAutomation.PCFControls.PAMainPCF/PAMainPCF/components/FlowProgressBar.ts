@@ -2,7 +2,6 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { IInputs } from "../generated/ManifestTypes";
 import { Constants } from "../constants";
-import "../css/FlowProgressBar.css";
 
 interface IStep {
   id: string;
@@ -110,8 +109,9 @@ export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
       }));
 
       setSteps(processed);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading steps:", error);
+      // Removed alert as per offline requirements
     } finally {
       setIsLoading(false);
     }
@@ -127,73 +127,75 @@ export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
       : 0;
   };
 
-  return (
-    <div
-      className={`main-pcf-flow-container ${isLTR ? "ltr" : "rtl"} ${isMobileOrTablet
+  // Checkmark SVG as React.createElement
+  const renderCheckmark = () =>
+    React.createElement(
+      "svg",
+      {
+        style: { width: "20px" },
+        fill: "#000000",
+        version: "1.1",
+        xmlns: "http://www.w3.org/2000/svg",
+        viewBox: "0 0 335.765 335.765",
+      },
+      React.createElement(
+        "g",
+        null,
+        React.createElement(
+          "g",
+          null,
+          React.createElement("polygon", {
+            fill: "white",
+            points: "311.757,41.803 107.573,245.96 23.986,162.364 0,186.393 107.573,293.962 335.765,65.795",
+          })
+        )
+      )
+    );
+
+  return React.createElement(
+    "div",
+    {
+      className: `main-pcf-flow-container ${isLTR ? "ltr" : "rtl"} ${isMobileOrTablet
         ? "main-pcf-flow-container-mobile-padding"
         : "main-pcf-flow-container-web-padding"
-        }`}
-      ref={containerRef}
-    >
-      {isLoading ? (
-        <div>Loading steps...</div>
-      ) : steps.length > 0 ? (
-        steps.map((step, index) => {
+        }`,
+      ref: containerRef,
+    },
+    isLoading
+      ? React.createElement("div", null, "Loading steps...")
+      : steps.length > 0
+        ? steps.map((step, index) => {
           const isLast = index === steps.length - 1;
           const status = step.done ? "done" : step.active ? "active" : "";
 
-          return (
-            <div key={step.id} className={`step ${status}`}>
-              {/* Step number / check */}
-              <div
-                className="step-number"
-                title={
-                  isLTR
-                    ? (step.descriptionEN ?? step.displayNameEN)
-                    : (step.descriptionAR ?? step.displayNameAR)
-                }
-              >
-                {step.done ? (
-                  <svg
-                    style={{ width: "20px" }}
-                    fill="#000000"
-                    version="1.1"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 335.765 335.765"
-                  >
-                    <g>
-                      <g>
-                        <polygon
-                          fill="white"
-                          points="311.757,41.803 107.573,245.96 23.986,162.364 0,186.393 107.573,293.962 335.765,65.795"
-                        />
-                      </g>
-                    </g>
-                  </svg>
-                ) : (
-                  (index + 1).toString()
-                )}
-              </div>
-
-              {/* Step label */}
-              <p
-                title={
-                  isLTR
-                    ? (step.descriptionEN ?? step.displayNameEN)
-                    : (step.descriptionAR ?? step.displayNameAR)
-                }
-              >
-                {isLTR ? step.displayNameEN : step.displayNameAR}
-              </p>
-
-              {/* Connector */}
-              {!isLast && <div className="connector"></div>}
-            </div>
+          return React.createElement(
+            "div",
+            { key: step.id, className: `step ${status}` },
+            // Step number / check
+            React.createElement(
+              "div",
+              {
+                className: "step-number",
+                title: isLTR
+                  ? (step.descriptionEN ?? step.displayNameEN)
+                  : (step.descriptionAR ?? step.displayNameAR),
+              },
+              step.done ? renderCheckmark() : (index + 1).toString()
+            ),
+            // Step label
+            React.createElement(
+              "p",
+              {
+                title: isLTR
+                  ? (step.descriptionEN ?? step.displayNameEN)
+                  : (step.descriptionAR ?? step.displayNameAR),
+              },
+              isLTR ? step.displayNameEN : step.displayNameAR
+            ),
+            // Connector
+            !isLast && React.createElement("div", { className: "connector" })
           );
         })
-      ) : (
-        <div>No steps found.</div>
-      )}
-    </div>
+        : React.createElement("div", null, "No steps found.")
   );
 };

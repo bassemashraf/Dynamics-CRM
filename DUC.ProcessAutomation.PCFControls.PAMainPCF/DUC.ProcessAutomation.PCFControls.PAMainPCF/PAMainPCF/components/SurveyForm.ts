@@ -17,6 +17,7 @@ interface SurveyQuestion {
 }
 
 export class SurveyForm extends React.Component<IInputs, IOutputs> {
+  public render(): React.ReactNode { return null; }
   /*private questions: SurveyQuestion[] = [];
   private conditionalRules: Record<string, ConditionalRule[]> = {};
 
@@ -143,64 +144,67 @@ export class SurveyForm extends React.Component<IInputs, IOutputs> {
   }
 
   render() {
-    return (
-      <div className="survey-form">
-        {this.questions.map((question) => (
-          <div key={question.duc_surveyquestionid} data-question-id={question.duc_surveyquestionid} className="question-card">
-            <div className="question-label">{question.duc_label}</div>
-            {question.duc_questiontype === 'radio' && this.createRadioGroup(question)}
-            {question.duc_questiontype === 'text' && this.createTextInput(question)}
-            {/* Add more question types as needed *//*}
-</div>
-))}
-<button onClick={() => this.submitSurvey()}>Submit</button>
-</div>
-);
-}
+    return React.createElement(
+      "div",
+      { className: "survey-form" },
+      this.questions.map((question) =>
+        React.createElement(
+          "div",
+          { key: question.duc_surveyquestionid, "data-question-id": question.duc_surveyquestionid, className: "question-card" },
+          React.createElement("div", { className: "question-label" }, question.duc_label),
+          question.duc_questiontype === 'radio' && this.createRadioGroup(question),
+          question.duc_questiontype === 'text' && this.createTextInput(question)
+        )
+      ),
+      React.createElement("button", { onClick: () => this.submitSurvey() }, "Submit")
+    );
+  }
 
-// Render radio button group for a question
-createRadioGroup(question: SurveyQuestion) {
-return (
-<div className="radio-group">
-{question.duc_conditionalrules.map((answer, index) => (
-<div key={index} className="radio-option">
-  <input
-    type="radio"
-    name={`question_${question.duc_surveyquestionid}`}
-    value={answer.duc_questionpossibleanswersid}
-    onChange={() => this.handleRadioChange(question, answer)}
-  />
-  <label>{answer.duc_questionpossibleanswersid}</label>
-</div>
-))}
-</div>
-);
-}
+  // Render radio button group for a question
+  createRadioGroup(question: SurveyQuestion) {
+    return React.createElement(
+      "div",
+      { className: "radio-group" },
+      question.duc_conditionalrules.map((answer, index) =>
+        React.createElement(
+          "div",
+          { key: index, className: "radio-option" },
+          React.createElement("input", {
+            type: "radio",
+            name: `question_${question.duc_surveyquestionid}`,
+            value: answer.duc_questionpossibleanswersid,
+            onChange: () => this.handleRadioChange(question, answer)
+          }),
+          React.createElement("label", null, answer.duc_questionpossibleanswersid)
+        )
+      )
+    );
+  }
 
-// Handle radio button change
-handleRadioChange(question: SurveyQuestion, answer: ConditionalRule) {
-const newAnswers = new Map(this.state.answers);
-newAnswers.set(question.duc_surveyquestionid, answer.duc_questionpossibleanswersid);
-this.setState({ answers: newAnswers });
-}
+  // Handle radio button change
+  handleRadioChange(question: SurveyQuestion, answer: ConditionalRule) {
+    const newAnswers = new Map(this.state.answers);
+    newAnswers.set(question.duc_surveyquestionid, answer.duc_questionpossibleanswersid);
+    this.setState({ answers: newAnswers });
+  }
 
-// Render text input for a question
-createTextInput(question: SurveyQuestion) {
-return (
-<div className="text-input">
-<textarea
-onChange={(e) => this.handleTextInputChange(question, e.target.value)}
-required={question.duc_required}
-/>
-</div>
-);
-}
+  // Render text input for a question
+  createTextInput(question: SurveyQuestion) {
+    return React.createElement(
+      "div",
+      { className: "text-input" },
+      React.createElement("textarea", {
+        onChange: (e) => this.handleTextInputChange(question, e.target.value),
+        required: question.duc_required
+      })
+    );
+  }
 
-// Handle text input change
-handleTextInputChange(question: SurveyQuestion, value: string) {
-const newAnswers = new Map(this.state.answers);
-newAnswers.set(question.duc_surveyquestionid, value);
-this.setState({ answers: newAnswers });
-}
+  // Handle text input change
+  handleTextInputChange(question: SurveyQuestion, value: string) {
+    const newAnswers = new Map(this.state.answers);
+    newAnswers.set(question.duc_surveyquestionid, value);
+    this.setState({ answers: newAnswers });
+  }
 */
 }

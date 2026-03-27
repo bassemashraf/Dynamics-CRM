@@ -8,9 +8,10 @@ interface CustomBadgeProps {
 }
 
 export const CustomBadge: React.FC<CustomBadgeProps> = ({ label, value, isLeave, iconClass }) => {
-  return (
-    <div
-      style={{
+  return React.createElement(
+    "div",
+    {
+      style: {
         backgroundColor: isLeave ? "#ffe5e5" : "#f0f0f0",
         borderRadius: "12px",
         padding: "4px 10px",
@@ -19,10 +20,9 @@ export const CustomBadge: React.FC<CustomBadgeProps> = ({ label, value, isLeave,
         display: "flex",
         alignItems: "center",
         fontWeight: isLeave ? "bold" : "normal",
-      }}
-    >
-      {iconClass && <i className={iconClass} style={{ marginRight: "5px" }}></i>}
-      {label} {value !== undefined ? `: ${value}` : ""}
-    </div>
+      }
+    },
+    iconClass && React.createElement("i", { className: iconClass, style: { marginRight: "5px" } }),
+    label + (value !== undefined ? `: ${value}` : "")
   );
 };

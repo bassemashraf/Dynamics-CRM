@@ -82,6 +82,7 @@ async function validateRequiredFields() {
             }
         }
 
+        await Xrm.Navigation.openAlertDialog({ text: "[validateRequiredFields] SUCCESS" });
         return true;
     }
     catch (e) {
@@ -118,9 +119,9 @@ async function setBookingCompletedForWorkOrder() {
         step = "Retrieving bookings for work order";
         var bookings = await Xrm.WebApi.retrieveMultipleRecords(
             "bookableresourcebooking",
-            `?$select=bookableresourcebookingid,starttime
-              &$filter=${woFilterField} eq ${workOrderId}
-              &$orderby=createdon asc`
+            "?$select=bookableresourcebookingid,starttime" +
+            "&$filter=" + woFilterField + " eq " + workOrderId +
+            "&$orderby=createdon asc"
         );
 
         if (!bookings.entities || bookings.entities.length === 0)
@@ -143,16 +144,17 @@ async function setBookingCompletedForWorkOrder() {
 
         // Update all bookings to Completed status
         step = "Updating bookings to Completed";
-        for (let booking of bookings.entities) {
+        for (var bi = 0; bi < bookings.entities.length; bi++) {
             await Xrm.WebApi.updateRecord(
                 "bookableresourcebooking",
-                booking.bookableresourcebookingid,
+                bookings.entities[bi].bookableresourcebookingid,
                 {
-                    "BookingStatus@odata.bind": `/bookingstatuses(${completedStatusId})`
+                    "BookingStatus@odata.bind": "/bookingstatuses(" + completedStatusId + ")"
                 }
             );
         }
 
+        await Xrm.Navigation.openAlertDialog({ text: "[setBookingCompletedForWorkOrder] SUCCESS" });
         return true;
     }
     catch (e) {
@@ -170,6 +172,7 @@ async function setBookingCompletedForWorkOrder() {
  * PROCESS EXTENSION UPDATE
  ***************************************/
 async function updateLastActionOnProcessExtension() {
+    debugger
     var step = "";
     try {
         var form = Xrm.Page;
@@ -178,57 +181,68 @@ async function updateLastActionOnProcessExtension() {
         if (!lookup || !lookup.getValue()) return;
 
         var extId = lookup.getValue()[0].id.replace(/[{}]/g, "");
+        alert("extId: " + extId);
         var isOff = isOffline();
 
         step = "Retrieving process extension record";
+        alert(step);
         var record = await Xrm.WebApi.retrieveRecord(
             "duc_processextension",
             extId,
             "?$select=_duc_processdefinition_value,_duc_currentstage_value"
         );
+        alert("record: " + JSON.stringify(record));
 
         if (!record._duc_processdefinition_value) return;
 
         step = "Retrieving stage actions";
+        alert(step);
         var processField = isOff ? "duc_process" : "_duc_process_value";
         var relatedStageField = isOff ? "duc_relatedstage" : "_duc_relatedstage_value";
 
         var actions = await Xrm.WebApi.retrieveMultipleRecords(
             "duc_stageaction",
-            `?$select=duc_stageactionid,_duc_defaultstatus_value
-              &$filter=duc_canbetriggeredbytarget eq true
-              and ${processField} eq ${record._duc_processdefinition_value}
-              and ${relatedStageField} eq ${record._duc_currentstage_value}`
+            "?$select=duc_stageactionid,_duc_defaultstatus_value" +
+            "&$filter=duc_canbetriggeredbytarget eq true" +
+            " and " + processField + " eq " + record._duc_processdefinition_value +
+            " and " + relatedStageField + " eq " + record._duc_currentstage_value
         );
+        alert("actions count: " + actions.entities.length);
 
         step = "Looping stage actions to find matching status";
-        for (let act of actions.entities) {
+        alert(step);
+        for (var ai = 0; ai < actions.entities.length; ai++) {
+            var act = actions.entities[ai];
             if (!act._duc_defaultstatus_value) continue;
 
-            let status = await Xrm.WebApi.retrieveRecord(
+            var actStatus = await Xrm.WebApi.retrieveRecord(
                 "duc_processstatus",
                 act._duc_defaultstatus_value,
                 "?$select=duc_value"
             );
+            alert("actStatus value: " + actStatus.duc_value);
 
-            if (status.duc_value === 100000006) {
+            if (actStatus.duc_value === 100000006) {
                 step = "Updating process extension with LastActionTaken";
+                alert(step);
                 await Xrm.WebApi.updateRecord(
                     "duc_processextension",
                     extId,
                     {
                         "duc_LastActionTaken_duc_ProcessExtension@odata.bind":
-                            `/duc_stageactions(${act.duc_stageactionid})`
+                            "/duc_stageactions(" + act.duc_stageactionid + ")"
                     }
                 );
 
                 // Run offline plugin logic inline (no external dependency)
                 step = "Running offline action logic";
+                alert(step);
                 await runOfflineActionLogic_Finish(act.duc_stageactionid, extId, form.data.entity.getId().replace(/[{}]/g, ""));
 
                 break;
             }
         }
+        await Xrm.Navigation.openAlertDialog({ text: "[updateLastActionOnProcessExtension] SUCCESS" });
     }
     catch (e) {
         Xrm.Utility.closeProgressIndicator();
@@ -245,12 +259,14 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
     var step = "";
     try {
         var userId = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+        Xrm.Navigation.openAlertDialog({ text: "[runOfflineActionLogic_Finish] START\nactionId: " + actionId + "\nPE: " + processExtensionId + "\nWO: " + workOrderId + "\nuserId: " + userId });
 
         step = "Retrieving stage action details";
         var action = await Xrm.WebApi.retrieveRecord("duc_stageaction", actionId,
             "?$select=duc_name,_duc_actiontype_value,_duc_nextstage_value,_duc_relatedstage_value," +
             "_duc_defaultstatus_value,_duc_defaultsubstatus_value"
         );
+        Xrm.Navigation.openAlertDialog({ text: "[step 1 OK] action: " + JSON.stringify(action) });
 
         var actionTypeId = action._duc_actiontype_value || null;
         var nextStageId = action._duc_nextstage_value || null;
@@ -264,7 +280,10 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
             try {
                 var actionType = await Xrm.WebApi.retrieveRecord("duc_actiontype", actionTypeId, "?$select=duc_sendtocustomer");
                 sendToCustomer = actionType.duc_sendtocustomer || false;
-            } catch (e) { /* non-critical */ }
+                Xrm.Navigation.openAlertDialog({ text: "[step 2 OK] actionType sendToCustomer: " + sendToCustomer });
+            } catch (e) {
+                Xrm.Navigation.openAlertDialog({ text: "[step 2 WARN] Failed to get action type: " + (e.message || e) });
+            }
         }
 
         var processDefId = null;
@@ -277,7 +296,10 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
             try {
                 var rs = await Xrm.WebApi.retrieveRecord("duc_processstage", relatedStageId, "?$select=_duc_relatedprocess_value");
                 processDefId = rs._duc_relatedprocess_value || null;
-            } catch (e) { /* ignore */ }
+                Xrm.Navigation.openAlertDialog({ text: "[step 3 OK] processDefId: " + processDefId });
+            } catch (e) {
+                Xrm.Navigation.openAlertDialog({ text: "[step 3 WARN] Failed to get related stage: " + (e.message || e) });
+            }
         }
 
         if (processDefId) {
@@ -293,17 +315,30 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
                 existingSubStatusEntity = pd.duc_existingsubstatusentity || null;
                 statusLookupType = pd.duc_statuslookuptype || null;
                 subStatusLookupType = pd.duc_substatuslookuptype || null;
-            } catch (e) { /* ignore */ }
+                Xrm.Navigation.openAlertDialog({ text: "[step 4 OK] procDef: targetStatus=" + targetStatusField + " targetSubStatus=" + targetSubStatusField });
+            } catch (e) {
+                Xrm.Navigation.openAlertDialog({ text: "[step 4 WARN] Failed to get process def: " + (e.message || e) });
+            }
         }
 
         var statusValue = null, subStatusValue = null;
         if (statusId) {
             step = "Retrieving process status value";
-            try { statusValue = (await Xrm.WebApi.retrieveRecord("duc_processstatus", statusId, "?$select=duc_value")).duc_value || null; } catch (e) { /* ignore */ }
+            try {
+                statusValue = (await Xrm.WebApi.retrieveRecord("duc_processstatus", statusId, "?$select=duc_value")).duc_value || null;
+                Xrm.Navigation.openAlertDialog({ text: "[step 5a OK] statusValue: " + statusValue });
+            } catch (e) {
+                Xrm.Navigation.openAlertDialog({ text: "[step 5a WARN] Failed to get status: " + (e.message || e) });
+            }
         }
         if (subStatusId) {
             step = "Retrieving process substatus value";
-            try { subStatusValue = (await Xrm.WebApi.retrieveRecord("duc_processsubstatus", subStatusId, "?$select=duc_value")).duc_value || null; } catch (e) { /* ignore */ }
+            try {
+                subStatusValue = (await Xrm.WebApi.retrieveRecord("duc_processsubstatus", subStatusId, "?$select=duc_value")).duc_value || null;
+                Xrm.Navigation.openAlertDialog({ text: "[step 5b OK] subStatusValue: " + subStatusValue });
+            } catch (e) {
+                Xrm.Navigation.openAlertDialog({ text: "[step 5b WARN] Failed to get substatus: " + (e.message || e) });
+            }
         }
 
         step = "Creating action log";
@@ -319,6 +354,7 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
         if (relatedStageId) logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + relatedStageId + ")";
         if (processDefId) logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + processDefId + ")";
         await Xrm.WebApi.createRecord("duc_processactionlog", logData);
+        Xrm.Navigation.openAlertDialog({ text: "[step 6 OK] Action log created" });
 
         step = "Updating process extension fields";
         var peUpdate = { "duc_islastactiontakenoffline": true };
@@ -327,6 +363,7 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
         if (statusId) peUpdate["duc_Status_duc_ProcessExtension@odata.bind"] = "/duc_processstatuses(" + statusId + ")";
         if (subStatusId) peUpdate["duc_SubStatus_duc_ProcessExtension@odata.bind"] = "/duc_processsubstatuses(" + subStatusId + ")";
         await Xrm.WebApi.updateRecord("duc_processextension", processExtensionId, peUpdate);
+        Xrm.Navigation.openAlertDialog({ text: "[step 7 OK] Process extension updated" });
 
         step = "Updating work order status";
         var woUpdate = {};
@@ -341,7 +378,14 @@ async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOr
             else if (existingSubStatusEntity) { woUpdate[targetSubStatusField + "@odata.bind"] = "/" + _entitySetNameFinish(existingSubStatusEntity) + "(" + subStatusValue + ")"; }
             hasWoUpdate = true;
         }
-        if (hasWoUpdate) { await Xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, woUpdate); }
+        if (hasWoUpdate) {
+            await Xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, woUpdate);
+            Xrm.Navigation.openAlertDialog({ text: "[step 8 OK] Work order status/substatus updated\n" + JSON.stringify(woUpdate) });
+        } else {
+            Xrm.Navigation.openAlertDialog({ text: "[step 8 SKIP] No WO status update needed (targetStatusField=" + targetStatusField + " statusValue=" + statusValue + ")" });
+        }
+
+        Xrm.Navigation.openAlertDialog({ text: "[runOfflineActionLogic_Finish] DONE successfully" });
 
     } catch (e) {
         var errMsg = "[runOfflineActionLogic_Finish] Error at step: " + step
@@ -384,31 +428,28 @@ async function updateServiceTasksPercent() {
         );
 
         var accountId = wo._duc_subaccount_value;
-
+        alert(accountId);
         step = "Retrieving service tasks for work order";
+        alert(step);
         var woFilterField = isOff ? "msdyn_workorder" : "_msdyn_workorder_value";
 
         var tasks = await Xrm.WebApi.retrieveMultipleRecords(
             "msdyn_workorderservicetask",
-            `?$select=msdyn_workorderservicetaskid
-              &$filter=${woFilterField} eq ${id}`
+            "?$select=msdyn_workorderservicetaskid&$filter=" + woFilterField + " eq " + id
         );
 
         step = "Updating service tasks to 100%";
-        for (let task of tasks.entities) {
+        alert(step);
 
-            let updateObj = {
-                msdyn_percentcomplete: 100
-            };
-
-
+        for (var ti = 0; ti < tasks.entities.length; ti++) {
             await Xrm.WebApi.updateRecord(
                 "msdyn_workorderservicetask",
-                task.msdyn_workorderservicetaskid,
-                updateObj
+                tasks.entities[ti].msdyn_workorderservicetaskid,
+                { msdyn_percentcomplete: 100 }
             );
         }
-
+        alert(step);
+        await Xrm.Navigation.openAlertDialog({ text: "[updateServiceTasksPercent] SUCCESS" });
         return 1;
     }
     catch (e) {
@@ -443,6 +484,7 @@ async function setWorkOrderEndTime() {
                 duc_inspectioncompletiondate: new Date().toISOString()
             }
         );
+        await Xrm.Navigation.openAlertDialog({ text: "[setWorkOrderEndTime] SUCCESS" });
     }
     catch (e) {
         var errMsg = "[setWorkOrderEndTime] Error."
@@ -470,32 +512,39 @@ async function navigateToWorkORderTab() {
  * MAIN EXECUTION
  ***************************************/
 async function runProcess() {
+    debugger
+    await Xrm.Navigation.openAlertDialog({ text: "[runProcess] START" });
     Xrm.Utility.showProgressIndicator(t("Processing"));
 
     var valid = await validateRequiredFields();
     if (!valid) {
-
         alert("Please make sure to fill all required fields in the inspection template, يرجى التأكد من تعبئة جميع الحقول الإلزامية في نموذج التفتيش.");
         Xrm.Utility.closeProgressIndicator();
         return;
     }
+
     var validatePercentage = await updateServiceTasksPercent();
     if (!validatePercentage) {
         alert("Please make sure to fill all required fields in the inspection template, يرجى التأكد من تعبئة جميع الحقول الإلزامية في نموذج التفتيش.");
         Xrm.Utility.closeProgressIndicator();
         return;
     }
+    debugger
 
     var booking = await setBookingCompletedForWorkOrder();
-    if (!booking) return;
+    if (!booking) {
+        await Xrm.Navigation.openAlertDialog({ text: "[runProcess] FAILED at setBookingCompletedForWorkOrder" });
+        return;
+    }
 
     await updateLastActionOnProcessExtension();
     await setWorkOrderEndTime();
     await navigateToWorkORderTab();
 
-    setTimeout(function () {
+    setTimeout(async function () {
         try { Xrm.Page.data.refresh(true); } catch (e) { }
         Xrm.Utility.closeProgressIndicator();
+        await Xrm.Navigation.openAlertDialog({ text: "[runProcess] DONE / SUCCESS" });
     }, 3000);
 }
 

@@ -455,19 +455,19 @@ async function runOfflineActionLogic(actionId, processExtensionId, workOrderId) 
             try { subStatusValue = (await Xrm.WebApi.retrieveRecord("duc_processsubstatus", subStatusId, "?$select=duc_value")).duc_value || null; } catch (e) { /* ignore */ }
         }
 
-        step = "Creating action log";
-        var logData = {
-            "subject": "Process Action", "actualstart": new Date(),
-            "duc_sendtocustomer": sendToCustomer, "duc_islastactiontakenoffline": true
-        };
-        logData["ownerid_duc_processactionlog@odata.bind"] = "/systemusers(" + userId + ")";
-        logData["duc_AuthorId_duc_processActionLog_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
-        logData["regardingobjectid_msdyn_workorder_duc_processactionlog@odata.bind"] = "/msdyn_workorders(" + workOrderId + ")";
-        logData["duc_Action_duc_processActionLog@odata.bind"] = "/duc_stageactions(" + actionId + ")";
-        if (actionTypeId) logData["duc_ActionType_duc_processActionLog@odata.bind"] = "/duc_actiontypes(" + actionTypeId + ")";
-        if (relatedStageId) logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + relatedStageId + ")";
-        if (processDefId) logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + processDefId + ")";
-        await Xrm.WebApi.createRecord("duc_processactionlog", logData);
+        // step = "Creating action log";
+        // var logData = {
+        //     "subject": "Process Action", "actualstart": new Date(),
+        //     "duc_sendtocustomer": sendToCustomer, "duc_islastactiontakenoffline": true
+        // };
+        // logData["ownerid_duc_processactionlog@odata.bind"] = "/systemusers(" + userId + ")";
+        // logData["duc_AuthorId_duc_processActionLog_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
+        // logData["regardingobjectid_msdyn_workorder_duc_processactionlog@odata.bind"] = "/msdyn_workorders(" + workOrderId + ")";
+        // logData["duc_Action_duc_processActionLog@odata.bind"] = "/duc_stageactions(" + actionId + ")";
+        // if (actionTypeId) logData["duc_ActionType_duc_processActionLog@odata.bind"] = "/duc_actiontypes(" + actionTypeId + ")";
+        // if (relatedStageId) logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + relatedStageId + ")";
+        // if (processDefId) logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + processDefId + ")";
+        // await Xrm.WebApi.createRecord("duc_processactionlog", logData);
 
         step = "Updating process extension fields";
         var peUpdate = { "duc_islastactiontakenoffline": true };

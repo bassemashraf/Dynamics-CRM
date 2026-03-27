@@ -1,10 +1,13 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
-import { HelloWorld, IHelloWorldProps } from "./HelloWorld";
 import * as React from "react";
 import { Main, IMainProps } from "./components/MainControl";
 import * as ReactDOM from 'react-dom';
+import { initializeIcons } from '@fluentui/react/lib/Icons';
 
-export class PAMainPCFOffline implements ComponentFramework.StandardControl<IInputs, IOutputs> {
+// Disable default CDN font loading to prevent offline crashes
+initializeIcons('', { disableWarnings: true });
+
+export class PAMainOfflinePCF implements ComponentFramework.StandardControl<IInputs, IOutputs> {
     private notifyOutputChanged: () => void;
     private container: HTMLDivElement;
     private currentProps: IInputs;
@@ -35,9 +38,9 @@ export class PAMainPCFOffline implements ComponentFramework.StandardControl<IInp
             this.currentProps = context.parameters;
             this._context = context;
         } catch (e: any) {
-            const errMsg = `[PAMainPCFOffline.init] Error: ${e?.message || JSON.stringify(e)}`;
+            const errMsg = `[PAMainOfflinePCF.init] Error: ${e?.message || String(e)}`;
             console.error(errMsg, e);
-            alert(errMsg);
+            if (typeof alert === "function") alert(errMsg);
         }
     }
 
@@ -57,30 +60,19 @@ export class PAMainPCFOffline implements ComponentFramework.StandardControl<IInp
             };
             ReactDOM.render(React.createElement(Main, props), this.container);
         } catch (e: any) {
-            const errMsg = `[PAMainPCFOffline.updateView] Error: ${e?.message || JSON.stringify(e)}`;
+            const errMsg = `[PAMainOfflinePCF.updateView] Error: ${e?.message || String(e)}`;
             console.error(errMsg, e);
-            alert(errMsg);
+            if (typeof alert === "function") alert(errMsg);
         }
     }
 
-    /**
-     * It is called by the framework prior to a control receiving new data.
-     * @returns an object based on nomenclature defined in manifest, expecting object[s] for property marked as "bound" or "output"
-     */
     public getOutputs(): IOutputs {
         try {
-            return {
-                lookupField: this._context?.parameters?.lookupField?.raw,
-                commentField: this._context?.parameters?.commentField?.raw ?? "",
-                ShowSurveyForm: this._context?.parameters?.ShowSurveyForm?.raw ?? false,
-                attachmentsGuid: this._context?.parameters?.attachmentsGuid?.raw ?? "",
-                nextAssignee: this._context?.parameters?.nextAssignee?.raw ?? "",
-                OwnerField: this._context?.parameters?.OwnerField?.raw
-            };
+            return {};
         } catch (e: any) {
-            const errMsg = `[PAMainPCFOffline.getOutputs] Error: ${e?.message || JSON.stringify(e)}`;
+            const errMsg = `[PAMainOfflinePCF.getOutputs] Error: ${e?.message || String(e)}`;
             console.error(errMsg, e);
-            alert(errMsg);
+            if (typeof alert === "function") alert(errMsg);
             return {};
         }
     }
