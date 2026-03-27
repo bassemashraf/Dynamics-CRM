@@ -731,7 +731,7 @@ export class MultiTypeInspection extends React.Component<
     if (selectedInspectionType === 1) return id;
     if ([2, 3, 6].includes(selectedInspectionType!)) return qataryId;
     if ([5, 7].includes(selectedInspectionType!)) return crNumber;
-    if ([10].includes(selectedInspectionType!)) return registrationNumber;
+    if ([10, 11].includes(selectedInspectionType!)) return registrationNumber;
 
     return "";
   };
@@ -796,6 +796,7 @@ export class MultiTypeInspection extends React.Component<
         return `${prefixEn}${crNumber}${prefixAr}`.trim();
 
       case 10: // Establishment
+      case 11: // Hospital
         return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
 
       default:
@@ -889,7 +890,7 @@ export class MultiTypeInspection extends React.Component<
 
       // Search for existing account
       var filterQuery;
-      if (selectedInspectionType === 10) {
+      if ([10, 11].includes(selectedInspectionType!)) {
         filterQuery = `duc_moinumber eq '${identifierValue}'`;
       } else {
         filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
@@ -936,8 +937,8 @@ export class MultiTypeInspection extends React.Component<
         duc_accountidentifier: identifierValue,
       };
 
-      // Establishment
-      if (selectedInspectionType === 10) {
+      // Establishment or Hospital
+      if ([10, 11].includes(selectedInspectionType!)) {
         newAccount.duc_moinumber = identifierValue;
       }
 
@@ -1324,8 +1325,8 @@ export class MultiTypeInspection extends React.Component<
     }
 
     if (field === "registrationNumber") {
-      // 10 = Establishment
-      return [10].includes(selectedInspectionType);
+      // 10 = Establishment, 11 = Hospital
+      return [10,11].includes(selectedInspectionType);
     }
 
     return false;
