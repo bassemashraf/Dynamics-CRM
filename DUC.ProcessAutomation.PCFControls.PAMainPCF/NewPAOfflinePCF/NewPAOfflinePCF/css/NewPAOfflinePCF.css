@@ -1,70 +1,134 @@
+/* Main container */
 .main-pcf-flow-container {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  width: 100%;
   font-family: inherit;
-  margin-top: 15px;
   position: relative;
+  margin-top: 15px;
 }
 
-.main-pcf-flow-container p {
-  color: #333;
-  font-size: 14px;
-  margin-top: 5px;
-  padding: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100px; /* Adjust according to spacing needed */
-  text-align: center;
-}
-
-.main-pcf-flow-container .step {
+/* Step styling — each step takes equal space */
+.main-pcf-flow-container > .step {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  z-index: 1;
 }
 
+/* Step text */
+.main-pcf-flow-container > .step p {
+  color: #333;
+  font-size: 14px;
+  margin: 6px 0 0 0;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+  text-align: center;
+}
+
+/* Circle with step number */
 .main-pcf-flow-container .step-number {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background-color: #95A0B6; /* Pending */
+  background-color: #95A0B6;
   color: white;
   display: flex;
   justify-content: center;
   align-items: center;
   font-weight: bold;
-  font-size: 14px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: 5px;
+  font-size: 18px;
+  position: relative;
+  z-index: 5;
+  transition: all 0.3s ease;
 }
 
-.main-pcf-flow-container .step.done .step-number {
-  background-color: #3BB674; /* Done */
-}
-
-.main-pcf-flow-container .step.active .step-number {
-  background-color: #FFA800; /* Active */
-  box-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
-}
-
-.main-pcf-flow-container .connector {
-  flex: 1;
-  height: 4px;
-  background-color: #e0e0e0;
-  margin-top: 14px; /* Center of the 32px circle */
-  align-self: flex-start;
-  z-index: 0;
-  margin-left: -16px; /* Overlap halfway into the preceding step */
-  margin-right: -16px; /* Overlap halfway into the following step */
-}
-
-.main-pcf-flow-container .connector.done {
+/* Done step */
+.main-pcf-flow-container > .step.done .step-number {
   background-color: #3BB674;
+  color: white;
+  transform: scale(1.1);
+}
+
+/* Active step */
+.main-pcf-flow-container > .step.active .step-number {
+  background-color: #FFA800;
+  color: white;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+  transform: scale(1.1);
+  animation: pulse 2s infinite;
+}
+
+/* ---- Connector lines via pseudo-elements on steps ---- */
+
+/* Base connector line (grey) going from center of step to the right */
+.main-pcf-flow-container.ltr > .step::before {
+  position: absolute;
+  content: "";
+  border-bottom: 4px solid #e0e0e0;
+  width: 100%;
+  top: 20px;
+  left: -50%;
+  z-index: 2;
+}
+
+.main-pcf-flow-container.rtl > .step::before {
+  position: absolute;
+  content: "";
+  border-bottom: 4px solid #e0e0e0;
+  width: 100%;
+  top: 20px;
+  right: -50%;
+  z-index: 2;
+}
+
+/* Green overlay line for done steps */
+.main-pcf-flow-container.ltr > .step.done::after {
+  position: absolute;
+  content: "";
+  border-bottom: 4px solid #3BB674;
+  width: 100%;
+  top: 20px;
+  left: 50%;
+  z-index: 3;
+}
+
+.main-pcf-flow-container.rtl > .step.done::after {
+  position: absolute;
+  content: "";
+  border-bottom: 4px solid #3BB674;
+  width: 100%;
+  top: 20px;
+  right: 50%;
+  z-index: 3;
+}
+
+/* Hide the line before the first step and after the last step */
+.main-pcf-flow-container > .step:first-child::before {
+  content: none !important;
+}
+
+.main-pcf-flow-container > .step:last-child::after {
+  content: none !important;
+}
+
+/* Hide the connector div — lines are now drawn via pseudo-elements */
+.main-pcf-flow-container .connector {
+  display: none;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 193, 7, 1);
+  }
 }
 
 .main-pcf-flow-container-web-padding {

@@ -76,8 +76,8 @@ export const MainControl: React.FC<IMainProps> = ({
         `?$select=_duc_processdefinition_value,_duc_currentstage_value`
       );
 
-      const processDefId = (processExtRecord._duc_processdefinition_value || "").replace(/[{}]/g, "");
-      const stepId = (processExtRecord._duc_currentstage_value || "").replace(/[{}]/g, "");
+      const processDefId = (processExtRecord._duc_processdefinition_value || "").replace(/[{}]/g, "").toLowerCase();
+      const stepId = (processExtRecord._duc_currentstage_value || "").replace(/[{}]/g, "").toLowerCase();
       setCurrentStepId(stepId);
 
       if (!processDefId) {
@@ -97,7 +97,7 @@ export const MainControl: React.FC<IMainProps> = ({
       );
 
       const fetchedSteps: IStep[] = result.entities.map((e: any) => ({
-        id: e.duc_processstageid,
+        id: (e.duc_processstageid || "").toLowerCase(),
         name: e.duc_name,
         displayNameEN: e.duc_name,
         displayNameAR: e.duc_arabicname,
@@ -109,14 +109,17 @@ export const MainControl: React.FC<IMainProps> = ({
         active: false,
       })).sort((a: IStep, b: IStep) => a.sequence - b.sequence);
 
-      let currentIndex = fetchedSteps.findIndex((s) => s.id === stepId);
-      if (currentIndex === -1) currentIndex = 0;
+      const currentIndex = fetchedSteps.findIndex((s) => s.id === stepId);
+      // If stage not found, don't default to 0 (Creation) — leave nothing highlighted
+      if (currentIndex === -1) {
+        console.warn("[MainControl] Current stage ID not found among fetched steps:", stepId);
+      }
 
       const lastIndex = fetchedSteps.length - 1;
       const processed = fetchedSteps.map((step, index) => ({
         ...step,
-        done: index < currentIndex || (index === lastIndex && index === currentIndex),
-        active: index === currentIndex,
+        done: currentIndex !== -1 && (index < currentIndex || (index === lastIndex && index === currentIndex)),
+        active: currentIndex !== -1 && index === currentIndex,
       }));
 
       setSteps(processed);

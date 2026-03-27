@@ -27,14 +27,6 @@ export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const getConnectorWidth = () => {
-    if (!containerRef.current || steps.length <= 1) return 0;
-    const containerWidth = containerRef.current.offsetWidth;
-    const totalStepWidth = steps.length * 32;
-    const connectorsCount = steps.length - 1;
-    return connectorsCount > 0 ? (containerWidth - totalStepWidth) / connectorsCount : 0;
-  };
-
   const renderCheckmark = () => (
     <svg style={{ width: "20px" }} fill="#000000" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 335.765 335.765">
       <g>

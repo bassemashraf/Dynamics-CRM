@@ -169,6 +169,91 @@ async function setBookingCompletedForWorkOrder() {
 }
 
 /***************************************
+ * UPDATE CURRENT STAGE ON PROCESS EXTENSION
+ ***************************************/
+async function updateCurrentStageOnProcessExtension() {
+    var step = "";
+    try {
+        var form = Xrm.Page;
+        var lookup = form.getAttribute("duc_processextension");
+
+        if (!lookup || !lookup.getValue()) return;
+
+        var extId = lookup.getValue()[0].id.replace(/[{}]/g, "");
+        var isOff = isOffline();
+
+        step = "Retrieving process extension record";
+        var record = await Xrm.WebApi.retrieveRecord(
+            "duc_processextension",
+            extId,
+            "?$select=_duc_processdefinition_value,_duc_currentstage_value"
+        );
+
+        if (!record._duc_processdefinition_value || !record._duc_currentstage_value) return;
+
+        step = "Retrieving stage actions for current stage";
+        var processField = isOff ? "duc_process" : "_duc_process_value";
+        var relatedStageField = isOff ? "duc_relatedstage" : "_duc_relatedstage_value";
+
+        var actions = await Xrm.WebApi.retrieveMultipleRecords(
+            "duc_stageaction",
+            "?$select=duc_stageactionid,_duc_nextstage_value,_duc_defaultstatus_value" +
+            "&$filter=duc_canbetriggeredbytarget eq true" +
+            " and " + processField + " eq " + record._duc_processdefinition_value +
+            " and " + relatedStageField + " eq " + record._duc_currentstage_value
+        );
+
+        if (!actions.entities || actions.entities.length === 0) {
+            console.warn("[updateCurrentStageOnProcessExtension] No matching stage action found.");
+            return;
+        }
+
+        step = "Looping stage actions to find status 690970004";
+        var nextStageId = null;
+
+        for (var i = 0; i < actions.entities.length; i++) {
+            var act = actions.entities[i];
+            if (!act._duc_defaultstatus_value) continue;
+
+            var actStatus = await Xrm.WebApi.retrieveRecord(
+                "duc_processstatus",
+                act._duc_defaultstatus_value,
+                "?$select=duc_value"
+            );
+
+            if (actStatus.duc_value === 690970004) {
+                nextStageId = act._duc_nextstage_value;
+                break;
+            }
+        }
+
+        if (!nextStageId) {
+            console.warn("[updateCurrentStageOnProcessExtension] No action with status 690970004 found, or action has no next stage.");
+            return;
+        }
+
+        step = "Updating current stage on process extension";
+        await Xrm.WebApi.updateRecord(
+            "duc_processextension",
+            extId,
+            {
+                "duc_CurrentStage_duc_ProcessExtension@odata.bind":
+                    "/duc_processstages(" + nextStageId + ")"
+            }
+        );
+
+        console.log("[updateCurrentStageOnProcessExtension] Current stage updated to: " + nextStageId);
+
+    } catch (e) {
+        var errMsg = "[updateCurrentStageOnProcessExtension] Error at step: " + step
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+        Xrm.Navigation.openAlertDialog({ text: errMsg });
+    }
+}
+
+/***************************************
  * PROCESS EXTENSION UPDATE
  ***************************************/
 async function updateLastActionOnProcessExtension() {
@@ -537,6 +622,7 @@ async function runProcess() {
         return;
     }
 
+    await updateCurrentStageOnProcessExtension();
     await updateLastActionOnProcessExtension();
     await setWorkOrderEndTime();
     await navigateToWorkORderTab();
