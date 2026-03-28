@@ -145,12 +145,32 @@ export class WOSTHelpers {
         try {
             const result = await this.xrm.WebApi.retrieveMultipleRecords(
                 "msdyn_incidenttypeservicetask",
-                `?$select=msdyn_incidenttypeservicetaskid,msdyn_name,msdyn_tasktype` +
+                `?$select=msdyn_incidenttypeservicetaskid,msdyn_name,msdyn_tasktype,msdyn_inspection` +
                 `&$filter=msdyn_incidenttype eq '${incidentTypeId}'`
             );
             return Array.from(result?.entities ?? []);
         } catch (error: any) {
             alert(`[WOST] getIncidentTypeServiceTasks ERROR: ${error?.message || JSON.stringify(error)}`);
+            console.error("[WOSTHelpers] Error fetching incident type service tasks:", error);
+            return [];
+        }
+    }
+
+    // =========================================================================
+    // Fetch Inspection Template Versions
+    // =========================================================================
+
+    private static async getInspectionTemplateVersions(templateId: string): Promise<any[]> {
+        try {
+            const result = await this.xrm.WebApi.retrieveMultipleRecords(
+                "msdyn_inspectiondefinition",
+                `?$select=msdyn_inspectiondefinitionid,createdon,msdyn_name` +
+                `&$filter=(msdyn_state eq 1 and msdyn_parentinspectionid eq '${templateId}')` +
+                `&$orderby=createdon desc`
+            );
+            return Array.from(result?.entities ?? []);
+        } catch (error: any) {
+            alert(`[WOST] getInspectionTemplateVersions ERROR: ${error?.message || JSON.stringify(error)}`);
             console.error("[WOSTHelpers] Error fetching incident type service tasks:", error);
             return [];
         }
@@ -178,6 +198,31 @@ export class WOSTHelpers {
                 "msdyn_name": taskTemplate.msdyn_name || "Service Task",
             };
 
+            const templateId =
+                taskTemplate["_msdyn_inspection_value"] ??
+                taskTemplate["msdyn_inspection"];
+
+            if (templateId) {
+                wostData["msdyn_Inspection@odata.bind"] =
+                    `/msdyn_inspections(${templateId})`;
+
+                const templateVersions = await this.getInspectionTemplateVersions(templateId);
+
+                //alert(`[WOST] getInspectionTemplateVersions returned: ${templateVersion.length} | templateId: ${templateId}`);
+
+                if (templateVersions.length === 0) {
+                    console.warn("[WOSTHelpers] No template versions found for template:", templateId);
+                }
+
+                if (templateVersions.length > 0) {
+                    const templateVersionId = templateVersions[0]["msdyn_inspectiondefinitionid"];
+                    if (templateVersionId) {
+                        wostData["msdyn_inspectiondefinitionid@odata.bind"] =
+                            `/msdyn_inspectiondefinitions(${templateVersionId})`;
+                    }
+                }
+            }
+
             const taskTypeId =
                 taskTemplate["_msdyn_tasktype_value"] ??
                 taskTemplate["msdyn_tasktype"];
@@ -187,10 +232,10 @@ export class WOSTHelpers {
                     `/msdyn_servicetasktypes(${taskTypeId})`;
             }
 
-            if (workOrderIncidentId) {
-                wostData["msdyn_workorderincident@odata.bind"] =
-                    `/msdyn_workorderincidents(${workOrderIncidentId})`;
-            }
+            // if (workOrderIncidentId) {
+            //     wostData["msdyn_workorderincident@odata.bind"] =
+            //         `/msdyn_workorderincidents(${workOrderIncidentId})`;
+            // }
 
             const result = await this.xrm.WebApi.createRecord(
                 "msdyn_workorderservicetask",

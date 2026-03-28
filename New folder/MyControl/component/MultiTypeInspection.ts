@@ -1124,11 +1124,11 @@ export class MultiTypeInspection extends React.Component<
 
 
         // Create msdyn_workorderincident offline — OOB creates this server-side only.
-        const workOrderIncidentId = await WOSTHelpers.createWorkOrderIncident(
-          workOrderId,
-          incidentTypeData.id,
-          incidentTypeData.name
-        );
+         const workOrderIncidentId = null; //await WOSTHelpers.createWorkOrderIncident(
+        //   workOrderId,
+        //   incidentTypeData.id,
+        //   incidentTypeData.name
+        // );
 
           //alert(`[STEP 9.6] WorkOrderIncident result: ${workOrderIncidentId}`);
  
