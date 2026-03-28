@@ -175,16 +175,17 @@ async function updateLastActionOnProcessExtension() {
 
         var actions = await Xrm.WebApi.retrieveMultipleRecords(
             "duc_stageaction",
-            `?$select=duc_stageactionid,_duc_defaultstatus_value
-              &$filter=duc_canbetriggeredbytarget eq true
-              and _duc_process_value eq ${record._duc_processdefinition_value}
-              and _duc_relatedstage_value eq ${record._duc_currentstage_value}`
+            "?$select=duc_stageactionid,_duc_defaultstatus_value" +
+            "&$filter=duc_canbetriggeredbytarget eq true" +
+            " and _duc_process_value eq " + record._duc_processdefinition_value +
+            " and _duc_relatedstage_value eq " + record._duc_currentstage_value
         );
 
-        for (let act of actions.entities) {
+        for (var i = 0; i < actions.entities.length; i++) {
+            var act = actions.entities[i];
             if (!act._duc_defaultstatus_value) continue;
 
-            let status = await Xrm.WebApi.retrieveRecord(
+            var status = await Xrm.WebApi.retrieveRecord(
                 "duc_processstatus",
                 act._duc_defaultstatus_value,
                 "?$select=duc_value"
@@ -196,17 +197,141 @@ async function updateLastActionOnProcessExtension() {
                     extId,
                     {
                         "duc_LastActionTaken_duc_ProcessExtension@odata.bind":
-                            `/duc_stageactions(${act.duc_stageactionid})`
+                            "/duc_stageactions(" + act.duc_stageactionid + ")"
                     }
                 );
+
+                // Run offline plugin logic inline
+                var woId = form.data.entity.getId().replace(/[{}]/g, "");
+                await runOfflineActionLogic_Finish(act.duc_stageactionid, extId, woId);
                 break;
             }
         }
     }
     catch (e) {
         Xrm.Utility.closeProgressIndicator();
-        console.error(e);
+        console.error("[updateLastActionOnProcessExtension]", e);
     }
+}
+
+// Self-contained offline plugin logic for finishInspection.js
+async function runOfflineActionLogic_Finish(actionId, processExtensionId, workOrderId) {
+    var step = "";
+    try {
+        var userId = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+
+        step = "Retrieving stage action details";
+        var action = await Xrm.WebApi.retrieveRecord("duc_stageaction", actionId,
+            "?$select=duc_name,_duc_actiontype_value,_duc_nextstage_value,_duc_relatedstage_value," +
+            "_duc_defaultstatus_value,_duc_defaultsubstatus_value"
+        );
+
+        var actionTypeId = action._duc_actiontype_value || null;
+        var nextStageId = action._duc_nextstage_value || null;
+        var statusId = action._duc_defaultstatus_value || null;
+        var subStatusId = action._duc_defaultsubstatus_value || null;
+        var relatedStageId = action._duc_relatedstage_value || null;
+
+        var sendToCustomer = false;
+        if (actionTypeId) {
+            try {
+                var actionType = await Xrm.WebApi.retrieveRecord("duc_actiontype", actionTypeId, "?$select=duc_sendtocustomer");
+                sendToCustomer = actionType.duc_sendtocustomer || false;
+            } catch (e) { /* non-critical */ }
+        }
+
+        var processDefId = null;
+        var targetStatusField = null, targetSubStatusField = null;
+        var existingStatusEntity = null, existingSubStatusEntity = null;
+        var statusLookupType = null, subStatusLookupType = null;
+
+        if (relatedStageId) {
+            try {
+                var rs = await Xrm.WebApi.retrieveRecord("duc_processstage", relatedStageId, "?$select=_duc_relatedprocess_value");
+                processDefId = rs._duc_relatedprocess_value || null;
+            } catch (e) { /* ignore */ }
+        }
+
+        if (processDefId) {
+            try {
+                var pd = await Xrm.WebApi.retrieveRecord("duc_processdefinition", processDefId,
+                    "?$select=duc_targetentitystatuslookupname,duc_targetentitysubstatuslookupname," +
+                    "duc_existingstatusentity,duc_existingsubstatusentity,duc_statuslookuptype,duc_substatuslookuptype"
+                );
+                targetStatusField = pd.duc_targetentitystatuslookupname || null;
+                targetSubStatusField = pd.duc_targetentitysubstatuslookupname || null;
+                existingStatusEntity = pd.duc_existingstatusentity || null;
+                existingSubStatusEntity = pd.duc_existingsubstatusentity || null;
+                statusLookupType = pd.duc_statuslookuptype || null;
+                subStatusLookupType = pd.duc_substatuslookuptype || null;
+            } catch (e) { /* ignore */ }
+        }
+
+        var statusValue = null, subStatusValue = null;
+        if (statusId) {
+            try { statusValue = (await Xrm.WebApi.retrieveRecord("duc_processstatus", statusId, "?$select=duc_value")).duc_value || null; } catch (e) { /* ignore */ }
+        }
+        if (subStatusId) {
+            try { subStatusValue = (await Xrm.WebApi.retrieveRecord("duc_processsubstatus", subStatusId, "?$select=duc_value")).duc_value || null; } catch (e) { /* ignore */ }
+        }
+
+        // step = "Creating action log";
+        // var logData = {
+        //     "subject": "Process Action", "actualstart": new Date(),
+        //     "duc_sendtocustomer": sendToCustomer, "duc_islastactiontakenoffline": true
+        // };
+        // logData["ownerid_duc_processactionlog@odata.bind"] = "/systemusers(" + userId + ")";
+        // logData["duc_AuthorId_duc_processActionLog_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
+        // logData["regardingobjectid_msdyn_workorder_duc_processactionlog@odata.bind"] = "/msdyn_workorders(" + workOrderId + ")";
+        // logData["duc_Action_duc_processActionLog@odata.bind"] = "/duc_stageactions(" + actionId + ")";
+        // if (actionTypeId) logData["duc_ActionType_duc_processActionLog@odata.bind"] = "/duc_actiontypes(" + actionTypeId + ")";
+        // if (relatedStageId) logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + relatedStageId + ")";
+        // if (processDefId) logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + processDefId + ")";
+        // await Xrm.WebApi.createRecord("duc_processactionlog", logData);
+
+        step = "Updating process extension fields";
+        var peUpdate = { "duc_islastactiontakenoffline": true };
+        if (nextStageId) peUpdate["duc_CurrentStage_duc_ProcessExtension@odata.bind"] = "/duc_processstages(" + nextStageId + ")";
+        peUpdate["duc_LastApprovedById_duc_ProcessExtension_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
+        if (statusId) peUpdate["duc_Status_duc_ProcessExtension@odata.bind"] = "/duc_processstatuses(" + statusId + ")";
+        if (subStatusId) peUpdate["duc_SubStatus_duc_ProcessExtension@odata.bind"] = "/duc_processsubstatuses(" + subStatusId + ")";
+        await Xrm.WebApi.updateRecord("duc_processextension", processExtensionId, peUpdate);
+
+        step = "Updating work order status";
+        var woUpdate = {};
+        var hasWoUpdate = false;
+        if (targetStatusField && statusValue) {
+            if (statusLookupType === 780500002) { woUpdate[targetStatusField] = parseInt(statusValue, 10); }
+            else if (existingStatusEntity) { woUpdate[targetStatusField + "@odata.bind"] = "/" + _esn(existingStatusEntity) + "(" + statusValue + ")"; }
+            hasWoUpdate = true;
+        }
+        if (targetSubStatusField && subStatusValue) {
+            if (subStatusLookupType === 780500002) { woUpdate[targetSubStatusField] = parseInt(subStatusValue, 10); }
+            else if (existingSubStatusEntity) { woUpdate[targetSubStatusField + "@odata.bind"] = "/" + _esn(existingSubStatusEntity) + "(" + subStatusValue + ")"; }
+            hasWoUpdate = true;
+        }
+        if (hasWoUpdate) { await Xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, woUpdate); }
+
+    } catch (e) {
+        var errMsg = "[runOfflineActionLogic_Finish] Error at step: " + step
+            + "\nActionId: " + actionId + "\nPE Id: " + processExtensionId
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+    }
+}
+
+function _esn(logicalName) {
+    var map = {
+        "msdyn_workordersubstatus": "msdyn_workordersubstatuses",
+        "msdyn_workorderstatus": "msdyn_workorderstatuses",
+        "duc_processstatus": "duc_processstatuses",
+        "duc_processsubstatus": "duc_processsubstatuses",
+        "duc_processstage": "duc_processstages",
+        "msdyn_workorder": "msdyn_workorders"
+    };
+    if (map[logicalName]) return map[logicalName];
+    if (/(?:s|x|z|ch|sh)$/.test(logicalName)) return logicalName + "es";
+    return logicalName + "s";
 }
 
 /***************************************
@@ -221,14 +346,13 @@ async function updateServiceTasksPercent() {
 
         var tasks = await Xrm.WebApi.retrieveMultipleRecords(
             "msdyn_workorderservicetask",
-            `?$select=msdyn_workorderservicetaskid
-              &$filter=_msdyn_workorder_value eq ${id}`
+            "?$select=msdyn_workorderservicetaskid&$filter=_msdyn_workorder_value eq " + id
         );
 
-        for (let task of tasks.entities) {
+        for (var i = 0; i < tasks.entities.length; i++) {
             await Xrm.WebApi.updateRecord(
                 "msdyn_workorderservicetask",
-                task.msdyn_workorderservicetaskid,
+                tasks.entities[i].msdyn_workorderservicetaskid,
                 { msdyn_percentcomplete: 100 }
             );
         }
@@ -267,7 +391,7 @@ async function setWorkOrderEndTime() {
  * UI HELPERS
  ***************************************/
 function clickRefreshButton(refreshbtnId) {
-    var btns = document.querySelectorAll(`button[data-id*='${refreshbtnId}']`);
+    var btns = document.querySelectorAll("button[data-id*='" + refreshbtnId + "']");
     if (btns.length > 0) btns[0].click();
 }
 

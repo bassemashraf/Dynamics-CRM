@@ -10,6 +10,7 @@ import {
   getReportViewerUrl,
   getValue,
 } from "../constants"; // Importing constants
+import { FormContextHelper } from "./FormContextHelper";
 
 interface RoleAssociation {
   name: string;
@@ -54,21 +55,21 @@ export const Actions: React.FC<IActionsProps> = ({
 
   useEffect(() => {
     void evaluatePermissions();
-  }, [_context.parameters.stepLookup, _context.parameters.OwnerField]);
+  }, []);
 
   useEffect(() => {
     const fetchDataAsync = async () => {
       try {
         await fetchData();
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching data:", error);
       }
     };
 
-    fetchDataAsync().catch((error) => {
+    fetchDataAsync().catch((error: any) => {
       console.error("Error in fetchDataAsync:", error);
     });
-  }, [_context.parameters.stepLookup]);
+  }, []);
 
   // permission check function
   const evaluatePermissions = async () => {
@@ -86,12 +87,9 @@ export const Actions: React.FC<IActionsProps> = ({
       const currentUserId = _context.userSettings.userId
         .replace(/[{}]/g, "")
         .toLowerCase();
-      const ownerId =
-        _context.parameters.OwnerField.raw?.[0]?.id
-          ?.toLowerCase()
-          .replace(/[{}]/g, "") ?? "";
-      const ownerType =
-        _context.parameters.OwnerField.raw?.[0]?.entityType ?? "";
+      const ownerVal = FormContextHelper.getLookupValue('ownerid');
+      const ownerId = ownerVal?.id?.toLowerCase().replace(/[{}]/g, "") ?? "";
+      const ownerType = ownerVal?.entityType ?? "";
 
       // Case 1: Current user is the record owner
       const isUserOwner =
@@ -119,7 +117,7 @@ export const Actions: React.FC<IActionsProps> = ({
           `Case 2 - Is current user System Administrator? ${isAdmin}`,
         );
       } catch (e: any) {
-        const errMsg = `[evaluatePermissions] Error fetching roles.\nError: ${e?.message || JSON.stringify(e)}`;
+        const errMsg = `[evaluatePermissions] Error fetching roles.\nError: ${e?.message || String(e)}`;
         console.error(errMsg, e);
         void _context.navigation.openAlertDialog({ text: errMsg });
       }
@@ -139,7 +137,7 @@ export const Actions: React.FC<IActionsProps> = ({
             `Case 3 - Is user member of owning team? ${isTeamMember}`,
           );
         } catch (e: any) {
-          const errMsg = `[evaluatePermissions] Error checking team membership.\nError: ${e?.message || JSON.stringify(e)}`;
+          const errMsg = `[evaluatePermissions] Error checking team membership.\nError: ${e?.message || String(e)}`;
           console.error(errMsg, e);
           void _context.navigation.openAlertDialog({ text: errMsg });
         }
@@ -152,7 +150,7 @@ export const Actions: React.FC<IActionsProps> = ({
         `User is ${authorized ? "authorized" : "not authorized"} for actions`,
       );
     } catch (error: any) {
-      const errMsg = `[evaluatePermissions] Permission check failed.\nError: ${error?.message || JSON.stringify(error)}`;
+      const errMsg = `[evaluatePermissions] Permission check failed.\nError: ${error?.message || String(error)}`;
       console.error(errMsg, error);
       void _context.navigation.openAlertDialog({ text: errMsg });
       setIsAuthorized(false);
@@ -175,6 +173,13 @@ export const Actions: React.FC<IActionsProps> = ({
 
     try {
       setIsLoading(true);
+
+      const isOffline = _context.client.isOffline?.() === true;
+      if (isOffline) {
+        console.log("[validateAction] Offline mode — skipping online validation");
+        return true;
+      }
+
       const result = await Xrm.WebApi.online.execute({
         processExtensionId: parameters.processExtensionId,
         actionId: parameters.actionId,
@@ -220,15 +225,9 @@ export const Actions: React.FC<IActionsProps> = ({
         });
         return false;
       }
-      /*if (succeeded) {
-                return true; 
-            } else {               
-                await _context.navigation.openAlertDialog({text: response.errorMsg});
-                return false;
-            }*/
     } catch (error: unknown) {
       if (error instanceof Error) {
-        await _context.navigation.openAlertDialog({ text: error.message });
+        console.error("Validation Error:", error.message);
         succeeded = false;
       } else {
         console.error("An unknown error occurred:", error);
@@ -255,14 +254,12 @@ export const Actions: React.FC<IActionsProps> = ({
   const fetchData = async () => {
     let currentQuery = "";
     try {
-      if (
-        _context.parameters.stepLookup.raw == null ||
-        _context.parameters.stepLookup.raw.length == 0
-      )
+      const stepVal = FormContextHelper.getLookupValue('duc_currentstage');
+      if (!stepVal || !stepVal.id)
         return;
       setIsLoading(true);
       const isMob = isMobile(_context);
-      const stepId = _context.parameters.stepLookup.raw[0].id.toString();
+      const stepId = stepVal.id;
 
       const Filter = isMob
         ? Constants.STAGE_ACTION_MOBILE_FILTER
@@ -284,29 +281,6 @@ export const Actions: React.FC<IActionsProps> = ({
       console.log(Constants.MSG_PREFIX + filteredEntities.length);
 
       const tempDataSet: IActionButtonProps[] = [];
-
-      if (
-        filteredEntities && filteredEntities.length > 0 &&
-        getValue(
-          filteredEntities[0],
-          _context.resources.getString(Constants.CURRENT_STEP_SEQUENCE),
-        ) == "1" &&
-        _context.parameters.GenericCancelAction.raw != null &&
-        _context.parameters.GenericCancelAction.raw.length > 0
-      ) {
-        const genericfilter = Constants.GENERIC_CANCEL_FILTER.replace(
-          "{0}",
-          _context.parameters.GenericCancelAction.raw.toString(),
-        );
-
-        const genericcancelresponse =
-          await _context.webAPI.retrieveMultipleRecords(
-            Constants.ENTITY_NAME,
-            genericfilter,
-          );
-        if (genericcancelresponse.entities && genericcancelresponse.entities.length > 0)
-          filteredEntities.push(genericcancelresponse.entities[0]);
-      }
 
       // Collect all unique ActionType IDs to fetch metadata for buttons
       const actionTypeIds: string[] = [];
@@ -336,7 +310,7 @@ export const Actions: React.FC<IActionsProps> = ({
           typeResponse.entities.forEach(typeEnt => {
             actionTypeMap[typeEnt.duc_actiontypeid] = typeEnt;
           });
-        } catch (e) {
+        } catch (e: any) {
           console.error("Action Type Fetch Error", e);
         }
       }
@@ -371,9 +345,8 @@ export const Actions: React.FC<IActionsProps> = ({
       });
       setDataSet(tempDataSet);
     } catch (error: unknown) {
-      const errMsg = `[fetchData] Error occurred in API call.\nError: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
+      const errMsg = `[fetchData] Error occurred in API call.\nError: ${error instanceof Error ? error.message : String(error)}`;
       console.error(errMsg, error);
-      void _context.navigation.openAlertDialog({ text: errMsg });
     } finally {
       setIsLoading(false);
     }
@@ -434,17 +407,14 @@ export const Actions: React.FC<IActionsProps> = ({
   ) => {
     if (actionId != null) {
       console.log(actionId);
-      _context.parameters.lookupField.raw[0] = {
-        entityType: Constants.ENTITY_NAME.toString(),
-        id: actionId,
-      };
-      _context.parameters.commentField.raw = comment;
-      _context.parameters.attachmentsGuid.raw = notetext;
+      FormContextHelper.setLookupValue('duc_lastactiontaken', actionId, actionId, Constants.ENTITY_NAME.toString());
+      if (_context.parameters.boundStringField) {
+        _context.parameters.boundStringField.raw = actionId;
+      }
+      FormContextHelper.setStringValue('duc_lastapprovercomment', comment);
+      FormContextHelper.setStringValue('duc_lastattachmentsguid', notetext);
       if (assignee != undefined) {
-        _context.parameters.nextAssignee.raw[0] = {
-          entityType: assignee.entityType,
-          id: assignee.id,
-        };
+        FormContextHelper.setLookupValue('duc_nextassignee', assignee.id, assignee.name, assignee.entityType);
       }
     }
     onnotifyOutputChanged();
@@ -464,7 +434,7 @@ export const Actions: React.FC<IActionsProps> = ({
     const pageInput: Xrm.Navigation.PageInputHtmlWebResource = {
       pageType: "webresource",
       webresourceName:
-        _context.parameters.SurveyFormWRName.raw ??
+        _context.parameters.SurveyFormWRName?.raw ??
         Constants.SURVEY_FORM_WR_NAME,
       data: JSON.stringify(Data),
     };
@@ -482,19 +452,21 @@ export const Actions: React.FC<IActionsProps> = ({
           console.log("Survey form opened successfully.");
           return;
         },
-        (error) => {
+        (error: any) => {
           console.error("Error opening survey form:", error);
           throw error;
         },
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in openSurveyModal:", error);
     }
   };
 
   const SetShowSurvey = () => {
     console.log("SetShowSurvey called");
-    _context.parameters.ShowSurveyForm.raw = true;
+    if (_context.parameters.ShowSurveyForm) {
+      _context.parameters.ShowSurveyForm.raw = true;
+    }
 
     console.log("SetShowSurvey updated");
     onnotifyOutputChanged();
@@ -508,7 +480,6 @@ export const Actions: React.FC<IActionsProps> = ({
     if (comment == "") {
       const msg = _context.resources.getString(Constants.SPECIFY_COMMENT_MSG);
       return _context.navigation.openAlertDialog({ text: msg });
-      //return;
     }
     console.log("Saving data");
     await onClick(action, comment, files);
@@ -584,11 +555,10 @@ export const Actions: React.FC<IActionsProps> = ({
       return;
     } else if (action.requiresSurvey) {
       const surveyId = getValue(action.entity, Constants.ACTION_SURVEY);
-      const serviceRequestId = _context.parameters.primaryKey?.formatted ?? "";
+      const serviceRequestId = FormContextHelper.getStringValue("activityid") || FormContextHelper.getFormContext()?.data?.entity?.getId()?.replace(/[{}]/g, "") || "";
       console.log("Before call SetShowSurvey");
       SetShowSurvey();
 
-      //await openSurveyModal(action.buttonId ?? '', surveyId, serviceRequestId);
       return;
     } else {
       if (isModalVisible == true) {
@@ -601,25 +571,12 @@ export const Actions: React.FC<IActionsProps> = ({
 
       const isExecuteAction =
         getValue(action.entity, "duc_actiontype." + Constants.WFACTION) == "false";
-      //const code = getValue(action.entity, Constants.ACTION_CODE);
-      //if (!iswfaction && code != "") {
-      // Here, instead of eval, call the actual function directly
-      //  await ShowReport(_context.parameters.reqNoField.raw!);
-      //}
-      //const varDef: string = "let srNumber = '" + _context.parameters.reqNoField.raw! + "'; ";
       if (isExecuteAction || !isExecuteAction) {
-        //await eval(varDef + code);
-        // Example inside your PCF control
-        const codeFromField = action.entity?.duc_actiontype?.duc_actioncommand ?? ""; // e.g. "openScheduleBoard(formContext);"
+        const codeFromField = action.entity?.duc_actiontype?.duc_actioncommand ?? "";
 
         if (codeFromField) {
           console.log(`[DEBUG] About to run JS code from duc_actioncommand:`, codeFromField);
           try {
-            //const recordId = (_context.mode as any).contextInfo.entityId;
-            //const entityName = (_context.mode as any).contextInfo.entityTypeName;
-
-            //openScheduleBoard(recordId, entityName, languageId);
-            // Build a callable function that has access to context variables
             const updatedCode = codeFromField.replace(
               "#StageActionId#",
               action.buttonId,
@@ -636,14 +593,13 @@ export const Actions: React.FC<IActionsProps> = ({
             // Run the code dynamically
             await runCode(
               _context.userSettings.languageId,
-              _context.parameters.regardingField.raw[0],
+              FormContextHelper.getLookupValue('regardingobjectid'),
               (_context.mode as any).contextInfo,
               action,
             );
             console.log("[DEBUG] JS code executed successfully.");
-          } catch (error) {
+          } catch (error: any) {
             console.error(`[DEBUG] JS code execution FAILED:`, error);
-            console.error("Error running dynamic code:", error);
           }
         } else {
           console.log("[DEBUG] No duc_actioncommand code found on this action.");
@@ -658,7 +614,7 @@ export const Actions: React.FC<IActionsProps> = ({
           if (result.confirmed) {
             const notetext = generateGuid();
             if (files && files.length > 0) {
-              const primaryKey = _context.parameters.primaryKey?.raw;
+              const primaryKey = FormContextHelper.getStringValue("activityid") || FormContextHelper.getFormContext()?.data?.entity?.getId()?.replace(/[{}]/g, "");
 
               if (primaryKey) {
                 await uploadFilesToNotes(
@@ -693,58 +649,63 @@ export const Actions: React.FC<IActionsProps> = ({
     setIsAssignModalVisible(false);
   };
 
-  return (
-    <div className="buttonIcons">
-      {isPermissionLoading ? (
-        <div className="loading-spinner">
-          <span>{_context.resources.getString(Constants.LOADING)}</span>
-        </div>
-      ) : !isAuthorized ? (
-        <div className="no-actions-message">
-          {_context.resources.getString(Constants.NOT_AUTHORIZED_MSG)}
-        </div>
-      ) : !isLoading && dataSet.length === 0 ? (
-        <div className="no-actions-message">
-          {_context.resources.getString(Constants.NO_RECORDS)}
-        </div>
-      ) : (
-        dataSet.map((item) => (
-          <PrimaryButton
-            className="btnaction"
-            key={item.buttonId}
-            iconProps={{ iconName: item.buttonIcon }}
-            text={item.displayName}
-            onClick={() => void onClick(item, "")}
-            disabled={!item.buttonStatus}
-            style={{
-              backgroundColor: item.buttonColor,
-              border: item.buttonColor,
-            }}
-          />
-        ))
-      )}
-      {isLoading && (
-        <div className="loading-spinner">
-          <span>{_context.resources.getString(Constants.LOADING)}</span>
-        </div>
-      )}
-
-      <ModalDialog
-        _context={_context}
-        isVisible={isModalVisible}
-        onClose={closeModal}
-        onSave={saveModal}
-        action={modalContent.action}
-      />
-
-      <AssignDialog
-        _context={_context}
-        isVisible={isAssignModalVisible}
-        onClose={closeAssignModal}
-        onSetNextAssigee={saveAssignModal}
-        action={modalContent?.action ?? {}}
-        teamId={modalContent?.action.nextTeamId ?? undefined}
-      />
-    </div>
+  return React.createElement(
+    "div",
+    { className: "buttonIcons" },
+    isPermissionLoading
+      ? React.createElement(
+        "div",
+        { className: "loading-spinner" },
+        React.createElement("span", null, _context.resources.getString(Constants.LOADING))
+      )
+      : !isAuthorized
+        ? React.createElement(
+          "div",
+          { className: "no-actions-message" },
+          _context.resources.getString(Constants.NOT_AUTHORIZED_MSG)
+        )
+        : !isLoading && dataSet.length === 0
+          ? React.createElement(
+            "div",
+            { className: "no-actions-message" },
+            _context.resources.getString(Constants.NO_RECORDS)
+          )
+          : dataSet.map((item) =>
+            React.createElement(
+              PrimaryButton,
+              {
+                className: "btnaction",
+                key: item.buttonId,
+                onClick: () => void onClick(item, ""),
+                disabled: !item.buttonStatus,
+                style: {
+                  backgroundColor: item.buttonColor,
+                  borderColor: item.buttonColor,
+                },
+              },
+              item.buttonIcon ? React.createElement("i", { className: item.buttonIcon, style: { marginRight: "8px" } }) : null,
+              item.displayName
+            )
+          ),
+    isLoading && React.createElement(
+      "div",
+      { className: "loading-spinner" },
+      React.createElement("span", null, _context.resources.getString(Constants.LOADING))
+    ),
+    React.createElement(ModalDialog, {
+      _context: _context,
+      isVisible: isModalVisible,
+      onClose: closeModal,
+      onSave: saveModal,
+      action: modalContent.action,
+    }),
+    React.createElement(AssignDialog, {
+      _context: _context,
+      isVisible: isAssignModalVisible,
+      onClose: closeAssignModal,
+      onSetNextAssigee: saveAssignModal,
+      action: modalContent?.action ?? {},
+      teamId: modalContent?.action.nextTeamId ?? undefined,
+    })
   );
 };

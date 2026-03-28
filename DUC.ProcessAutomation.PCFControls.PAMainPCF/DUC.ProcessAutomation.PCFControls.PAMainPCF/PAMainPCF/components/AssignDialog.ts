@@ -123,115 +123,109 @@ const AssignDialog: React.FC<AssignDialogProps> = ({ _context, isVisible, onClos
     onClose();
   };
 
-  return (
-    <Dialog
-      hidden={!isVisible}
-      onDismiss={onClose}
-      minWidth="40%"
-      dialogContentProps={{
+  return React.createElement(
+    Dialog,
+    {
+      hidden: !isVisible,
+      onDismiss: onClose,
+      minWidth: "40%",
+      dialogContentProps: {
         type: DialogType.largeHeader,
         title: _context.resources.getString("Assigned_Record") ?? "Assign Record",
-      }}
-    >
-      {message && (
-        <MessageBar messageBarType={message.type} onDismiss={() => setMessage(null)}>
-          {message.text}
-        </MessageBar>
-      )}
-
-      <TextField
-        placeholder={_context.resources.getString("Search") ?? "Search..."}
-        value={search}
-        onChange={(_, v) => setSearch(v ?? "")}
-        iconProps={{ iconName: "Search" }}
-        styles={{ root: { marginBottom: 10 } }}
-      />
-
-      <Pivot selectedKey={tab} onLinkClick={item => setTab(item?.props.itemKey as "user" | "team")}>
-        <PivotItem headerText="Users" itemKey="user" />
-        {/* <PivotItem headerText="Teams" itemKey="team" /> */}
-      </Pivot>
-
-      <div style={{ maxHeight: "300px", overflowY: "auto", border: "1px solid #ddd", borderRadius: 4, marginTop: 10 }}>
-        {loading && items.length === 0 ? (
-          <Spinner label={_context.resources.getString(Constants.LOADING) ?? "Loading..."} />
-        ) : (
-          filteredItems.map(item => (
-            <div
-              key={item.id}
-              onClick={() => setSelected(item)}
-              style={{
+      },
+    },
+    // Message bar
+    message && React.createElement(
+      MessageBar,
+      { messageBarType: message.type, onDismiss: () => setMessage(null) },
+      message.text
+    ),
+    // Search field
+    React.createElement(TextField, {
+      placeholder: _context.resources.getString("Search") ?? "Search...",
+      value: search,
+      onChange: (_: any, v: any) => setSearch(v ?? ""),
+      iconProps: { iconName: "Search" },
+      styles: { root: { marginBottom: 10 } },
+    }),
+    // Pivot tabs
+    React.createElement(
+      Pivot,
+      { selectedKey: tab, onLinkClick: (item: any) => setTab(item?.props.itemKey as "user" | "team") },
+      React.createElement(PivotItem, { headerText: "Users", itemKey: "user" })
+      // React.createElement(PivotItem, { headerText: "Teams", itemKey: "team" })
+    ),
+    // Assignee list
+    React.createElement(
+      "div",
+      { style: { maxHeight: "300px", overflowY: "auto", border: "1px solid #ddd", borderRadius: 4, marginTop: 10 } },
+      loading && items.length === 0
+        ? React.createElement(Spinner, { label: _context.resources.getString(Constants.LOADING) ?? "Loading..." })
+        : filteredItems.map(item =>
+          React.createElement(
+            "div",
+            {
+              key: item.id,
+              onClick: () => setSelected(item),
+              style: {
                 display: "flex",
                 alignItems: "center",
                 padding: "8px",
                 cursor: "pointer",
                 backgroundColor: selected?.id === item.id ? "#e6f7ff" : "transparent",
-              }}
-            >
-              <Persona
-                text={item.name}
-                secondaryText={item.email}
-                size={PersonaSize.size40}
-                initialsColor={"darkblue"} // Use same color as assign button
-              />
-              <div style={{ display: "flex", flexDirection: "row", gap: "8px", flexWrap: "wrap" }}>
-                {item.assignedCount !== undefined && (
-                  <CustomBadge
-                    label={_context.resources.getString("Assigned_Label")}
-                    value={item.assignedCount}
-                  />
-                )}
-
-                {item.assignedToday !== undefined && (
-                  <CustomBadge
-                    label={_context.resources.getString("AssignedToday_Label")}
-                    value={item.assignedToday}
-                  />
-                )}
-
-                {item.capacity !== undefined && (
-                  <CustomBadge
-                    label={_context.resources.getString("Capacity_Label")}
-                    value={item.capacity}
-                  />
-                )}
-
-                {item.onLeave && (
-                  <CustomBadge
-                    label={_context.resources.getString("OnLeave_Label")}
-                    isLeave={true}
-                    iconClass="fas fa-calendar-minus"
-                  />
-                )}
-              </div>
-
-            </div>
-          ))
-        )}
-      </div>
-
-      <DialogFooter>
-        {onSetNextAssigee && action && (
-          <PrimaryButton
-            text={action.displayName}
-            style={{ backgroundColor: action.buttonColor }}
-            onClick={handleAssign}
-            disabled={!selected}
-          />
-        )}
-
-        {onAssign && (
-          <PrimaryButton
-            text={_context.resources.getString(Constants.ASSIGNMENT_BTN_LABEL)}
-            onClick={handleAssign}
-            disabled={!selected}
-            style={{ backgroundColor: "darkblue" }}
-          />
-        )}
-
-        <DefaultButton onClick={onClose} text={_context.resources.getString(Constants.CLOSE_MODAL)} />
-      </DialogFooter>
-    </Dialog>
+              },
+            },
+            React.createElement(Persona, {
+              text: item.name,
+              secondaryText: item.email,
+              size: PersonaSize.size40,
+              initialsColor: "darkblue" as any,
+            }),
+            React.createElement(
+              "div",
+              { style: { display: "flex", flexDirection: "row", gap: "8px", flexWrap: "wrap" } },
+              item.assignedCount !== undefined && React.createElement(CustomBadge, {
+                label: _context.resources.getString("Assigned_Label"),
+                value: item.assignedCount,
+              }),
+              item.assignedToday !== undefined && React.createElement(CustomBadge, {
+                label: _context.resources.getString("AssignedToday_Label"),
+                value: item.assignedToday,
+              }),
+              item.capacity !== undefined && React.createElement(CustomBadge, {
+                label: _context.resources.getString("Capacity_Label"),
+                value: item.capacity,
+              }),
+              item.onLeave && React.createElement(CustomBadge, {
+                label: _context.resources.getString("OnLeave_Label"),
+                isLeave: true,
+                iconClass: "fas fa-calendar-minus",
+              })
+            )
+          )
+        )
+    ),
+    // Footer
+    React.createElement(
+      DialogFooter,
+      null,
+      onSetNextAssigee && action && React.createElement(PrimaryButton, {
+        text: action.displayName,
+        style: { backgroundColor: action.buttonColor },
+        onClick: handleAssign,
+        disabled: !selected,
+      }),
+      onAssign && React.createElement(PrimaryButton, {
+        text: _context.resources.getString(Constants.ASSIGNMENT_BTN_LABEL),
+        onClick: handleAssign,
+        disabled: !selected,
+        style: { backgroundColor: "darkblue" },
+      }),
+      React.createElement(DefaultButton, {
+        onClick: onClose,
+        text: _context.resources.getString(Constants.CLOSE_MODAL),
+      })
+    )
   );
 };
 

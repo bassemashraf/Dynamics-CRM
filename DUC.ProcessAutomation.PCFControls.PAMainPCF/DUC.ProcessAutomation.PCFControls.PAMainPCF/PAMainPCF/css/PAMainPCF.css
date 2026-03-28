@@ -370,11 +370,9 @@
 
 
 .borders {
-    padding-bottom: 10px;
-    padding-top: 10px;
-    border-bottom: solid 1px lightgrey;
-    border-top: solid 1px lightgrey;
-  }
+  padding-bottom: 10px;
+  padding-top: 10px;
+}
 
 
 .close-btn {
@@ -425,13 +423,6 @@
 }
 
 /* Flow Progress Bar*/
-@font-face {
-  font-family: 'aptos';
-  src: url('../fonts/Aptos.ttf') format('woff2'),
-    url('../fonts/Aptos.ttf') format('woff');
-  font-weight: normal;
-  font-style: normal;
-}
 
 .main-pcf-flow-container {
   display: flex;
@@ -443,13 +434,15 @@
   margin-top: auto;
   /* margin-bottom: 20px; */
 }
+
 .main-pcf-flow-container-web-padding {
-    padding: 20px;
-    margin-bottom: 20px;
+  padding: 20px;
+  margin-bottom: 20px;
 }
+
 .main-pcf-flow-container-mobile-padding {
-    padding: 5px;
-    margin-bottom: 5px;
+  padding: 5px;
+  margin-bottom: 5px;
 }
 
 
@@ -484,9 +477,9 @@
 
 /* Step number animation for active state */
 .main-pcf-flow-container>.active .step-number {
-  /* background-color: #ffc107 !important;
-color: white !important; */
-  /* box-shadow: 0 0 10px rgba(255, 193, 7, 0.8); */
+  background-color: rgba(255, 193, 7, 0.8) !important;
+  color: white !important;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
   transform: scale(1.1);
   animation: pulse 2s infinite;
   /* Pulse animation */
@@ -494,8 +487,8 @@ color: white !important; */
 
 /* Step number animation for active state */
 .main-pcf-flow-container>.done .step-number {
-  /* background-color: #28a745;
-color: white; */
+  background-color: #28a745;
+  color: white;
   transform: scale(1.1);
 }
 

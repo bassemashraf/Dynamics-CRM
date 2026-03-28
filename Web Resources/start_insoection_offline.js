@@ -122,101 +122,69 @@ async function uLA(woId) {
 
         var isOff = isOffline();
 
-        alert("[uLA] START\nwoId (passed in): " + woId + "\nOffline: " + isOff);
-
         step = "Retrieving work order process extension";
-        alert("[uLA] Step: " + step + "\nQuery: retrieveRecord('msdyn_workorder', '" + woId + "', '?$select=_duc_processextension_value')");
-
         var woRecord = await Xrm.WebApi.retrieveRecord(
             "msdyn_workorder",
             woId,
             "?$select=_duc_processextension_value"
         );
 
-        alert("[uLA] woRecord returned:\n" + JSON.stringify(woRecord, null, 2));
-
         var peId = woRecord._duc_processextension_value;
-        alert("[uLA] peId: " + peId);
-        if (!peId) {
-            alert("[uLA] peId is null/undefined — returning early");
-            return;
-        }
+        if (!peId) return;
 
-        step = "Retrieving process extension record (processdefinition & currentstage)";
-        alert("[uLA] Step: " + step + "\nQuery: retrieveRecord('duc_processextension', '" + peId + "', '?$select=_duc_processdefinition_value,_duc_currentstage_value')");
-
+        step = "Retrieving process extension record";
         var peRecord = await Xrm.WebApi.retrieveRecord(
             "duc_processextension",
             peId,
             "?$select=_duc_processdefinition_value,_duc_currentstage_value"
         );
 
-        alert("[uLA] peRecord returned:\n" + JSON.stringify(peRecord, null, 2));
-
         var processDefinitionId = peRecord._duc_processdefinition_value;
         var currentStageId = peRecord._duc_currentstage_value;
 
-        alert("[uLA] processDefinitionId: " + processDefinitionId + "\ncurrentStageId: " + currentStageId);
-
-        if (!processDefinitionId) {
-            alert("[uLA] processDefinitionId is null — returning early");
-            return;
-        }
+        if (!processDefinitionId) return;
 
         step = "Retrieving stage actions";
         var processField = isOff ? "duc_process" : "_duc_process_value";
         var relatedStageField = isOff ? "duc_relatedstage" : "_duc_relatedstage_value";
 
-        var stageActionsQuery = `?$select=duc_stageactionid,_duc_defaultstatus_value&$filter=duc_canbetriggeredbytarget eq true and ${processField} eq ${processDefinitionId} and ${relatedStageField} eq ${currentStageId}&$top=10`;
-
-        alert("[uLA] Step: " + step + "\nprocessField: " + processField + "\nrelatedStageField: " + relatedStageField + "\nFull query: " + stageActionsQuery);
-
         var stageActions = await Xrm.WebApi.retrieveMultipleRecords(
             "duc_stageaction",
-            stageActionsQuery
+            "?$select=duc_stageactionid,_duc_defaultstatus_value" +
+            "&$filter=duc_canbetriggeredbytarget eq true" +
+            " and " + processField + " eq " + processDefinitionId +
+            " and " + relatedStageField + " eq " + currentStageId +
+            "&$top=10"
         );
-
-        alert("[uLA] stageActions count: " + stageActions.entities.length + "\nEntities: " + JSON.stringify(stageActions.entities, null, 2));
 
         var actionIdToSet = null;
 
-        step = "Looping stage actions to find matching status (duc_value == 690970002)";
-        for (let item of stageActions.entities) {
-            let statusId = item._duc_defaultstatus_value;
-
-            alert("[uLA] Checking stageAction: " + item.duc_stageactionid + "\nstatusId (_duc_defaultstatus_value): " + statusId);
+        step = "Looping stage actions to find matching status";
+        for (var i = 0; i < stageActions.entities.length; i++) {
+            var item = stageActions.entities[i];
+            var statusId = item._duc_defaultstatus_value;
 
             if (statusId) {
-                let status = await Xrm.WebApi.retrieveRecord(
+                var status = await Xrm.WebApi.retrieveRecord(
                     "duc_processstatus",
                     statusId,
                     "?$select=duc_value"
                 );
 
-                alert("[uLA] Status record:\n" + JSON.stringify(status, null, 2) + "\nduc_value: " + status.duc_value);
-
                 if (status.duc_value == 690970002) {
                     actionIdToSet = item.duc_stageactionid;
-                    alert("[uLA] MATCH FOUND! actionIdToSet: " + actionIdToSet);
                     break;
                 }
             }
         }
 
-        if (!actionIdToSet) {
-            alert("[uLA] No matching action found — returning early");
-            return;
-        }
+        if (!actionIdToSet) return;
 
         step = "Updating process extension with LastActionTaken";
-        alert("[uLA] Step: " + step + "\npeId: " + peId + "\nactionIdToSet: " + actionIdToSet);
-
         await Xrm.WebApi.updateRecord("duc_processextension", peId, {
             "duc_LastActionTaken_duc_ProcessExtension@odata.bind":
-                `/duc_stageactions(${actionIdToSet})`
+                "/duc_stageactions(" + actionIdToSet + ")"
         });
-
-        alert("[uLA] Update successful!");
 
         // Run offline plugin logic inline (no external dependency)
         step = "Running offline action logic";
@@ -318,23 +286,23 @@ async function runOfflineActionLogic(actionId, processExtensionId, workOrderId) 
             } catch (e) { /* ignore */ }
         }
 
-        // 5. Create action log
-        step = "Creating action log";
-        var logData = {
-            "subject": "Process Action",
-            "actualstart": new Date(),
-            "duc_sendtocustomer": sendToCustomer,
-            "duc_islastactiontakenoffline": true
-        };
-        logData["ownerid_duc_processactionlog@odata.bind"] = "/systemusers(" + userId + ")";
-        logData["duc_AuthorId_duc_processActionLog_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
-        logData["regardingobjectid_msdyn_workorder_duc_processactionlog@odata.bind"] = "/msdyn_workorders(" + workOrderId + ")";
-        logData["duc_Action_duc_processActionLog@odata.bind"] = "/duc_stageactions(" + actionId + ")";
-        if (actionTypeId) logData["duc_ActionType_duc_processActionLog@odata.bind"] = "/duc_actiontypes(" + actionTypeId + ")";
-        if (relatedStageId) logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + relatedStageId + ")";
-        if (processDefId) logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + processDefId + ")";
+        // // 5. Create action log
+        // step = "Creating action log";
+        // var logData = {
+        //     "subject": "Process Action",
+        //     "actualstart": new Date(),
+        //     "duc_sendtocustomer": sendToCustomer,
+        //     "duc_islastactiontakenoffline": true
+        // };
+        // logData["ownerid_duc_processactionlog@odata.bind"] = "/systemusers(" + userId + ")";
+        // logData["duc_AuthorId_duc_processActionLog_systemuser@odata.bind"] = "/systemusers(" + userId + ")";
+        // logData["regardingobjectid_msdyn_workorder_duc_processactionlog@odata.bind"] = "/msdyn_workorders(" + workOrderId + ")";
+        // logData["duc_Action_duc_processActionLog@odata.bind"] = "/duc_stageactions(" + actionId + ")";
+        // if (actionTypeId) logData["duc_ActionType_duc_processActionLog@odata.bind"] = "/duc_actiontypes(" + actionTypeId + ")";
+        // if (relatedStageId) logData["duc_processStage_duc_processActionLog@odata.bind"] = "/duc_processstages(" + relatedStageId + ")";
+        // if (processDefId) logData["duc_process_duc_processActionLog@odata.bind"] = "/duc_processdefinitions(" + processDefId + ")";
 
-        await Xrm.WebApi.createRecord("duc_processactionlog", logData);
+        // await Xrm.WebApi.createRecord("duc_processactionlog", logData);
 
         // 6. Update process extension fields
         step = "Updating process extension fields";
@@ -407,10 +375,9 @@ async function sBIP(woId) {
         step = "Retrieving bookable resource booking for work order";
         var bookingResult = await Xrm.WebApi.retrieveMultipleRecords(
             "bookableresourcebooking",
-            `?$select=bookableresourcebookingid
-              &$filter=${woFilterField} eq ${woId}
-              &$orderby=createdon asc
-              &$top=1`
+            "?$select=bookableresourcebookingid" +
+            "&$filter=" + woFilterField + " eq " + woId +
+            "&$orderby=createdon asc&$top=1"
         );
 
         if (!bookingResult.entities.length) return false;
@@ -420,7 +387,7 @@ async function sBIP(woId) {
         step = "Retrieving booking status 'In Progress'";
         var statusResult = await Xrm.WebApi.retrieveMultipleRecords(
             "bookingstatus",
-            `?$select=bookingstatusid&$filter=name eq 'In Progress'`
+            "?$select=bookingstatusid&$filter=name eq 'In Progress'"
         );
 
         if (!statusResult.entities.length) {
@@ -432,7 +399,7 @@ async function sBIP(woId) {
 
         step = "Updating booking record with 'In Progress' status";
         await Xrm.WebApi.updateRecord("bookableresourcebooking", bookingId, {
-            "BookingStatus@odata.bind": `/bookingstatuses(${statusId})`
+            "BookingStatus@odata.bind": "/bookingstatuses(" + statusId + ")"
         });
 
         return true;

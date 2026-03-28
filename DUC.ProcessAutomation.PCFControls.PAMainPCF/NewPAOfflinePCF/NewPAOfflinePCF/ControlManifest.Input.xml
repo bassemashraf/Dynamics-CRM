@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="DUC.ProcessAutomation.Offline" constructor="NewPAOfflinePCF" version="0.0.1" display-name-key="NewPAOfflinePCF" description-key="NewPAOfflinePCF description" control-type="standard" >
+    <external-service-usage enabled="false">
+    </external-service-usage>
+    <property name="boundStringField" display-name-key="Bound String Field" description-key="A simple text field to bind the control to." of-type="SingleLine.Text" usage="bound" required="true" />
+    
+    <resources>
+      <code path="index.ts" order="1"/>
+      <css path="css/NewPAOfflinePCF.css" order="1" />
+    </resources>
+    
+    <feature-usage>
+      <uses-feature name="Utility" required="true" />
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
+  </control>
+</manifest>
