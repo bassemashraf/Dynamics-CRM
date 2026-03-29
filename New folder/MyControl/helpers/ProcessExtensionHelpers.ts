@@ -267,7 +267,7 @@ export class ProcessExtensionHelpers {
     workOrderId: string,
     incidentTypeId: string,
     serviceAccountId?: string,
-  ): Promise<string | null> {
+  ): Promise<{ peId: string | null; processDef: ProcessDefinitionData | null }> {
     // Step 1: Get the process definition from the incident type
     const processDef =
       await this.getProcessDefinitionFromIncidentType(incidentTypeId);
@@ -276,7 +276,7 @@ export class ProcessExtensionHelpers {
       const msg =
         "[ProcessExtension] No process definition found on incident type — skipping process extension creation";
       console.warn(msg);
-      return null;
+      return { peId: null, processDef: null };
     }
 
     console.log(
@@ -286,10 +286,44 @@ export class ProcessExtensionHelpers {
     );
 
     // Step 2: Create the process extension with defaults
-    return await this.createProcessExtension(
+    const peId = await this.createProcessExtension(
       workOrderId,
       processDef,
       serviceAccountId,
     );
+
+    return { peId, processDef };
+  }
+
+  // =====================================================================
+  // SUBSTATUS RESOLUTION
+  // =====================================================================
+
+  /**
+   * Retrieves the raw GUID string (duc_value) from the process substatus record.
+   * This is used to set the actual work order substatus (msdyn_substatus).
+   *
+   * @param defaultSubStatusId The ID of the duc_processsubstatus record
+   */
+  static async getSubStatusValueFromProcessDefinition(
+    defaultSubStatusId: string,
+  ): Promise<string | null> {
+    try {
+      const subStatusRecord = await this.xrm.WebApi.retrieveRecord(
+        "duc_processsubstatus",
+        defaultSubStatusId,
+        "?$select=duc_value"
+      );
+
+      const subStatusGuid = subStatusRecord?.duc_value;
+      if (!subStatusGuid) {
+        console.warn("[ProcessExtension] duc_processsubstatus has no duc_value");
+        return null;
+      }
+      return subStatusGuid;
+    } catch (error: any) {
+      console.error("[ProcessExtension] Error getting substatus value:", error);
+      return null;
+    }
   }
 }
