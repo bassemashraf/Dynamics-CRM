@@ -214,7 +214,7 @@ async function updateCurrentStageOnProcessExtension(extId) {
             return;
         }
 
-        step = "Finding action with status 690970004";
+        step = "Finding action with status 100000006";
         var nextStageId = null;
 
         for (var i = 0; i < ctx.stageActions.length; i++) {
@@ -225,14 +225,14 @@ async function updateCurrentStageOnProcessExtension(extId) {
             var statusRec = await Xrm.WebApi.retrieveRecord("duc_processstatus", sid, "?$select=duc_value");
             var statusVal = statusRec.duc_value;
 
-            if (statusVal == 690970004) {
+            if (statusVal == 100000006) {
                 nextStageId = act._duc_nextstage_value;
                 break;
             }
         }
 
         if (!nextStageId) {
-            console.warn("[updateCurrentStageOnProcessExtension] No action with status 690970004 found — skipping update.");
+            console.warn("[updateCurrentStageOnProcessExtension] No action with status 100000006 found — skipping update.");
             return;
         }
 
@@ -294,7 +294,6 @@ async function updateLastActionOnProcessExtension(extId, workOrderId) {
                 // Run offline plugin logic
                 step = "Running offline action logic";
                 await runOfflineActionLogic_Finish(act, extId, workOrderId);
-
                 break;
             }
         }
@@ -439,6 +438,23 @@ async function runOfflineActionLogic_Finish(action, processExtensionId, workOrde
         }
 
         if (hasWoUpdate) {
+            // If status is heading to 690970004, complete bookings first
+            // so the Field Service engine doesn't override the WO status
+            if (woUpdate["msdyn_systemstatus"] == 690970004 ||
+                (targetStatusField == "msdyn_systemstatus" && parseInt(statusValue, 10) == 690970004) ||
+                (targetSubStatusField == "msdyn_systemstatus" && parseInt(subStatusValue, 10) == 690970004)) {
+
+                await Xrm.Navigation.openAlertDialog({
+                    text: "🚨 STATUS 690970004 DETECTED — completing bookings first before WO update.\n\nPayload: " + JSON.stringify(woUpdate)
+                });
+
+                var booking = await setBookingCompletedForWorkOrder();
+                if (!booking) {
+                    Xrm.Utility.closeProgressIndicator();
+                    return;
+                }
+            }
+
             await Xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, woUpdate);
         }
 
@@ -571,11 +587,11 @@ async function runProcess() {
         return;
     }
 
-    var booking = await setBookingCompletedForWorkOrder();
-    if (!booking) {
-        Xrm.Utility.closeProgressIndicator();
-        return;
-    }
+    // var booking = await setBookingCompletedForWorkOrder();
+    // if (!booking) {
+    //     Xrm.Utility.closeProgressIndicator();
+    //     return;
+    // }
 
     // Resolve process extension ID and work order ID once, then pass to each function
     var form = Xrm.Page;
@@ -593,6 +609,7 @@ async function runProcess() {
 
     await setWorkOrderEndTime();
     await navigateToWorkORderTab();
+
 
     setTimeout(function () {
         try { Xrm.Page.data.refresh(true); } catch (e) { }
