@@ -581,11 +581,11 @@ async function runProcess() {
         return;
     }
 
-    var validatePercentage = await updateServiceTasksPercent();
-    if (!validatePercentage) {
-        Xrm.Utility.closeProgressIndicator();
-        return;
-    }
+    // var validatePercentage = await updateServiceTasksPercent();
+    // if (!validatePercentage) {
+    //     Xrm.Utility.closeProgressIndicator();
+    //     return;
+    // }
 
     // var booking = await setBookingCompletedForWorkOrder();
     // if (!booking) {
