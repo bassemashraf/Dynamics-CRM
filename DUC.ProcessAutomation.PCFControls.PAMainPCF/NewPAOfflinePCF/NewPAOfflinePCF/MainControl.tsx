@@ -109,17 +109,37 @@ export const MainControl: React.FC<IMainProps> = ({
         active: false,
       })).sort((a: IStep, b: IStep) => a.sequence - b.sequence);
 
-      const currentIndex = fetchedSteps.findIndex((s) => s.id === stepId);
-      // If stage not found, don't default to 0 (Creation) — leave nothing highlighted
-      if (currentIndex === -1) {
-        console.warn("[MainControl] Current stage ID not found among fetched steps:", stepId);
+      // Deduplicate by name — keep only the first stage (lowest sequence) per unique name.
+      // This ensures stages with the same name appear as a single step in the progress bar.
+      const seenNames = new Set<string>();
+      const uniqueSteps = fetchedSteps.filter((s) => {
+        const key = (s.displayNameEN || s.name || "").trim().toLowerCase();
+        if (seenNames.has(key)) return false;
+        seenNames.add(key);
+        return true;
+      });
+
+      const currentIndex = uniqueSteps.findIndex((s) => s.id === stepId);
+      // If the active stage was deduplicated away, find it by name instead
+      let resolvedCurrentIndex = currentIndex;
+      if (currentIndex === -1 && stepId) {
+        const activeStep = fetchedSteps.find((s) => s.id === stepId);
+        if (activeStep) {
+          const activeName = (activeStep.displayNameEN || activeStep.name || "").trim().toLowerCase();
+          resolvedCurrentIndex = uniqueSteps.findIndex(
+            (s) => (s.displayNameEN || s.name || "").trim().toLowerCase() === activeName
+          );
+        }
+        if (resolvedCurrentIndex === -1) {
+          console.warn("[MainControl] Current stage ID not found among deduplicated steps:", stepId);
+        }
       }
 
-      const lastIndex = fetchedSteps.length - 1;
-      const processed = fetchedSteps.map((step, index) => ({
+      const lastIndex = uniqueSteps.length - 1;
+      const processed = uniqueSteps.map((step, index) => ({
         ...step,
-        done: currentIndex !== -1 && (index < currentIndex || (index === lastIndex && index === currentIndex)),
-        active: currentIndex !== -1 && index === currentIndex,
+        done: resolvedCurrentIndex !== -1 && (index < resolvedCurrentIndex || (index === lastIndex && index === resolvedCurrentIndex)),
+        active: resolvedCurrentIndex !== -1 && index === resolvedCurrentIndex,
       }));
 
       setSteps(processed);

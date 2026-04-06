@@ -1102,7 +1102,7 @@ export class MultiTypeInspection extends React.Component<
       // STEP 9.5: Create process extension record with defaults
       try {
         this.xrm.Utility.showProgressIndicator("Creating Process Extension...");
-        const peId = await ProcessExtensionHelpers.createProcessExtensionForWorkOrder(
+        const { peId, processDef } = await ProcessExtensionHelpers.createProcessExtensionForWorkOrder(
           workOrderId,
           incidentTypeData.id,
           serviceAccountData?.id
@@ -1110,6 +1110,22 @@ export class MultiTypeInspection extends React.Component<
         this.xrm.Utility.closeProgressIndicator();
         if (peId) {
           console.log("Process extension created:", peId);
+        }
+
+        // STEP 9.55: Set work order substatus from process definition
+        if (processDef?.defaultSubStatusId) {
+          try {
+            const subStatusGuid = await ProcessExtensionHelpers.getSubStatusValueFromProcessDefinition(processDef.defaultSubStatusId);
+            if (subStatusGuid) {
+              const cleanGuid = subStatusGuid.replace(/[{}]/g, "");
+              await this.xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, {
+                "msdyn_substatus@odata.bind": `/msdyn_workordersubstatuses(${cleanGuid})`
+              });
+              console.log("[SubStatus] Work order substatus set to:", cleanGuid);
+            }
+          } catch (subStatusError: any) {
+            console.warn("[SubStatus] Failed to set substatus (non-blocking):", subStatusError);
+          }
         }
       } catch (peError: any) {
         this.xrm.Utility.closeProgressIndicator();
@@ -1124,11 +1140,11 @@ export class MultiTypeInspection extends React.Component<
 
 
         // Create msdyn_workorderincident offline — OOB creates this server-side only.
-        const workOrderIncidentId = await WOSTHelpers.createWorkOrderIncident(
-          workOrderId,
-          incidentTypeData.id,
-          incidentTypeData.name
-        );
+         const workOrderIncidentId = null; //await WOSTHelpers.createWorkOrderIncident(
+        //   workOrderId,
+        //   incidentTypeData.id,
+        //   incidentTypeData.name
+        // );
 
           //alert(`[STEP 9.6] WorkOrderIncident result: ${workOrderIncidentId}`);
  
