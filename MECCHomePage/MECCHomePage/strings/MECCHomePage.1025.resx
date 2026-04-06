@@ -24,6 +24,9 @@
   <data name="CompletedInspections" xml:space="preserve">
     <value>عمليات التفتيش المكتملة اليوم</value>
   </data>
+  <data name="PendingWorkOrderActions" xml:space="preserve">
+    <value>إجراءات أمر العمل المعلقة</value>
+  </data>
   <data name="ScheduledInspections" xml:space="preserve">
     <value>عمليات التفتيش المجدولة</value>
   </data>

@@ -33,6 +33,7 @@ interface State {
     searchText: string;
     pendingTodayBookings: number | null;
     completedTodayWorkorders: number | null;
+    pendingWorkOrderActions: number | null;
     TodayCampaigns: number | null;
     userName: string;
     message?: string;
@@ -69,6 +70,7 @@ interface LocalizedStrings {
     FindFacility: string;
     RemainingInspections: string;
     CompletedInspections: string;
+    PendingWorkOrderActions: string;
     ScheduledInspections: string;
     TodaysPatrols: string;
     StartInspection: string;
@@ -175,6 +177,7 @@ export const Main = (props: IProps) => {
             FindFacility: ctx.resources.getString("FindFacility"),
             RemainingInspections: ctx.resources.getString("RemainingInspections"),
             CompletedInspections: ctx.resources.getString("CompletedInspections"),
+            PendingWorkOrderActions: ctx.resources.getString("PendingWorkOrderActions"),
             ScheduledInspections: ctx.resources.getString("ScheduledInspections"),
             StartInspection: ctx.resources.getString("StartInspection"),
             SearchPlaceholder: ctx.resources.getString("SearchPlaceholder"),
@@ -202,6 +205,7 @@ export const Main = (props: IProps) => {
         searchText: "",
         pendingTodayBookings: null,
         completedTodayWorkorders: null,
+        pendingWorkOrderActions: null,
         TodayCampaigns: null,
         userName: strings.Loading,
         message: undefined,
@@ -492,13 +496,14 @@ export const Main = (props: IProps) => {
         }
     }, [props.context, state.orgUnitId]);
 
-    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
+    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number; pendingActions: number }> => {
         const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
 
         try {
             let completedToday = 0;
             let remainingToday = 0;
             let campaignsToday = 0;
+            let pendingActions = 0;
 
             try {
                 
@@ -518,14 +523,14 @@ export const Main = (props: IProps) => {
                         //console.log("Resource ID fetched and cached:", resourceId);
                     } else {
                         console.warn(`User ${userId} is not linked to a Bookable Resource.`);
-                        return { completedToday, remainingToday, campaignsToday };
+                        return { completedToday, remainingToday, campaignsToday, pendingActions };
                     }
                 } else {
                     //console.log("Resource ID retrieved from cache:", resourceId);
                 }
 
                 if (!resourceId) {
-                    return { completedToday, remainingToday, campaignsToday };
+                    return { completedToday, remainingToday, campaignsToday, pendingActions };
                 }
 
                 const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
@@ -533,24 +538,48 @@ export const Main = (props: IProps) => {
                 completedToday = completedResults.entities.length;
                 //console.log("Completed Work Orders Count:", completedToday);
 
-                const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
-                const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and _bookingstatus_value eq '${bookingStatusGuid}' and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
+                const bookingStatusGuid1 = 'f16d80d1-fd07-4237-8b69-187a11eb75f9'; // Scheduled status
+                const bookingStatusGuid2 = 'a2ad7f6a-f763-461a-b724-6d4371506baa'; // In Progress
+                const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and (_bookingstatus_value eq '${bookingStatusGuid1}' or _bookingstatus_value eq '${bookingStatusGuid2}') and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
                 const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                 remainingToday = remainingResults.entities.length;
                 //console.log("Remaining Bookings Count:", remainingToday);
 
-                return { completedToday, remainingToday, campaignsToday };
+                // Fetch pending work order actions using FetchXML
+                const pendingActionsFetchXml = `
+                    <fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="true" no-lock="false">
+                        <entity name="msdyn_workorder">
+                            <attribute name="msdyn_workorderid"/>
+                            <filter type="and">
+                                <condition attribute="statecode" operator="eq" value="0"/>
+                            </filter>
+                            <link-entity name="duc_inspectionaction" alias="aa" link-type="inner" from="duc_inspectionactionid" to="duc_primaryinspectionaction">
+                                <filter type="and">
+                                    <condition attribute="ownerid" operator="eq-useroruserteams"/>
+                                    <condition attribute="duc_status" operator="not-in">
+                                        <value>100000003</value>
+                                        <value>100000005</value>
+                                    </condition>
+                                </filter>
+                            </link-entity>
+                        </entity>
+                    </fetch>`;
+                const pendingActionsResult = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", `?fetchXml=${encodeURIComponent(pendingActionsFetchXml)}`);
+                pendingActions = pendingActionsResult.entities.length;
+                //console.log("Pending Work Order Actions Count:", pendingActions);
+
+                return { completedToday, remainingToday, campaignsToday, pendingActions };
 
             } catch (error: any) {
                 console.error("Error retrieving counts:", error);
                 // alert("Error retrieving counts: " + (error?.message || error));
-                return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+                return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingActions: 0 };
             }
 
         } catch (e: any) {
             //console.log("Failed to load today's counts:", e);
             // alert("Failed to load today's counts: " + (e?.message || e));
-            return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+            return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingActions: 0 };
         }
     };
 
@@ -578,12 +607,13 @@ export const Main = (props: IProps) => {
 
             if (res) {
                 const username = res.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
-                const { completedToday, remainingToday, campaignsToday } = await loadTodaysCounts(ctx, userId);
+                const { completedToday, remainingToday, campaignsToday, pendingActions } = await loadTodaysCounts(ctx, userId);
 
                 setState(prev => ({
                     ...prev,
                     pendingTodayBookings: remainingToday,
                     completedTodayWorkorders: completedToday,
+                    pendingWorkOrderActions: pendingActions,
                     TodayCampaigns: campaignsToday,
                     userName: username,
                 }));
@@ -756,7 +786,7 @@ export const Main = (props: IProps) => {
         void ctx.navigation.navigateTo({
             pageType: "entitylist",
             entityName: "msdyn_workorder",
-            viewId: "bee0efc7-40e4-f011-8406-6045bd9c224c"
+            viewId: "960bbe64-7c09-f111-8341-6045bd8e23b3"
         });
     };
 
@@ -936,7 +966,7 @@ export const Main = (props: IProps) => {
         }));
     };
 
-    const { searchText, pendingTodayBookings, completedTodayWorkorders, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, pendingWorkOrderActions, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
     const isActionDisabled = isLoading;
 
     // MODIFIED BUTTON VISIBILITY LOGIC - Always show Multi Type Inspection button
@@ -1107,6 +1137,34 @@ export const Main = (props: IProps) => {
                             React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
+                    ),
+                    // Pending Work Order Actions Card
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: openPendingWorkorders,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: 'pointer'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
+                                React.createElement("img", { src: clockDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.PendingWorkOrderActions)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingWorkOrderActions ?? "...")
                     )
                 )
             ),

@@ -785,9 +785,6 @@ export class MultiTypeInspection extends React.Component<
       case 3: // Cabin
         return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
 
-      case 4: // Anonymous
-        return `${prefixEn}Account${prefixAr}`.trim();
-
       case 6: // Wilderness Camp
         return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
 
@@ -799,8 +796,9 @@ export class MultiTypeInspection extends React.Component<
       case 11: // Hospital
         return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
 
+      case 4: // Anonymous
       default:
-        return `${prefixEn}${crNumber ?? registrationNumber ?? qataryId}${prefixAr}`.trim();
+        return `${prefixEn}Account${prefixAr}`.trim();
     }
   };
 
@@ -1326,7 +1324,7 @@ export class MultiTypeInspection extends React.Component<
 
     if (field === "registrationNumber") {
       // 10 = Establishment, 11 = Hospital
-      return [10,11].includes(selectedInspectionType);
+      return [10, 11].includes(selectedInspectionType);
     }
 
     return false;
