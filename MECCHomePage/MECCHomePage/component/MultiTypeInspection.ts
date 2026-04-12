@@ -17,6 +17,8 @@ interface IMultiTypeInspectionProps {
   incidentTypeName?: string;
   unknownAccountId?: string;
   unknownAccountName?: string;
+  siteAccountId?: string;
+  siteAccountName?: string;
   organizationUnitId?: string;
   organizationUnitName?: string;
   defaultInspectionType?: number;
@@ -57,6 +59,8 @@ interface IMultiTypeInspectionState {
   incidentTypeReadOnly: boolean;
   // NEW: map campaign ID → incident type to avoid re-retrieves
   campaignIncidentTypeMap: Record<string, { id: string; name: string }>;
+  // NEW: whether to show campaign field based on user's department setting
+  shouldShowCampaignField: boolean;
 }
 
 interface LocalizedStrings {
@@ -232,6 +236,7 @@ export class MultiTypeInspection extends React.Component<
       incidentTypeReadOnly: false,
       campaignIncidentTypeMap: {},
       registrationNumber: "",
+      shouldShowCampaignField: true, // Default to true, will be updated after checking user's department
     };
   }
 
@@ -249,6 +254,7 @@ export class MultiTypeInspection extends React.Component<
         this.loadVehicleTypes(),
         this.preloadCampaignsAndIncidentTypes(),
         InitCache.load(userId),
+        this.checkCampaignVisibility(userId),
       ]);
 
       // If default inspection type is provided, set account type from loaded data
@@ -419,6 +425,32 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       console.error("Error loading vehicle types:", error);
       // alert("Error loading vehicle types: " + (error?.message || error));
+    }
+  };
+
+  // =====================================================================
+  // CHECK CAMPAIGN VISIBILITY FROM USER'S DEPARTMENT
+  // =====================================================================
+
+  private checkCampaignVisibility = async (userId: string): Promise<void> => {
+    try {
+      // Fetch the current user's department
+      const userQuery = `?$select=systemuserid&$expand=duc_department($select=duc_hidecampaignonhomepage)`;
+      const userResult = await this.xrm.WebApi.retrieveRecord(
+        "systemuser",
+        userId,
+        userQuery,
+      );
+
+      // Check if the department has the hide campaign flag set
+      const hideCampaign = userResult?.duc_department?.duc_hidecampaignonhomepage;
+
+      // Show campaign if the flag is null or false, hide if true
+      this.setState({ shouldShowCampaignField: !hideCampaign });
+    } catch (error: any) {
+      console.error("Error checking campaign visibility:", error);
+      // Default to showing campaign on error
+      this.setState({ shouldShowCampaignField: true });
     }
   };
 
@@ -752,14 +784,20 @@ export class MultiTypeInspection extends React.Component<
     if (!selectedInspectionType)
       return "Account";
 
-    var prefixResult = await Xrm.WebApi.retrieveMultipleRecords('duc_organizationunitaccounttypes',
-      `?$top=1&$select=duc_name,duc_namear&$filter=duc_AccountType/duc_accounttype eq ${selectedInspectionType}`);
+    var entityResult = await Xrm.WebApi.retrieveMultipleRecords('duc_organizationunitaccounttypes',
+      `?$top=1&$select=duc_name,duc_namear&$expand=duc_AccountType($select=duc_overrideaccountname)&$filter=duc_AccountType/duc_accounttype eq ${selectedInspectionType}`);
 
     var prefixEn = '';
     var prefixAr = '';
 
-    if (prefixResult.entities.length > 0) {
-      const record = prefixResult.entities[0];
+    // Check if there's an override account name
+    if (entityResult.entities.length > 0) {
+      const record = entityResult.entities[0];
+
+      // If override account name exists, use it
+      if (record.duc_AccountType?.duc_overrideaccountname) {
+        return record.duc_AccountType.duc_overrideaccountname;
+      }
 
       if (record.duc_name) {
         prefixEn = `${record.duc_name} | `;
@@ -870,6 +908,15 @@ export class MultiTypeInspection extends React.Component<
           return this.props.unknownAccountId;
         } else {
           throw new Error("No anonymous account available");
+        }
+      }
+
+      // Site
+      else if (selectedInspectionType === 12) {
+        if (this.props.siteAccountId) {
+          return this.props.siteAccountId;
+        } else {
+          throw new Error("No site account available");
         }
       }
 
@@ -1229,7 +1276,7 @@ export class MultiTypeInspection extends React.Component<
       this.setState((prev) => ({
         ...prev,
         showCampaignIncidentPopup: true,
-        popupShowCampaign: true, // Always show campaign field
+        popupShowCampaign: this.state.shouldShowCampaignField, // Show based on user's department setting
         popupShowIncidentType: true, // Always show incident type field
         loading: false,
         error: null,
@@ -1765,6 +1812,7 @@ export class MultiTypeInspection extends React.Component<
 
         error &&
         React.createElement("div", { style: styles.errorStyle }, error),
+
 
         // Inspection Type
         React.createElement(

@@ -20,7 +20,9 @@ interface OrgUnitCache {
     isNaturalReserve: boolean;
     isWildlifeSection: boolean;
     unknownAccountId?: string;
+    siteAccountId?: string;
     unknownAccountName?: string;
+    siteAccountName?: string;
     incidentTypeId?: string;
     incidentTypeName?: string;
     // COMMENTED OUT: inspectionCustomerClassification field no longer used
@@ -48,6 +50,8 @@ interface State {
     isWildlifeSection: boolean; // Track if org unit is Wildlife section
     unknownAccountId?: string; // Store unknown account ID for anonymous inspections
     unknownAccountName?: string; // Store unknown account name
+    siteAccountId?: string; // Store site account ID for site inspections
+    siteAccountName?: string; // Store site account name
     incidentTypeName?: string; // Store incident type name for Natural Reserve
     incidentTypeId?: string; // Store incident type ID for Natural Reserve
     orgUnitId?: string; // Store organization unit ID
@@ -219,6 +223,7 @@ export const Main = (props: IProps) => {
         isNaturalReserve: false,
         isWildlifeSection: false,
         unknownAccountId: undefined,
+        siteAccountId: undefined,
         incidentTypeId: undefined,
         orgUnitId: undefined,
         organizationUnitName: undefined,
@@ -302,6 +307,8 @@ export const Main = (props: IProps) => {
                     isWildlifeSection: cachedData.isWildlifeSection,
                     unknownAccountId: cachedData.unknownAccountId,
                     unknownAccountName: cachedData.unknownAccountName,
+                    siteAccountId: cachedData.siteAccountId,
+                    siteAccountName: cachedData.siteAccountName,
                     incidentTypeId: cachedData.incidentTypeId,
                     incidentTypeName: cachedData.incidentTypeName,
                     orgUnitId: cachedData.orgUnitId,
@@ -328,12 +335,15 @@ export const Main = (props: IProps) => {
             const orgUnitResult = await xrm.WebApi.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name)"
+                "?$select=_duc_siteaccount_value,_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name),duc_SiteAccount($select=name)"
             );
 
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
             const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
+
+            const siteAccountId = orgUnitResult._duc_siteaccount_value || undefined;
+            const siteAccountName = orgUnitResult.duc_SiteAccount?.name || undefined;
 
             // Check if organization unit name is "Natural Reserve" (case insensitive)
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
@@ -369,6 +379,8 @@ export const Main = (props: IProps) => {
                 unknownAccountName,
                 incidentTypeId,
                 incidentTypeName,
+                siteAccountId,
+                siteAccountName,
             });
 
             setState(prev => ({
@@ -381,6 +393,8 @@ export const Main = (props: IProps) => {
                 incidentTypeName: incidentTypeName,
                 orgUnitId: orgUnitId,
                 organizationUnitName: orgUnitName,
+                siteAccountId: siteAccountId,
+                siteAccountName: siteAccountName,
             }));
 
             //console.log("Organization Unit:", orgUnitName);
@@ -401,6 +415,8 @@ export const Main = (props: IProps) => {
                 isWildlifeSection: false,
                 unknownAccountId: undefined,
                 unknownAccountName: undefined,
+                    siteAccountId: undefined,
+                    siteAccountName: undefined,
                 incidentTypeId: undefined,
                 incidentTypeName: undefined,
                 orgUnitId: undefined,
@@ -1295,6 +1311,8 @@ export const Main = (props: IProps) => {
             incidentTypeId: state.incidentTypeId,
             incidentTypeName: state.incidentTypeName,
             unknownAccountId: state.unknownAccountId,
+            siteAccountId: state.siteAccountId,
+            siteAccountName: state.siteAccountName,
             unknownAccountName: state.unknownAccountName,
             organizationUnitId: state.orgUnitId,
             organizationUnitName: state.organizationUnitName,
