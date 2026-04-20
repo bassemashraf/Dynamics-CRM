@@ -93,6 +93,7 @@ interface LocalizedStrings {
   Clear: string;
   PlateNumber: string;
   RegistrationNumber: string;
+  ContactAdministrator: string;
 }
 
 // Cache constants
@@ -207,6 +208,9 @@ export class MultiTypeInspection extends React.Component<
         props.context.resources.getString("PlateNumber") || "Plate Number",
       RegistrationNumber: props.context.resources.getString("RegistrationNumber")
         || "Registration Number",
+      ContactAdministrator:
+        props.context.resources.getString("ContactAdministrator") ||
+        "An error occurred. Please contact the administrator.",
     };
 
     this.state = {
@@ -273,7 +277,7 @@ export class MultiTypeInspection extends React.Component<
       }
     } catch (error: any) {
       console.error("Error in componentDidMount:", error);
-      // alert("Error in componentDidMount: " + (error?.message || error));
+      this.setState({ error: this.strings.ContactAdministrator });
     }
   }
 
@@ -297,7 +301,6 @@ export class MultiTypeInspection extends React.Component<
       return cacheData.data;
     } catch (error: any) {
       console.error(`Error reading cache for ${key}:`, error);
-      // alert(`Error reading cache for ${key}: ` + (error?.message || error));
       return null;
     }
   };
@@ -311,7 +314,6 @@ export class MultiTypeInspection extends React.Component<
       localStorage.setItem(key, JSON.stringify(cacheData));
     } catch (error: any) {
       console.error(`Error saving cache for ${key}:`, error);
-      // alert(`Error saving cache for ${key}: ` + (error?.message || error));
     }
   };
 
@@ -386,8 +388,7 @@ export class MultiTypeInspection extends React.Component<
       this.setState({ inspectionTypes: types });
     } catch (error: any) {
       console.error("Error loading inspection types from org unit:", error);
-      // alert("Error loading inspection types from org unit: " + (error?.message || error));
-      this.setState({ error: "Failed to load inspection types" });
+      this.setState({ error: this.strings.ContactAdministrator });
     }
   };
 
@@ -424,7 +425,6 @@ export class MultiTypeInspection extends React.Component<
       }
     } catch (error: any) {
       console.error("Error loading vehicle types:", error);
-      // alert("Error loading vehicle types: " + (error?.message || error));
     }
   };
 
@@ -504,7 +504,6 @@ export class MultiTypeInspection extends React.Component<
       this.setState({ campaigns, incidentTypes, campaignIncidentTypeMap });
     } catch (error: any) {
       console.error("Error preloading campaigns/incident types:", error);
-      // alert("Error preloading campaigns/incident types: " + (error?.message || error));
     }
   };
 
@@ -537,7 +536,6 @@ export class MultiTypeInspection extends React.Component<
       return campaigns;
     } catch (error: any) {
       console.error("Error loading campaigns:", error);
-      // alert("Error loading campaigns: " + (error?.message || error));
       return [];
     }
   };
@@ -569,7 +567,6 @@ export class MultiTypeInspection extends React.Component<
       return incidentTypes;
     } catch (error: any) {
       console.error("Error loading incident types:", error);
-      // alert("Error loading incident types: " + (error?.message || error));
       return [];
     }
   };
@@ -624,6 +621,19 @@ export class MultiTypeInspection extends React.Component<
     this.setState({ [field]: value } as any);
   };
 
+  /**
+   * Handle numeric-only input fields (Qatari ID, CR Number, Registration Number)
+   * Filters out any non-numeric characters
+   */
+  private handleNumericInputChange = (
+    field: keyof IMultiTypeInspectionState,
+    value: string,
+  ): void => {
+    // Remove any non-numeric characters
+    const numericValue = value.replace(/[^0-9]/g, '');
+    this.setState({ [field]: numericValue } as any);
+  };
+
   // =====================================================================
   // BARCODE SCANNER
   // =====================================================================
@@ -642,7 +652,7 @@ export class MultiTypeInspection extends React.Component<
       }
     } catch (error: any) {
       console.error("Error scanning barcode:", error);
-      // alert("Error scanning barcode: " + (error?.message || error));
+      this.setState({ error: this.strings.ContactAdministrator });
     }
   };
 
@@ -854,7 +864,6 @@ export class MultiTypeInspection extends React.Component<
       }
     } catch (error: any) {
       console.error("Error getting location:", error);
-      // alert("Error getting location: " + (error?.message || error));
     }
     return null;
   };
@@ -887,7 +896,6 @@ export class MultiTypeInspection extends React.Component<
 
     } catch (error: any) {
       console.error("Error creating address information:", error);
-      // alert("Error creating address information: " + (error?.message || error));
     }
   };
 
@@ -907,7 +915,7 @@ export class MultiTypeInspection extends React.Component<
         if (this.props.unknownAccountId) {
           return this.props.unknownAccountId;
         } else {
-          throw new Error("No anonymous account available");
+          throw new Error(this.strings.ContactAdministrator);
         }
       }
 
@@ -916,7 +924,7 @@ export class MultiTypeInspection extends React.Component<
         if (this.props.siteAccountId) {
           return this.props.siteAccountId;
         } else {
-          throw new Error("No site account available");
+          throw new Error(this.strings.ContactAdministrator);
         }
       }
 
@@ -925,7 +933,7 @@ export class MultiTypeInspection extends React.Component<
         if (this.props.unknownAccountId) {
           return this.props.unknownAccountId;
         } else {
-          throw new Error("No anonymous account available");
+          throw new Error(this.strings.ContactAdministrator);
         }
       }
 
@@ -1008,8 +1016,7 @@ export class MultiTypeInspection extends React.Component<
       return newAccountId;
     } catch (error: any) {
       console.error("Error searching/creating account:", error);
-      // alert("Error searching/creating account: " + (error?.message || error));
-      throw error;
+      throw new Error(this.strings.ContactAdministrator);
     }
   };
 
@@ -1096,7 +1103,7 @@ export class MultiTypeInspection extends React.Component<
       }
 
       if (!incidentTypeData) {
-        throw new Error("No incident type available");
+        throw new Error(this.strings.ContactAdministrator);
       }
 
       // STEP 3 & 4: Get work order type AND department in ONE API call
@@ -1122,7 +1129,7 @@ export class MultiTypeInspection extends React.Component<
       }
 
       if (!departmentData) {
-        throw new Error("No department available");
+        throw new Error(this.strings.ContactAdministrator);
       }
 
       // STEP 5: Prepare campaign data
@@ -1160,9 +1167,7 @@ export class MultiTypeInspection extends React.Component<
       });
 
       if (!validation.isValid) {
-        throw new Error(
-          `Missing required fields: ${validation.missingFields.join(", ")}`,
-        );
+        throw new Error(this.strings.ContactAdministrator);
       }
 
       // STEP 9: Create work order — with progress indicator
@@ -1188,7 +1193,7 @@ export class MultiTypeInspection extends React.Component<
       this.xrm.Utility.closeProgressIndicator();
 
       if (!workOrderId) {
-        throw new Error("Failed to create work order");
+        throw new Error(this.strings.ContactAdministrator);
       }
 
       console.log("Work order created successfully:", workOrderId);
@@ -1225,8 +1230,7 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error creating work order:", error);
-      // alert("Error creating work order: " + (error?.message || error));
-      throw error;
+      throw new Error(this.strings.ContactAdministrator);
     }
   };
 
@@ -1292,9 +1296,8 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error in handleStart:", error);
-      // alert("Error in handleStart: " + (error?.message || error));
       this.setState({
-        error: error.message || "Error starting inspection",
+        error: this.strings.ContactAdministrator,
         loading: false,
       });
     }
@@ -1328,9 +1331,8 @@ export class MultiTypeInspection extends React.Component<
     } catch (error: any) {
       this.xrm.Utility.closeProgressIndicator();
       console.error("Error creating work order (handleContinueWithSelections):", error);
-      // alert("Error creating work order (handleContinueWithSelections): " + (error?.message || error));
       this.setState({
-        error: error.message || "Error creating work order",
+        error: this.strings.ContactAdministrator,
         loading: false,
       });
     }
@@ -1851,7 +1853,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement("input", {
             type: "checkbox",
             checked: isAnonymous,
-            onChange: (e) => this.setState({ isAnonymous: e.target.checked }),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ isAnonymous: e.target.checked }),
             disabled: loading,
             style: styles.checkboxStyle,
           }),
@@ -1883,7 +1885,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement("input", {
             type: "text",
             value: id,
-            onChange: (e) => this.handleInputChange("id", e.target.value),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.handleInputChange("id", e.target.value),
             disabled: loading,
             style: styles.inputStyle,
           }),
@@ -1902,7 +1904,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement("input", {
             type: "text",
             value: carColor,
-            onChange: (e) =>
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
               this.handleInputChange("carColor", e.target.value),
             disabled: loading,
             style: styles.inputStyle,
@@ -1952,10 +1954,12 @@ export class MultiTypeInspection extends React.Component<
             React.createElement("input", {
               type: "text",
               value: qataryId,
-              onChange: (e) =>
-                this.handleInputChange("qataryId", e.target.value),
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleNumericInputChange("qataryId", e.target.value),
               disabled: loading,
               style: { ...styles.inputStyle, flex: 1 },
+              placeholder: "0123456789",
+              inputMode: "numeric" as any,
             }),
             React.createElement(
               "button",
@@ -2002,7 +2006,7 @@ export class MultiTypeInspection extends React.Component<
           React.createElement("input", {
             type: "text",
             value: name,
-            onChange: (e) => this.handleInputChange("name", e.target.value),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.handleInputChange("name", e.target.value),
             disabled: loading,
             style: styles.inputStyle,
           }),
@@ -2026,10 +2030,12 @@ export class MultiTypeInspection extends React.Component<
             React.createElement("input", {
               type: "text",
               value: crNumber,
-              onChange: (e) =>
-                this.handleInputChange("crNumber", e.target.value),
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleNumericInputChange("crNumber", e.target.value),
               disabled: loading,
               style: { ...styles.inputStyle, flex: 1 },
+              placeholder: "0123456789",
+              inputMode: "numeric" as any,
             }),
             React.createElement(
               "button",
@@ -2078,10 +2084,12 @@ export class MultiTypeInspection extends React.Component<
             React.createElement("input", {
               type: "text",
               value: registrationNumber,
-              onChange: (e) =>
-                this.handleInputChange("registrationNumber", e.target.value),
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.handleNumericInputChange("registrationNumber", e.target.value),
               disabled: loading,
               style: { ...styles.inputStyle, flex: 1 },
+              placeholder: "0123456789",
+              inputMode: "numeric" as any,
             }),
             React.createElement(
               "button",
