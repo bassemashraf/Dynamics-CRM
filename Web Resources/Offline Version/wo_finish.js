@@ -110,9 +110,6 @@ async function validateRequiredFields() {
             let attr = form.getAttribute(field);
             if (!attr || attr.getValue() == null || attr.getValue() === "") {
                 Xrm.Utility.closeProgressIndicator();
-                await Xrm.Navigation.openAlertDialog({
-                    text: t("RequiredFields")
-                });
                 return false;
             }
         }
@@ -125,7 +122,6 @@ async function validateRequiredFields() {
             + "\nOffline: " + isOffline()
             + "\nError: " + (e.message || JSON.stringify(e));
         console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
         return false;
     }
 }
@@ -140,9 +136,6 @@ async function setBookingCompletedForWorkOrder() {
         var workOrderId = form.data.entity.getId();
 
         if (!workOrderId) {
-            await Xrm.Navigation.openAlertDialog({
-                text: t("WorkOrderNotFound")
-            });
             return false;
         }
 
@@ -168,9 +161,6 @@ async function setBookingCompletedForWorkOrder() {
         );
 
         if (!statusResult.entities || statusResult.entities.length === 0) {
-            await Xrm.Navigation.openAlertDialog({
-                text: t("BookingCompletedNotFound")
-            });
             return false;
         }
 
@@ -195,7 +185,6 @@ async function setBookingCompletedForWorkOrder() {
             + "\nOffline: " + isOffline()
             + "\nError: " + (e.message || JSON.stringify(e));
         console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
         return false;
     }
 }
@@ -253,7 +242,6 @@ async function updateCurrentStageOnProcessExtension(extId) {
             + "\nOffline: " + isOffline()
             + "\nError: " + (e.message || JSON.stringify(e));
         console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -304,7 +292,6 @@ async function updateLastActionOnProcessExtension(extId, workOrderId) {
             + "\nOffline: " + isOffline()
             + "\nError: " + (e.message || JSON.stringify(e));
         console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -444,9 +431,7 @@ async function runOfflineActionLogic_Finish(action, processExtensionId, workOrde
                 (targetStatusField == "msdyn_systemstatus" && parseInt(statusValue, 10) == 690970004) ||
                 (targetSubStatusField == "msdyn_systemstatus" && parseInt(subStatusValue, 10) == 690970004)) {
 
-                await Xrm.Navigation.openAlertDialog({
-                    text: "🚨 STATUS 690970004 DETECTED — completing bookings first before WO update.\n\nPayload: " + JSON.stringify(woUpdate)
-                });
+                console.log("STATUS 690970004 DETECTED — completing bookings first before WO update.");
 
                 var booking = await setBookingCompletedForWorkOrder();
                 if (!booking) {
@@ -465,7 +450,6 @@ async function runOfflineActionLogic_Finish(action, processExtensionId, workOrde
             + "\nOffline: " + isOffline()
             + "\nError: " + (e.message || JSON.stringify(e));
         console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
     }
 }
 
@@ -520,7 +504,6 @@ async function updateServiceTasksPercent() {
             + "\nOffline: " + isOffline()
             + "\nError: " + (e.message || JSON.stringify(e));
         console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
         return 0;
     }
 }
@@ -581,40 +564,44 @@ async function runProcess() {
         return;
     }
 
-    // var validatePercentage = await updateServiceTasksPercent();
-    // if (!validatePercentage) {
-    //     Xrm.Utility.closeProgressIndicator();
-    //     return;
-    // }
-
-    // var booking = await setBookingCompletedForWorkOrder();
-    // if (!booking) {
-    //     Xrm.Utility.closeProgressIndicator();
-    //     return;
-    // }
-
-    // Resolve process extension ID and work order ID once, then pass to each function
-    var form = Xrm.Page;
-    var peLookup = form.getAttribute("duc_processextension");
-    if (peLookup && peLookup.getValue()) {
-        var extId = peLookup.getValue()[0].id.replace(/[{}]/g, "");
+    try {
+        var form = Xrm.Page;
         var workOrderId = form.data.entity.getId().replace(/[{}]/g, "");
+        var peLookup = form.getAttribute("duc_processextension");
 
-        // Step 1: update stage — writes new current stage to DB
-        await updateCurrentStageOnProcessExtension(extId);
+        if (!workOrderId) {
+            Xrm.Utility.closeProgressIndicator();
+            return;
+        }
 
-        // Step 2: fetch fresh context AFTER stage update so it sees the new stage
-        await updateLastActionOnProcessExtension(extId, workOrderId);
-    }
+        // 1. Update Work Order system status to 100000017 and clear substatus
+        await Xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, {
+            msdyn_systemstatus: 100000017,
+            "msdyn_substatus@odata.bind": null
+        });
 
-    await setWorkOrderEndTime();
-    await navigateToWorkORderTab();
+        // 2. Update Process Extension duc_isofflineprocessing to true
+        if (peLookup && peLookup.getValue()) {
+            var extId = peLookup.getValue()[0].id.replace(/[{}]/g, "");
+            await Xrm.WebApi.updateRecord("duc_processextension", extId, {
+                duc_isofflineprocessing: true
+            });
+        }
 
+        await navigateToWorkORderTab();
 
-    setTimeout(function () {
-        try { Xrm.Page.data.refresh(true); } catch (e) { }
+        setTimeout(function () {
+            try { Xrm.Page.data.refresh(true); } catch (e) { }
+            Xrm.Utility.closeProgressIndicator();
+        }, 3000);
+
+    } catch (e) {
         Xrm.Utility.closeProgressIndicator();
-    }, 3000);
+        var errMsg = "[runProcess] Error."
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (e.message || JSON.stringify(e));
+        console.error(errMsg, e);
+    }
 }
 
 runProcess();

@@ -8,6 +8,7 @@ export class NewPAOfflinePCF implements ComponentFramework.StandardControl<IInpu
     private container: HTMLDivElement;
     private currentProps: IInputs;
     private _context: ComponentFramework.Context<IInputs>;
+    private refreshCounter = 0;
 
     constructor() {}
 
@@ -26,10 +27,12 @@ export class NewPAOfflinePCF implements ComponentFramework.StandardControl<IInpu
     public updateView(context: ComponentFramework.Context<IInputs>): void {
         this.currentProps = context.parameters;
         this._context = context;
+        this.refreshCounter++;
         
         const props: IMainProps = {
             _context: context,
-            notifyOutputChanged: this.notifyOutputChanged
+            notifyOutputChanged: this.notifyOutputChanged,
+            refreshCounter: this.refreshCounter
         };
         
         ReactDOM.render(React.createElement(MainControl, props), this.container);

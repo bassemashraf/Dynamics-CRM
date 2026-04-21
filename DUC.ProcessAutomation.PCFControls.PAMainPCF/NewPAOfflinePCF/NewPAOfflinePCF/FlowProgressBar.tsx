@@ -18,12 +18,14 @@ export interface IFlowProgressBarProps {
   steps: IStep[];
   isLTR: boolean;
   isMobileOrTablet: boolean;
+  isOfflineProcessing?: boolean;
 }
 
 export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
   steps,
   isLTR,
-  isMobileOrTablet
+  isMobileOrTablet,
+  isOfflineProcessing
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -46,6 +48,23 @@ export const FlowProgressBar: React.FC<IFlowProgressBarProps> = ({
         steps.map((step, index) => {
           const isLast = index === steps.length - 1;
           const status = step.done ? "done" : step.active ? "active" : "";
+
+          // Offline processing: render a single large stage without number
+          if (isOfflineProcessing) {
+            return (
+              <div key={step.id} className="step active offline-step">
+                <div
+                  className="step-number offline-step-icon"
+                  title={isLTR ? step.displayNameEN : step.displayNameAR}
+                >
+                  ⏳
+                </div>
+                <p className="offline-step-label">
+                  {isLTR ? step.displayNameEN : step.displayNameAR}
+                </p>
+              </div>
+            );
+          }
 
           return (
             <React.Fragment key={step.id}>

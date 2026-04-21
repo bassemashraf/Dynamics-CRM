@@ -138,3 +138,34 @@
 .main-pcf-flow-container-mobile-padding {
   padding: 0 5px;
 }
+
+/* ---- Offline Processing Stage ---- */
+.main-pcf-flow-container .offline-step {
+  flex: none !important;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.main-pcf-flow-container .offline-step::before,
+.main-pcf-flow-container .offline-step::after {
+  content: none !important;
+}
+
+.main-pcf-flow-container .offline-step-icon {
+  width: 70px !important;
+  height: 70px !important;
+  font-size: 32px !important;
+  background-color: #FFA800 !important;
+  box-shadow: 0 0 16px rgba(255, 168, 0, 0.7) !important;
+  animation: pulse 2s infinite !important;
+}
+
+.main-pcf-flow-container .offline-step-label {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+  color: #333 !important;
+  margin-top: 10px !important;
+}

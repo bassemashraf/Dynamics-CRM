@@ -1132,29 +1132,29 @@ export class MultiTypeInspection extends React.Component<
         console.warn("Process extension creation failed (non-blocking):", peError);
       }
 
-     // STEP 9.6: Create Work Order Incident + Service Tasks
+      // STEP 9.6: Create Work Order Incident + Service Tasks
       try {
         this.xrm.Utility.showProgressIndicator("Creating Service Tasks...");
- 
+
         //alert(`[STEP 9.6] Starting — WO: ${workOrderId} | IncidentType: ${incidentTypeData?.id} | IncidentName: ${incidentTypeData?.name}`);
 
 
         // Create msdyn_workorderincident offline — OOB creates this server-side only.
-         const workOrderIncidentId = null; //await WOSTHelpers.createWorkOrderIncident(
+        const workOrderIncidentId = null; //await WOSTHelpers.createWorkOrderIncident(
         //   workOrderId,
         //   incidentTypeData.id,
         //   incidentTypeData.name
         // );
 
-          //alert(`[STEP 9.6] WorkOrderIncident result: ${workOrderIncidentId}`);
- 
+        //alert(`[STEP 9.6] WorkOrderIncident result: ${workOrderIncidentId}`);
+
         const wostResults = await WOSTHelpers.createWOSTsForWorkOrder(
           workOrderId,
           incidentTypeData.id,
           workOrderIncidentId
         );
 
-          //alert(`[STEP 9.6] WOST results: ${wostResults.length} | ${JSON.stringify(wostResults)}`);
+        //alert(`[STEP 9.6] WOST results: ${wostResults.length} | ${JSON.stringify(wostResults)}`);
 
 
         this.xrm.Utility.closeProgressIndicator();
@@ -1168,7 +1168,7 @@ export class MultiTypeInspection extends React.Component<
         this.xrm.Utility.closeProgressIndicator();
         alert(`[STEP 9.6] CATCH ERROR: ${wostError?.message || JSON.stringify(wostError)}`);
         console.warn("[WOST] Service task creation failed (non-blocking):", wostError);
-      }   
+      }
 
       // STEP 10: Create auto booking if from mobile
       if (createdFromMobile && InitCache.hasBookableResource) {
@@ -1196,7 +1196,7 @@ export class MultiTypeInspection extends React.Component<
       await this.xrm.Navigation.openForm({
         entityName: "msdyn_workorder",
         entityId: workOrderId,
-        formId: "b7b3d199-8809-f111-8341-6045bd8e2841",
+        formId: "b5ea80ff-301f-f111-88b1-6045bd8e2841",
         openInNewWindow: true,
       });
 

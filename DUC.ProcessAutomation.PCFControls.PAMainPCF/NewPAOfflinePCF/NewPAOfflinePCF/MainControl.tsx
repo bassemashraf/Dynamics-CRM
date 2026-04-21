@@ -7,16 +7,19 @@ import { Actions } from "./Actions";
 export interface IMainProps {
   _context: ComponentFramework.Context<IInputs>;
   notifyOutputChanged: () => void;
+  refreshCounter: number;
 }
 
 export const MainControl: React.FC<IMainProps> = ({
   _context,
-  notifyOutputChanged
+  notifyOutputChanged,
+  refreshCounter
 }) => {
   const [steps, setSteps] = useState<IStep[]>([]);
   const [currentStepId, setCurrentStepId] = useState<string>("");
   const [processExtId, setProcessExtId] = useState<string>("");
   const [isReady, setIsReady] = useState(false);
+  const [isOfflineProcessing, setIsOfflineProcessing] = useState(false);
 
   // Store xrm in a ref — NOT state — to avoid React calling it as an updater function
   const xrmRef = useRef<any>(null);
@@ -27,7 +30,7 @@ export const MainControl: React.FC<IMainProps> = ({
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshCounter]);
 
   const getFormContext = (): any => {
     let parentXrm: any = null;
@@ -73,8 +76,28 @@ export const MainControl: React.FC<IMainProps> = ({
       const processExtRecord = await xrm.WebApi.retrieveRecord(
         "duc_processextension",
         extId,
-        `?$select=_duc_processdefinition_value,_duc_currentstage_value`
+        `?$select=_duc_processdefinition_value,_duc_currentstage_value,duc_isofflineprocessing`
       );
+
+      const isOfflineProc = processExtRecord.duc_isofflineprocessing === true;
+      setIsOfflineProcessing(isOfflineProc);
+
+      // If offline processing is active, show a single hardcoded stage and skip everything else
+      if (isOfflineProc) {
+        const offlineStep: IStep = {
+          id: "offline-processing",
+          name: "Waiting Offline Processing",
+          displayNameEN: "Waiting Offline Processing",
+          displayNameAR: "في انتظار المعالجة",
+          sequence: 1,
+          visible: true,
+          done: false,
+          active: true,
+        };
+        setSteps([offlineStep]);
+        setIsReady(true);
+        return;
+      }
 
       const processDefId = (processExtRecord._duc_processdefinition_value || "").replace(/[{}]/g, "").toLowerCase();
       const stepId = (processExtRecord._duc_currentstage_value || "").replace(/[{}]/g, "").toLowerCase();
@@ -157,11 +180,12 @@ export const MainControl: React.FC<IMainProps> = ({
           steps={steps}
           isLTR={isLTR}
           isMobileOrTablet={isMobileOrTablet}
+          isOfflineProcessing={isOfflineProcessing}
         />
       )}
 
-      {/* Always render Actions once data is loaded — do NOT gate on currentStepId */}
-      {isReady && xrmRef.current && (
+      {/* Render Actions only when data is loaded AND not in offline processing mode */}
+      {isReady && !isOfflineProcessing && xrmRef.current && (
         <Actions
           _context={_context}
           notifyOutputChanged={notifyOutputChanged}
