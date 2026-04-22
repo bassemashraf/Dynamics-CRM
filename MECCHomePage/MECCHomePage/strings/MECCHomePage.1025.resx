@@ -233,6 +233,9 @@
   <data name="RegistrationNumber" xml:space="preserve">
     <value>رقم قيد المنشأة:</value>
   </data>
+  <data name="BoatNumber" xml:space="preserve">
+    <value>رقم القارب:</value>
+  </data>
   <data name="ContactAdministrator" xml:space="preserve">
     <value>حدث خطأ. يرجى الاتصال بالمسؤول.</value>
     <comment>User-friendly error message for exceptions</comment>

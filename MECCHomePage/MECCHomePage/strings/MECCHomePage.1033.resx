@@ -233,6 +233,9 @@
   <data name="RegistrationNumber" xml:space="preserve">
     <value>Registration Number:</value>
   </data>
+  <data name="BoatNumber" xml:space="preserve">
+    <value>Boat Number:</value>
+  </data>
   <data name="ContactAdministrator" xml:space="preserve">
     <value>An error occurred. Please contact the administrator.</value>
     <comment>User-friendly error message for exceptions</comment>

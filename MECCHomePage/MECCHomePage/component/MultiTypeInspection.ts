@@ -42,6 +42,7 @@ interface IMultiTypeInspectionState {
   carColor: string;
   vehicleBrand: number | null;
   vehicleBrands: Array<{ value: number; label: string }>;
+  boatNumber: string;
   loading: boolean;
   error: string | null;
   accountTypeRecord: any | null;
@@ -94,6 +95,7 @@ interface LocalizedStrings {
   PlateNumber: string;
   RegistrationNumber: string;
   ContactAdministrator: string;
+  BoatNumber: string;
 }
 
 // Cache constants
@@ -211,6 +213,8 @@ export class MultiTypeInspection extends React.Component<
       ContactAdministrator:
         props.context.resources.getString("ContactAdministrator") ||
         "An error occurred. Please contact the administrator.",
+      BoatNumber:
+        props.context.resources.getString("BoatNumber") || "Boat Number",
     };
 
     this.state = {
@@ -224,6 +228,7 @@ export class MultiTypeInspection extends React.Component<
       carColor: "",
       vehicleBrand: null,
       vehicleBrands: [],
+      boatNumber: "",
       loading: false,
       error: null,
       accountTypeRecord: null,
@@ -608,6 +613,7 @@ export class MultiTypeInspection extends React.Component<
       id: "",
       carColor: "",
       vehicleBrand: null,
+      boatNumber: "",
       error: null,
       accountTypeRecord: accountTypeRecord,
       isAnonymous: false,
@@ -726,10 +732,12 @@ export class MultiTypeInspection extends React.Component<
 
     if (selectedInspectionType === 1) {
       requiredFields.push("id");
-    } else if ([2, 3, 6].includes(selectedInspectionType)) {
+    } else if ([2, 3, 6, 15].includes(selectedInspectionType)) {
       requiredFields.push("qataryId", "name");
     } else if ([5, 7].includes(selectedInspectionType)) {
       requiredFields.push("crNumber");
+    } else if (selectedInspectionType === 14) {
+      requiredFields.push("boatNumber");
     }
 
     return requiredFields;
@@ -743,7 +751,8 @@ export class MultiTypeInspection extends React.Component<
       return false;
     }
 
-    if (selectedInspectionType === 4) {
+    // Anonymous (4) and type 13 (Anonymous-like) — no fields needed
+    if ([4, 13].includes(selectedInspectionType)) {
       return true;
     }
 
@@ -768,12 +777,13 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private getIdentifierValue = (): string => {
-    const { selectedInspectionType, qataryId, crNumber, id, registrationNumber } = this.state;
+    const { selectedInspectionType, qataryId, crNumber, id, registrationNumber, boatNumber } = this.state;
 
     if (selectedInspectionType === 1) return id;
-    if ([2, 3, 6].includes(selectedInspectionType!)) return qataryId;
+    if ([2, 3, 6, 15].includes(selectedInspectionType!)) return qataryId;
     if ([5, 7].includes(selectedInspectionType!)) return crNumber;
     if ([10, 11].includes(selectedInspectionType!)) return registrationNumber;
+    if (selectedInspectionType === 14) return boatNumber;
 
     return "";
   };
@@ -788,7 +798,8 @@ export class MultiTypeInspection extends React.Component<
       carColor,
       vehicleBrand,
       vehicleBrands,
-      registrationNumber
+      registrationNumber,
+      boatNumber
     } = this.state;
 
     if (!selectedInspectionType)
@@ -828,6 +839,7 @@ export class MultiTypeInspection extends React.Component<
         return `${prefixEn}${id} ${carColor} ${brandLabel}${prefixAr}`.trim();
 
       case 2: // Individual
+      case 15: // Individual-like
         return `${prefixEn}${qataryId} ${name}${prefixAr}`.trim();
 
       case 3: // Cabin
@@ -844,7 +856,11 @@ export class MultiTypeInspection extends React.Component<
       case 11: // Hospital
         return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
 
+      case 14: // Boat
+        return `${prefixEn}${boatNumber}${prefixAr}`.trim();
+
       case 4: // Anonymous
+      case 13: // Anonymous-like
       default:
         return `${prefixEn}Account${prefixAr}`.trim();
     }
@@ -910,8 +926,8 @@ export class MultiTypeInspection extends React.Component<
       } = this.state;
       const identifierValue = this.getIdentifierValue();
 
-      // Anonymous type (4) uses unknown account
-      if (selectedInspectionType === 4) {
+      // Anonymous type (4) and type 13 (Anonymous-like) use unknown account
+      if ([4, 13].includes(selectedInspectionType!)) {
         if (this.props.unknownAccountId) {
           return this.props.unknownAccountId;
         } else {
@@ -1152,7 +1168,7 @@ export class MultiTypeInspection extends React.Component<
 
       // STEP 6: Determine anonymous customer flag
       const anonymousCustomer =
-        this.state.selectedInspectionType === 4 ||
+        [4, 13].includes(this.state.selectedInspectionType!) ||
         (this.state.isAnonymous &&
           [3, 6, 7].includes(this.state.selectedInspectionType!));
 
@@ -1350,10 +1366,14 @@ export class MultiTypeInspection extends React.Component<
       | "registrationNumber"
       | "id"
       | "carColor"
-      | "vehicleBrand",
+      | "vehicleBrand"
+      | "boatNumber",
   ): boolean => {
     const { selectedInspectionType, isAnonymous } = this.state;
     if (!selectedInspectionType) return false;
+
+    // Type 13 (Anonymous-like) — no fields
+    if (selectedInspectionType === 13) return false;
 
     if (isAnonymous && [3, 6, 7].includes(selectedInspectionType)) {
       return false;
@@ -1364,7 +1384,7 @@ export class MultiTypeInspection extends React.Component<
     }
 
     if (["qataryId", "name"].includes(field)) {
-      return [2, 3, 6].includes(selectedInspectionType);
+      return [2, 3, 6, 15].includes(selectedInspectionType);
     }
 
     if (field === "crNumber") {
@@ -1374,6 +1394,10 @@ export class MultiTypeInspection extends React.Component<
     if (field === "registrationNumber") {
       // 10 = Establishment, 11 = Hospital
       return [10, 11].includes(selectedInspectionType);
+    }
+
+    if (field === "boatNumber") {
+      return selectedInspectionType === 14;
     }
 
     return false;
@@ -2121,6 +2145,26 @@ export class MultiTypeInspection extends React.Component<
               ),
             ),
           ),
+        ),
+
+        // Boat Number (type 14)
+        this.shouldShowField("boatNumber") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.BoatNumber + " *",
+          ),
+          React.createElement("input", {
+            type: "text",
+            value: this.state.boatNumber,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              this.handleInputChange("boatNumber", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
         ),
 
         // Buttons
