@@ -859,8 +859,10 @@ export class MultiTypeInspection extends React.Component<
       case 14: // Boat
         return `${prefixEn}${boatNumber}${prefixAr}`.trim();
 
+      case 13: // Important maritime areas
+        return "Important maritime areas";
+
       case 4: // Anonymous
-      case 13: // Anonymous-like
       default:
         return `${prefixEn}Account${prefixAr}`.trim();
     }
@@ -926,13 +928,37 @@ export class MultiTypeInspection extends React.Component<
       } = this.state;
       const identifierValue = this.getIdentifierValue();
 
-      // Anonymous type (4) and type 13 (Anonymous-like) use unknown account
-      if ([4, 13].includes(selectedInspectionType!)) {
+      // Anonymous type (4) uses unknown account
+      if (selectedInspectionType === 4) {
         if (this.props.unknownAccountId) {
           return this.props.unknownAccountId;
         } else {
           throw new Error(this.strings.ContactAdministrator);
         }
+      }
+
+      // Type 13: Always create a new account with name "Important maritime areas", no identifier
+      if (selectedInspectionType === 13) {
+        const accountName = "Important maritime areas";
+        const newAccount: any = {
+          name: accountName,
+          duc_accountinspectiontype: selectedInspectionType,
+        };
+
+        if (accountTypeRecord?.duc_accounttypeid) {
+          newAccount["duc_NewAccountType@odata.bind"] =
+            `/duc_accounttypes(${accountTypeRecord.duc_accounttypeid})`;
+        }
+
+        const createdAccount = await this.xrm.WebApi.createRecord(
+          "account",
+          newAccount,
+        );
+        const newAccountId = createdAccount?.id;
+
+        await this.createAddressInformation(newAccountId, accountName);
+
+        return newAccountId;
       }
 
       // Site
