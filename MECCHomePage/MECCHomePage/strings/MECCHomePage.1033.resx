@@ -240,4 +240,8 @@
     <value>An error occurred. Please contact the administrator.</value>
     <comment>User-friendly error message for exceptions</comment>
   </data>
+  <data name="QataryIDMustBe11Digits" xml:space="preserve">
+    <value>Qatary ID must be exactly 11 digits</value>
+    <comment>Validation message when Qatary ID is not 11 digits</comment>
+  </data>
 </root>

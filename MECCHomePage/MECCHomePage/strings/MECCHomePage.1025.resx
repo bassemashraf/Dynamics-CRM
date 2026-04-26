@@ -240,4 +240,8 @@
     <value>حدث خطأ. يرجى الاتصال بالمسؤول.</value>
     <comment>User-friendly error message for exceptions</comment>
   </data>
+  <data name="QataryIDMustBe11Digits" xml:space="preserve">
+    <value>رقم البطاقة القطرية يجب أن يكون 11 رقماً بالضبط</value>
+    <comment>Validation message when Qatary ID is not 11 digits</comment>
+  </data>
 </root>

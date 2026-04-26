@@ -96,6 +96,7 @@ interface LocalizedStrings {
   RegistrationNumber: string;
   ContactAdministrator: string;
   BoatNumber: string;
+  QataryIDMustBe11Digits: string;
 }
 
 // Cache constants
@@ -215,6 +216,9 @@ export class MultiTypeInspection extends React.Component<
         "An error occurred. Please contact the administrator.",
       BoatNumber:
         props.context.resources.getString("BoatNumber") || "Boat Number",
+      QataryIDMustBe11Digits:
+        props.context.resources.getString("QataryIDMustBe11Digits") ||
+        "Qatary ID must be exactly 11 digits",
     };
 
     this.state = {
@@ -767,6 +771,12 @@ export class MultiTypeInspection extends React.Component<
         this.setState({ error: this.strings.PleaseEnterRequiredFields });
         return false;
       }
+    }
+
+    // Validate Qatary ID must be exactly 11 digits
+    if (requiredFields.includes("qataryId") && this.state.qataryId.length !== 11) {
+      this.setState({ error: this.strings.QataryIDMustBe11Digits });
+      return false;
     }
 
     return true;
@@ -2008,7 +2018,8 @@ export class MultiTypeInspection extends React.Component<
                 this.handleNumericInputChange("qataryId", e.target.value),
               disabled: loading,
               style: { ...styles.inputStyle, flex: 1 },
-              placeholder: "0123456789",
+              placeholder: "01234567891",
+              maxLength: 11,
               inputMode: "numeric" as any,
             }),
             React.createElement(
