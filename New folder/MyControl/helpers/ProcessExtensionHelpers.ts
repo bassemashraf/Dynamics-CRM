@@ -206,6 +206,7 @@ export class ProcessExtensionHelpers {
       // }
 
       createData["subject"] = "test";
+      createData["duc_skiptargetupdate"] = true;
 
       // Last Action Taken (from Start Action on process definition)
       // Nav prop: duc_LastActionTaken_duc_ProcessExtension
