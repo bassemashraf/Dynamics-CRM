@@ -43,6 +43,9 @@ interface IMultiTypeInspectionState {
   vehicleBrand: number | null;
   vehicleBrands: Array<{ value: number; label: string }>;
   boatNumber: string;
+  projectName: string;
+  requestPermitNumber: string;
+  locationDetails: string;
   loading: boolean;
   error: string | null;
   accountTypeRecord: any | null;
@@ -97,6 +100,9 @@ interface LocalizedStrings {
   ContactAdministrator: string;
   BoatNumber: string;
   QataryIDMustBe11Digits: string;
+  ProjectName: string;
+  RequestPermitNumber: string;
+  LocationDetails: string;
 }
 
 // Cache constants
@@ -219,6 +225,12 @@ export class MultiTypeInspection extends React.Component<
       QataryIDMustBe11Digits:
         props.context.resources.getString("QataryIDMustBe11Digits") ||
         "Qatary ID must be exactly 11 digits",
+      ProjectName:
+        props.context.resources.getString("ProjectName") || "Project Name",
+      RequestPermitNumber:
+        props.context.resources.getString("RequestPermitNumber") || "Request/Permit Number",
+      LocationDetails:
+        props.context.resources.getString("LocationDetails") || "Location Details",
     };
 
     this.state = {
@@ -233,6 +245,9 @@ export class MultiTypeInspection extends React.Component<
       vehicleBrand: null,
       vehicleBrands: [],
       boatNumber: "",
+      projectName: "",
+      requestPermitNumber: "",
+      locationDetails: "",
       loading: false,
       error: null,
       accountTypeRecord: null,
@@ -618,6 +633,9 @@ export class MultiTypeInspection extends React.Component<
       carColor: "",
       vehicleBrand: null,
       boatNumber: "",
+      projectName: "",
+      requestPermitNumber: "",
+      locationDetails: "",
       error: null,
       accountTypeRecord: accountTypeRecord,
       isAnonymous: false,
@@ -742,6 +760,8 @@ export class MultiTypeInspection extends React.Component<
       requiredFields.push("crNumber");
     } else if (selectedInspectionType === 14) {
       requiredFields.push("boatNumber");
+    } else if (selectedInspectionType === 16) {
+      requiredFields.push("requestPermitNumber");
     }
 
     return requiredFields;
@@ -787,13 +807,14 @@ export class MultiTypeInspection extends React.Component<
   // =====================================================================
 
   private getIdentifierValue = (): string => {
-    const { selectedInspectionType, qataryId, crNumber, id, registrationNumber, boatNumber } = this.state;
+    const { selectedInspectionType, qataryId, crNumber, id, registrationNumber, boatNumber, requestPermitNumber } = this.state;
 
     if (selectedInspectionType === 1) return id;
     if ([2, 3, 6, 15].includes(selectedInspectionType!)) return qataryId;
     if ([5, 7].includes(selectedInspectionType!)) return crNumber;
     if ([10, 11].includes(selectedInspectionType!)) return registrationNumber;
     if (selectedInspectionType === 14) return boatNumber;
+    if (selectedInspectionType === 16) return requestPermitNumber;
 
     return "";
   };
@@ -868,6 +889,9 @@ export class MultiTypeInspection extends React.Component<
 
       case 14: // Boat
         return `${prefixEn}${boatNumber}${prefixAr}`.trim();
+
+      case 16: // Project
+        return this.state.projectName || `${prefixEn}Project${prefixAr}`.trim();
 
       case 13: // Important maritime areas
         return "Important maritime areas";
@@ -1045,6 +1069,20 @@ export class MultiTypeInspection extends React.Component<
       // Establishment or Hospital
       if ([10, 11].includes(selectedInspectionType!)) {
         newAccount.duc_moinumber = identifierValue;
+      }
+
+      // Project (16): Set description with Request/Permit Number + Location Details
+      if (selectedInspectionType === 16) {
+        const descriptionParts = [];
+        if (this.state.requestPermitNumber) {
+          descriptionParts.push(this.state.requestPermitNumber);
+        }
+        if (this.state.locationDetails) {
+          descriptionParts.push(this.state.locationDetails);
+        }
+        if (descriptionParts.length > 0) {
+          newAccount.description = descriptionParts.join(" - ");
+        }
       }
 
       if (accountTypeRecord?.duc_accounttypeid) {
@@ -1403,7 +1441,10 @@ export class MultiTypeInspection extends React.Component<
       | "id"
       | "carColor"
       | "vehicleBrand"
-      | "boatNumber",
+      | "boatNumber"
+      | "projectName"
+      | "requestPermitNumber"
+      | "locationDetails",
   ): boolean => {
     const { selectedInspectionType, isAnonymous } = this.state;
     if (!selectedInspectionType) return false;
@@ -1434,6 +1475,10 @@ export class MultiTypeInspection extends React.Component<
 
     if (field === "boatNumber") {
       return selectedInspectionType === 14;
+    }
+
+    if (["projectName", "requestPermitNumber", "locationDetails"].includes(field)) {
+      return selectedInspectionType === 16;
     }
 
     return false;
@@ -2201,6 +2246,65 @@ export class MultiTypeInspection extends React.Component<
               this.handleInputChange("boatNumber", e.target.value),
             disabled: loading,
             style: styles.inputStyle,
+          }),
+        ),
+
+        // Project Name (type 16)
+        this.shouldShowField("projectName") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.ProjectName,
+          ),
+          React.createElement("input", {
+            type: "text",
+            value: this.state.projectName,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              this.handleInputChange("projectName", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
+
+        // Request/Permit Number (type 16)
+        this.shouldShowField("requestPermitNumber") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.RequestPermitNumber + " *",
+          ),
+          React.createElement("input", {
+            type: "text",
+            value: this.state.requestPermitNumber,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              this.handleInputChange("requestPermitNumber", e.target.value),
+            disabled: loading,
+            style: styles.inputStyle,
+          }),
+        ),
+
+        // Location Details (type 16)
+        this.shouldShowField("locationDetails") &&
+        React.createElement(
+          "div",
+          { style: styles.fieldStyle },
+          React.createElement(
+            "label",
+            { style: styles.labelStyle },
+            this.strings.LocationDetails,
+          ),
+          React.createElement("textarea", {
+            value: this.state.locationDetails,
+            onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) =>
+              this.handleInputChange("locationDetails", e.target.value),
+            disabled: loading,
+            style: { ...styles.inputStyle, minHeight: "60px", resize: "vertical" },
           }),
         ),
 
