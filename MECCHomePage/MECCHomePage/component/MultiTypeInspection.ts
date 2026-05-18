@@ -1225,6 +1225,9 @@ export class MultiTypeInspection extends React.Component<
       // STEP 5: Prepare campaign data
       let campaignData: { id: string; name: string } | undefined;
       let parentCampaignData: { id: string; name: string } | undefined;
+      let captainId: string | undefined;
+      let targetedAreaId: string | undefined;
+      let subAreaId: string | undefined;
 
       if (this.state.selectedCampaignId && this.state.selectedCampaignName) {
         campaignData = {
@@ -1232,12 +1235,20 @@ export class MultiTypeInspection extends React.Component<
           name: this.state.selectedCampaignName,
         };
         parentCampaignData = campaignData;
+        const cData = await WorkOrderHelpers.getCampaignData(this.state.selectedCampaignId);
+        captainId = cData?.captainId;
+        targetedAreaId = cData?.targetedAreaId;
+        subAreaId = cData?.subAreaId;
       } else if (this.props.activePatrolId && this.props.activePatrolName) {
         campaignData = {
           id: this.props.activePatrolId,
           name: this.props.activePatrolName,
         };
         parentCampaignData = campaignData;
+        const cData = await WorkOrderHelpers.getCampaignData(this.props.activePatrolId);
+        captainId = cData?.captainId;
+        targetedAreaId = cData?.targetedAreaId;
+        subAreaId = cData?.subAreaId;
       }
 
       // STEP 6: Determine anonymous customer flag
@@ -1279,6 +1290,9 @@ export class MultiTypeInspection extends React.Component<
         anonymousCustomer: anonymousCustomer,
         accountInspectionType: this.state.selectedInspectionType || undefined,
         createdFromMobile: createdFromMobile,
+        captainId: captainId,
+        targetedAreaId: targetedAreaId,
+        subAreaId: subAreaId,
       });
       this.xrm.Utility.closeProgressIndicator();
 

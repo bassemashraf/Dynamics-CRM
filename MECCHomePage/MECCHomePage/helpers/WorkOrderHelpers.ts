@@ -162,12 +162,15 @@ export class WorkOrderHelpers {
     static async getCampaignData(campaignId: string): Promise<{
         incidentType?: { id: string; name: string; entityType: string };
         parentCampaign: { id: string; name: string; entityType: string };
+        captainId?: string;
+        targetedAreaId?: string;
+        subAreaId?: string;
     } | null> {
         try {
             const result = await this.xrm.WebApi.retrieveRecord(
                 "new_inspectioncampaign",
                 campaignId,
-                "?$select=_duc_incidenttype_value,new_name"
+                "?$select=_duc_incidenttype_value,new_name,_duc_captain_value,_duc_targetedarea_value,_duc_subarea_value"
             );
 
             const incidentTypeId = result["_duc_incidenttype_value"];
@@ -178,7 +181,10 @@ export class WorkOrderHelpers {
                     id: campaignId,
                     name: campaignName,
                     entityType: "new_inspectioncampaign"
-                }
+                },
+                captainId: result["_duc_captain_value"],
+                targetedAreaId: result["_duc_targetedarea_value"],
+                subAreaId: result["_duc_subarea_value"]
             };
 
             if (incidentTypeId) {
@@ -450,6 +456,9 @@ export class WorkOrderHelpers {
         anonymousCustomer?: boolean;
         accountInspectionType?: number;
         createdFromMobile?: boolean;
+        captainId?: string;
+        targetedAreaId?: string;
+        subAreaId?: string;
     }): Promise<string | null> {
         try {
             const workOrderData: any = {
@@ -470,6 +479,18 @@ export class WorkOrderHelpers {
 
             if (data.parentCampaign) {
                 workOrderData['duc_ParentCampaign@odata.bind'] = `/new_inspectioncampaigns(${data.parentCampaign.id})`;
+            }
+
+            if (data.captainId) {
+                workOrderData['duc_captain@odata.bind'] = `/systemusers(${data.captainId})`;
+            }
+
+            if (data.targetedAreaId) {
+                workOrderData['duc_targetedarea@odata.bind'] = `/accounts(${data.targetedAreaId})`;
+            }
+
+            if (data.subAreaId) {
+                workOrderData['duc_subarea@odata.bind'] = `/accounts(${data.subAreaId})`;
             }
 
             if (data.address) {
