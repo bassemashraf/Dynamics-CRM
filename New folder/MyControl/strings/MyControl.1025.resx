@@ -140,6 +140,77 @@
     <value>...اختر...</value>
     <comment>Label for choosing inspection type</comment>
   </data>
-
-  
+  <data name="PendingWorkOrderActions" xml:space="preserve">
+    <value>إجراءات أمر العمل المعلقة</value>
+  </data>
+  <data name="CPNumber" xml:space="preserve">
+    <value>رقم الرخصة التجارية:</value>
+    <comment>Label for CP Number field</comment>
+  </data>
+  <data name="BoatNumber" xml:space="preserve">
+    <value>رقم القارب:</value>
+  </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>اسم المشروع:</value>
+  </data>
+  <data name="RequestPermitNumber" xml:space="preserve">
+    <value>رقم الطلب/التصريح:</value>
+  </data>
+  <data name="LocationDetails" xml:space="preserve">
+    <value>تفاصيل الموقع:</value>
+  </data>
+  <data name="ContactAdministrator" xml:space="preserve">
+    <value>حدث خطأ. يرجى الاتصال بالمسؤول.</value>
+    <comment>User-friendly error message for exceptions</comment>
+  </data>
+  <data name="QataryIDMustBe11Digits" xml:space="preserve">
+    <value>رقم البطاقة القطرية يجب أن يكون 11 رقماً بالضبط</value>
+    <comment>Validation message when Qatary ID is not 11 digits</comment>
+  </data>
+  <data name="PlateNumber" xml:space="preserve">
+    <value>رقم اللوحة:</value>
+  </data>
+  <data name="RegistrationNumber" xml:space="preserve">
+    <value>رقم قيد المنشأة:</value>
+  </data>
+  <data name="Anonymous" xml:space="preserve">
+    <value>مجهول</value>
+    <comment>Label for anonymous inspection checkbox</comment>
+  </data>
+  <data name="SelectCampaign" xml:space="preserve">
+    <value>اختر الحملة</value>
+  </data>
+  <data name="SelectIncidentType" xml:space="preserve">
+    <value>اختر نوع التفتيش</value>
+  </data>
+  <data name="Campaign" xml:space="preserve">
+    <value>الحملة</value>
+  </data>
+  <data name="IncidentType" xml:space="preserve">
+    <value>نوع التفتيش</value>
+  </data>
+  <data name="Continue" xml:space="preserve">
+    <value>متابعة</value>
+  </data>
+  <data name="PleaseSelectInspectionType" xml:space="preserve">
+    <value>الرجاء اختيار نوع التفتيش</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>خطأ</value>
+  </data>
+  <data name="CreatingAccount" xml:space="preserve">
+    <value>جاري إنشاء الحساب...</value>
+  </data>
+  <data name="CreatingWorkOrder" xml:space="preserve">
+    <value>جاري إنشاء أمر العمل...</value>
+  </data>
+  <data name="CreatingBooking" xml:space="preserve">
+    <value>جاري إنشاء الحجز...</value>
+  </data>
+  <data name="ScanBarcode" xml:space="preserve">
+    <value>مسح الباركود</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>مسح</value>
+  </data>
 </root>

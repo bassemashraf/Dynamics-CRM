@@ -138,4 +138,77 @@
     <value>...Select...</value>
     <comment>Label for choosing inspection type</comment>
   </data>
+  <data name="PendingWorkOrderActions" xml:space="preserve">
+    <value>Pending Work Order Actions</value>
+  </data>
+  <data name="CPNumber" xml:space="preserve">
+    <value>CP Number:</value>
+    <comment>Label for CP Number field</comment>
+  </data>
+  <data name="BoatNumber" xml:space="preserve">
+    <value>Boat Number:</value>
+  </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>Project Name:</value>
+  </data>
+  <data name="RequestPermitNumber" xml:space="preserve">
+    <value>Request/Permit Number:</value>
+  </data>
+  <data name="LocationDetails" xml:space="preserve">
+    <value>Location Details:</value>
+  </data>
+  <data name="ContactAdministrator" xml:space="preserve">
+    <value>An error occurred. Please contact the administrator.</value>
+    <comment>User-friendly error message for exceptions</comment>
+  </data>
+  <data name="QataryIDMustBe11Digits" xml:space="preserve">
+    <value>Qatary ID must be exactly 11 digits</value>
+    <comment>Validation message when Qatary ID is not 11 digits</comment>
+  </data>
+  <data name="PlateNumber" xml:space="preserve">
+    <value>Plate Number:</value>
+  </data>
+  <data name="RegistrationNumber" xml:space="preserve">
+    <value>Registration Number:</value>
+  </data>
+  <data name="Anonymous" xml:space="preserve">
+    <value>Anonymous</value>
+    <comment>Label for anonymous inspection checkbox</comment>
+  </data>
+  <data name="SelectCampaign" xml:space="preserve">
+    <value>Select Campaign</value>
+  </data>
+  <data name="SelectIncidentType" xml:space="preserve">
+    <value>Select Incident Type</value>
+  </data>
+  <data name="Campaign" xml:space="preserve">
+    <value>Campaign</value>
+  </data>
+  <data name="IncidentType" xml:space="preserve">
+    <value>Incident Type</value>
+  </data>
+  <data name="Continue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="PleaseSelectInspectionType" xml:space="preserve">
+    <value>Please select an inspection type</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="CreatingAccount" xml:space="preserve">
+    <value>Creating Account...</value>
+  </data>
+  <data name="CreatingWorkOrder" xml:space="preserve">
+    <value>Creating Work Order...</value>
+  </data>
+  <data name="CreatingBooking" xml:space="preserve">
+    <value>Creating Booking...</value>
+  </data>
+  <data name="ScanBarcode" xml:space="preserve">
+    <value>Scan Barcode</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
 </root>

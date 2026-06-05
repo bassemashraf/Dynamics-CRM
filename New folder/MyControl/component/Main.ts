@@ -20,7 +20,9 @@ interface OrgUnitCache {
     isNaturalReserve: boolean;
     isWildlifeSection: boolean;
     unknownAccountId?: string;
+    siteAccountId?: string;
     unknownAccountName?: string;
+    siteAccountName?: string;
     incidentTypeId?: string;
     incidentTypeName?: string;
     timestamp: number;
@@ -31,6 +33,7 @@ interface State {
     searchText: string;
     pendingTodayBookings: number | null;
     completedTodayWorkorders: number | null;
+    pendingWorkOrderActions: number | null;
     TodayCampaigns: number | null;
     userName: string;
     message?: string;
@@ -45,6 +48,8 @@ interface State {
     isWildlifeSection: boolean;
     unknownAccountId?: string;
     unknownAccountName?: string;
+    siteAccountId?: string;
+    siteAccountName?: string;
     incidentTypeName?: string;
     incidentTypeId?: string;
     orgUnitId?: string;
@@ -65,6 +70,7 @@ interface LocalizedStrings {
     FindFacility: string;
     RemainingInspections: string;
     CompletedInspections: string;
+    PendingWorkOrderActions: string;
     ScheduledInspections: string;
     TodaysPatrols: string;
     StartInspection: string;
@@ -185,6 +191,7 @@ export const Main = (props: IProps) => {
             StartAnonymousInspection: ctx.resources.getString("StartAnonymousInspection"),
             PendingInspections: ctx.resources.getString("PendingInspections"),
             StartMultiTypeInspection: ctx.resources.getString("StartMultiTypeInspection"),
+            PendingWorkOrderActions: ctx.resources.getString("PendingWorkOrderActions"),
         };
     }, [props.context]);
 
@@ -198,6 +205,7 @@ export const Main = (props: IProps) => {
         searchText: "",
         pendingTodayBookings: null,
         completedTodayWorkorders: null,
+        pendingWorkOrderActions: null,
         TodayCampaigns: null,
         userName: strings.Loading,
         message: undefined,
@@ -308,16 +316,37 @@ export const Main = (props: IProps) => {
 
             const orgUnitId = userResult._duc_organizationalunitid_value;
 
-            // Retrieve the organizational unit details with default incident type
+            // Retrieve the organizational unit details (Offline safe, NO $expand)
             const orgUnitResult = await xrm.WebApi.retrieveRecord(
                 "msdyn_organizationalunit",
                 orgUnitId,
-                "?$select=_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name)"
+                "?$select=_duc_siteaccount_value,_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value"
             );
 
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
-            const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
+            let unknownAccountName: string | undefined = undefined;
+            
+            const siteAccountId = orgUnitResult._duc_siteaccount_value || undefined;
+            let siteAccountName: string | undefined = undefined;
+
+            let incidentTypeId: string | undefined = undefined;
+            let incidentTypeName: string | undefined = undefined;
+
+            // Fetch related names separately for offline compatibility
+            if (unknownAccountId) {
+                try {
+                    const acc = await xrm.WebApi.retrieveRecord("account", unknownAccountId, "?$select=name");
+                    unknownAccountName = acc.name;
+                } catch (e) { console.warn("Failed to get unknown account name"); }
+            }
+
+            if (siteAccountId) {
+                try {
+                    const acc = await xrm.WebApi.retrieveRecord("account", siteAccountId, "?$select=name");
+                    siteAccountName = acc.name;
+                } catch (e) { console.warn("Failed to get site account name"); }
+            }
 
             const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
 
@@ -325,12 +354,12 @@ export const Main = (props: IProps) => {
             const isWildlifeNaturalResources = orgUnitName.includes("Wildlife - Natural Resources Section");
             const isWildlifeSection = isWildlifePlantLife || isWildlifeNaturalResources;
 
-            let incidentTypeId: string | undefined = undefined;
-            let incidentTypeName: string | undefined = undefined;
-
-            if (orgUnitResult._duc_defaultincidenttype_value && orgUnitResult.duc_DefaultIncidenttype) {
-                incidentTypeId = orgUnitResult.duc_DefaultIncidenttype.msdyn_incidenttypeid;
-                incidentTypeName = orgUnitResult.duc_DefaultIncidenttype.msdyn_name;
+            if (orgUnitResult._duc_defaultincidenttype_value) {
+                incidentTypeId = orgUnitResult._duc_defaultincidenttype_value;
+                try {
+                    const inc = await xrm.WebApi.retrieveRecord("msdyn_incidenttype", incidentTypeId!, "?$select=msdyn_name");
+                    incidentTypeName = inc.msdyn_name;
+                } catch (e) { console.warn("Failed to get incident type name"); }
             } else {
                 console.warn("No default incident type found for org unit");
             }
@@ -343,6 +372,8 @@ export const Main = (props: IProps) => {
                 isWildlifeSection,
                 unknownAccountId,
                 unknownAccountName,
+                siteAccountId,
+                siteAccountName,
                 incidentTypeId,
                 incidentTypeName,
             });
@@ -353,6 +384,8 @@ export const Main = (props: IProps) => {
                 isWildlifeSection: isWildlifeSection,
                 unknownAccountId: unknownAccountId,
                 unknownAccountName: unknownAccountName,
+                siteAccountId: siteAccountId,
+                siteAccountName: siteAccountName,
                 incidentTypeId: incidentTypeId,
                 incidentTypeName: incidentTypeName,
                 orgUnitId: orgUnitId,
@@ -457,13 +490,14 @@ export const Main = (props: IProps) => {
         }
     }, [props.context, state.orgUnitId]);
 
-    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number }> => {
+    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number; pendingActions: number }> => {
         const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
 
         try {
             let completedToday = 0;
             let remainingToday = 0;
             let campaignsToday = 0;
+            let pendingActions = 0;
 
             try {
                 let resourceId: string | null = localStorage.getItem(CACHE_KEY);
@@ -481,12 +515,12 @@ export const Main = (props: IProps) => {
                         localStorage.setItem(CACHE_KEY, resourceId?.toString() ?? "");
                     } else {
                         console.warn(`User ${userId} is not linked to a Bookable Resource.`);
-                        return { completedToday, remainingToday, campaignsToday };
+                        return { completedToday, remainingToday, campaignsToday, pendingActions };
                     }
                 }
 
                 if (!resourceId) {
-                    return { completedToday, remainingToday, campaignsToday };
+                    return { completedToday, remainingToday, campaignsToday, pendingActions };
                 }
 
                 // Use ISO date range — works both online and offline in Field Service Mobile
@@ -506,16 +540,20 @@ export const Main = (props: IProps) => {
                 const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                 remainingToday = remainingResults.entities.length;
 
-                return { completedToday, remainingToday, campaignsToday };
+                const pendingActionsQuery = `?$select=duc_inspectionactionid&$filter=ownerid eq '${userId}' and duc_status ne 100000003 and duc_status ne 100000005`;
+                const pendingActionsResult = await xrm.WebApi.retrieveMultipleRecords("duc_inspectionaction", pendingActionsQuery);
+                pendingActions = pendingActionsResult.entities.length;
+
+                return { completedToday, remainingToday, campaignsToday, pendingActions };
 
             } catch (error: any) {
                 console.error("Error retrieving counts:", error);
-                return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+                return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingActions: 0 };
             }
 
         } catch (e: any) {
             console.error("Failed to load today's counts:", e);
-            return { completedToday: 0, remainingToday: 0, campaignsToday: 0 };
+            return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingActions: 0 };
         }
     };
 
@@ -543,19 +581,20 @@ export const Main = (props: IProps) => {
 
             if (res) {
                 const username = res.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
-                const { completedToday, remainingToday, campaignsToday } = await loadTodaysCounts(ctx, userId);
+                const { completedToday, remainingToday, campaignsToday, pendingActions } = await loadTodaysCounts(ctx, userId);
 
                 setState(prev => ({
                     ...prev,
                     pendingTodayBookings: remainingToday,
                     completedTodayWorkorders: completedToday,
+                    pendingWorkOrderActions: pendingActions,
                     TodayCampaigns: campaignsToday,
                     userName: username,
                 }));
 
                 localStorage.setItem(
                     "MOCI_userCounts",
-                    JSON.stringify({ userName: username, pendingTodayBookings: remainingToday, completedTodayWorkorders: completedToday, TodayCampaigns: campaignsToday })
+                    JSON.stringify({ userName: username, pendingTodayBookings: remainingToday, completedTodayWorkorders: completedToday, TodayCampaigns: campaignsToday, pendingWorkOrderActions: pendingActions })
                 );
 
                 // Check organization unit after loading user data — skip when offline
@@ -720,6 +759,8 @@ export const Main = (props: IProps) => {
             viewId: "bee0efc7-40e4-f011-8406-6045bd9c224c"
         });
     };
+
+
 
     const closedWorkorders = (): void => {
         const ctx: any = props.context;
@@ -1012,7 +1053,36 @@ export const Main = (props: IProps) => {
                             React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
                         ),
                         React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
+                    ),
+                    // Pending Work Order Actions Card
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: openPendingWorkorders,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: 'pointer'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
+                                React.createElement("img", { src: clockDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.PendingWorkOrderActions)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, state.pendingWorkOrderActions ?? "...")
                     )
+
                 )
             ),
             // Action Buttons
@@ -1119,6 +1189,8 @@ export const Main = (props: IProps) => {
             incidentTypeName: state.incidentTypeName,
             unknownAccountId: state.unknownAccountId,
             unknownAccountName: state.unknownAccountName,
+            siteAccountId: state.siteAccountId,
+            siteAccountName: state.siteAccountName,
             organizationUnitId: state.orgUnitId,
             organizationUnitName: state.organizationUnitName,
             defaultInspectionType: state.defaultInspectionType,

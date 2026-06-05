@@ -65,3 +65,50 @@ function hideFormHeader(executionContext) {
     //     // For example, adjust field layouts or add mobile-friendly messages
     // }
 }
+
+/**
+ * Toggles visibility between the offline and online PCF home fields
+ * based on the current connectivity state of the client.
+ *
+ * - Offline: shows duc_name (offline PCF), hides duc_onlinehome (online PCF)
+ * - Online:  shows duc_onlinehome (online PCF), hides duc_name (offline PCF)
+ *
+ * @param {Object} executionContext - The form execution context passed by CRM.
+ */
+function isOffline() {
+    try {
+        // Check if user is on an offline profile (works even WITH internet connection).
+        // isAvailableOffline returns true when the entity is part of the active
+        // Mobile Offline profile — meaning the user is on the offline-first app.
+        if (Xrm.WebApi.isAvailableOffline &&
+            Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
+        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
+}
+
+function toggleOfflineFields(executionContext) {
+    var formContext = executionContext.getFormContext();
+
+    try {
+        var isCurrentlyOffline = isOffline();
+
+        var offlineField = formContext.getControl("duc_name");       // Offline PCF component
+        var onlineField = formContext.getControl("duc_onlinehome"); // Online PCF component
+
+        if (isCurrentlyOffline) {
+            // --- OFFLINE mode ---
+            if (offlineField) offlineField.setVisible(true);
+            if (onlineField) onlineField.setVisible(false);
+            console.log("[HomeOnload] Offline mode detected — showing duc_name, hiding duc_onlinehome.");
+        } else {
+            // --- ONLINE mode ---
+            if (offlineField) offlineField.setVisible(false);
+            if (onlineField) onlineField.setVisible(true);
+            console.log("[HomeOnload] Online mode detected — showing duc_onlinehome, hiding duc_name.");
+        }
+    } catch (e) {
+        console.log("[HomeOnload] toggleOfflineFields error: " + e.message);
+    }
+}

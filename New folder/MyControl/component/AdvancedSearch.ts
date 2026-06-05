@@ -97,46 +97,56 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
             return;
         }
 
-        let fetch = "<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>";
-        fetch += "<entity name='account'>";
-        fetch += "<attribute name='name' />";
-        fetch += "<attribute name='accountid' />";
-        fetch += "<attribute name='new_businessregistrationnumber' />";
-        fetch += "<order attribute='name' descending='false' />";
-        fetch += "<filter type='and'>";
+        let filters: string[] = [];
 
         if (valAccName) {
-            fetch += "<filter type='or'>";
-            fetch += `<condition attribute='name' operator='like' value='%${valAccName}%' />`;
-            fetch += "</filter>";
+            filters.push(`contains(name, '${valAccName}')`);
         }
         if (valBuildingNo) {
-            fetch += `<condition attribute='address1_line1' operator='eq' value='${valBuildingNo}' />`;
+            filters.push(`address1_line1 eq '${valBuildingNo}'`);
         }
         if (valPinNo) {
-            fetch += `<condition attribute='duc_address1_pinno' operator='eq' value='${valPinNo}' />`;
+            filters.push(`duc_address1_pinno eq '${valPinNo}'`);
         }
+        // valRegNo logic if it existed in the original, although the original FetchXML didn't include it in the filter,
+        // so we'll omit it to match original behavior, or we could add it if it was a bug.
+        // Original FetchXML didn't use valRegNo in the filter.
 
-        fetch += "</filter>";
-
+        // If valLicenseNo is provided, we must do a separate call offline instead of link-entity
         if (valLicenseNo) {
-            fetch += "<link-entity name='new_license' from='new_licenseid' to='new_licenseid' link-type='inner' alias='lic'>";
-            fetch += "<filter type='and'>";
-            fetch += `<condition attribute='new_name' operator='like' value='%${valLicenseNo}%' />`;
-            fetch += "</filter>";
-            fetch += "</link-entity>";
+            try {
+                const licenseResults = await (this.props.context.webAPI as any).retrieveMultipleRecords(
+                    'new_license',
+                    `?$select=new_licenseid&$filter=contains(new_name, '${valLicenseNo}')`
+                );
+
+                if (licenseResults.entities.length === 0) {
+                    // No matching licenses found, meaning no accounts will match the inner join
+                    this.setState({ results: [], showResults: true });
+                    return;
+                }
+
+                const licenseIds = licenseResults.entities.map((e: any) => e.new_licenseid).filter(Boolean);
+                const licenseFilter = licenseIds.map((id: string) => `new_licenseid eq '${id}'`).join(' or ');
+                filters.push(`(${licenseFilter})`);
+            } catch (error: any) {
+                console.error("Error fetching licenses for advanced search:", error);
+                this.setState({ results: [], showResults: true });
+                return;
+            }
         }
 
-        fetch += "</entity>";
-        fetch += "</fetch>";
+        let filterQuery = filters.length > 0 ? `&$filter=${filters.join(' and ')}` : "";
+        let query = `?$select=name,accountid,new_businessregistrationnumber,emailaddress1,telephone1${filterQuery}&$orderby=name asc`;
 
         try {
             const result = await (this.props.context.webAPI as any).retrieveMultipleRecords(
                 'account',
-                `?fetchXml=${encodeURIComponent(fetch)}`
+                query
             );
 
             if (result.entities.length === 0) {
+                this.setState({ results: [], showResults: true });
             } else if (result.entities.length === 1) {
                 this.openRecord(result.entities[0].accountid);
             } else {
@@ -144,6 +154,7 @@ export class AdvancedSearch extends React.Component<IAdvancedSearchProps, IAdvan
             }
         } catch (error: any) {
             console.error('Search error:', error);
+            this.setState({ results: [], showResults: true });
         }
     };
 
