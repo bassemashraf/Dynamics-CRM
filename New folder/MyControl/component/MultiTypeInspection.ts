@@ -5,6 +5,8 @@ import {
     CampaignHelpers,
     IncidentTypeHelpers,
     InitCache,
+    ProcessExtensionHelpers,
+    WOSTHelpers,
 } from "../helpers";
 
 interface IMultiTypeInspectionProps {
@@ -401,10 +403,22 @@ export class MultiTypeInspection extends React.Component<
                 let accountTypeValue: number | undefined = undefined;
                 try {
                     const accTypeResult = await this.xrm.WebApi.retrieveRecord("duc_accounttype", accountTypeId, "?$select=duc_accounttype");
-                    accountTypeValue = accTypeResult.duc_accounttype;
+                    if (accTypeResult && accTypeResult.duc_accounttype != null) {
+                        accountTypeValue = accTypeResult.duc_accounttype;
+                    }
                 } catch (e) {
-                    console.warn(`Failed to fetch account type value for ${accountTypeId}`);
-                    continue;
+                    console.warn(`Failed to fetch account type numeric value for ${accountTypeId}`);
+                }
+
+                // If retrieval failed or value is null, try to infer or fallback so it doesn't disappear
+                if (accountTypeValue === undefined) {
+                    const entityName = (entity.duc_name || entity.duc_namear || "").toLowerCase();
+                    if (entityName.includes("anonymous") || entityName.includes("مجهول")) {
+                        accountTypeValue = 4;
+                    } else {
+                        // generic fallback
+                        accountTypeValue = -1;
+                    }
                 }
 
                 if (accountTypeValue !== undefined) {
@@ -937,35 +951,20 @@ export class MultiTypeInspection extends React.Component<
         if (!selectedInspectionType)
             return "Account";
 
-        let prefixEn = '';
-        let prefixAr = '';
+        if (name && name.trim() !== "") {
+            return name.trim();
+        }
 
         const typeInfo = this.state.inspectionTypes.find(t => t.value === selectedInspectionType);
 
-        if (typeInfo) {
-            if (typeInfo.accountTypeId) {
-                try {
-                    const accTypeResult = await Xrm.WebApi.retrieveRecord("duc_accounttype", typeInfo.accountTypeId, "?$select=duc_overrideaccountname");
-                    if (accTypeResult.duc_overrideaccountname) {
-                        return accTypeResult.duc_overrideaccountname;
-                    }
-                } catch (e) {
-                    console.warn("Failed to get override account name");
+        if (typeInfo && typeInfo.accountTypeId) {
+            try {
+                const accTypeResult = await Xrm.WebApi.retrieveRecord("duc_accounttype", typeInfo.accountTypeId, "?$select=duc_overrideaccountname");
+                if (accTypeResult.duc_overrideaccountname) {
+                    return accTypeResult.duc_overrideaccountname;
                 }
-            }
-
-            if (typeInfo.orgUnitAccountTypeId) {
-                try {
-                    const orgUnitAccType = await Xrm.WebApi.retrieveRecord("duc_organizationunitaccounttypes", typeInfo.orgUnitAccountTypeId, "?$select=duc_name,duc_namear");
-                    if (orgUnitAccType.duc_name) {
-                        prefixEn = `${orgUnitAccType.duc_name} | `;
-                    }
-                    if (orgUnitAccType.duc_namear) {
-                        prefixAr = ` | ${orgUnitAccType.duc_namear}`;
-                    }
-                } catch (e) {
-                    console.warn("Failed to get organization unit account type names");
-                }
+            } catch (e) {
+                console.warn("Failed to get override account name");
             }
         }
 
@@ -976,38 +975,34 @@ export class MultiTypeInspection extends React.Component<
                         ? vehicleBrands.find((v) => v.value === vehicleBrand)?.label ||
                         vehicleBrand
                         : "";
-                return `${prefixEn}${id} ${carColor} ${brandLabel}${prefixAr}`.trim();
+                return `${id} ${carColor} ${brandLabel}`.trim() || "Account";
 
             case 2: // Individual
             case 15: // Individual-like
-                return `${prefixEn}${qataryId} ${name}${prefixAr}`.trim();
-
             case 3: // Cabin
-                return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
-
             case 6: // Wilderness Camp
-                return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
+                return qataryId || "Account";
 
             case 5: // Company
             case 7: // Manor
-                return `${prefixEn}${this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber}${prefixAr}`.trim();
+                return (this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber) || "Account";
 
             case 10: // Establishment
             case 11: // Hospital
-                return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
+                return registrationNumber || "Account";
 
             case 14: // Boat
-                return `${prefixEn}${boatNumber}${prefixAr}`.trim();
+                return boatNumber || "Account";
 
             case 16: // Project
-                return this.state.projectName || `${prefixEn}Project${prefixAr}`.trim();
+                return this.state.projectName || "Project";
 
             case 13: // Important maritime areas
                 return "Important maritime areas";
 
             case 4: // Anonymous
             default:
-                return `${prefixEn}Account${prefixAr}`.trim();
+                return "Account";
         }
     };
 
@@ -1441,6 +1436,7 @@ export class MultiTypeInspection extends React.Component<
                 anonymousCustomer: anonymousCustomer,
                 accountInspectionType: this.state.selectedInspectionType || undefined,
                 createdFromMobile: createdFromMobile,
+                assignedInspectorId: userId,
             });
             this.xrm.Utility.closeProgressIndicator();
 
@@ -1449,6 +1445,69 @@ export class MultiTypeInspection extends React.Component<
             }
 
             console.log("Work order created successfully:", workOrderId);
+
+            // STEP 9.5: Create Process Extension
+            if (incidentTypeData?.id) {
+                try {
+                    this.xrm.Utility.showProgressIndicator("Creating Process Extension...");
+                    const { peId, processDef } = await ProcessExtensionHelpers.createProcessExtensionForWorkOrder(
+                        workOrderId,
+                        incidentTypeData.id,
+                        serviceAccountData?.id || accountId
+                    );
+                    this.xrm.Utility.closeProgressIndicator();
+
+                    if (peId) {
+                        console.log("Process extension created:", peId);
+                    }
+
+                    // STEP 9.55: Set work order substatus from process definition
+                    if (processDef?.defaultSubStatusId) {
+                        try {
+                            const subStatusGuid = await ProcessExtensionHelpers.getSubStatusValueFromProcessDefinition(processDef.defaultSubStatusId);
+                            if (subStatusGuid) {
+                                const cleanGuid = subStatusGuid.replace(/[{}]/g, "");
+                                await this.xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, {
+                                    "msdyn_substatus@odata.bind": `/msdyn_workordersubstatuses(${cleanGuid})`
+                                });
+                                console.log("[SubStatus] Work order substatus set to:", cleanGuid);
+                            }
+                        } catch (subStatusError: any) {
+                            console.warn("[SubStatus] Failed to set substatus (non-blocking):", subStatusError);
+                        }
+                    }
+                } catch (peError: any) {
+                    this.xrm.Utility.closeProgressIndicator();
+                    console.error("Non-fatal error creating Process Extension:", peError);
+                }
+            }
+
+            // STEP 9.6: Create Work Order Incident + Service Tasks
+            if (incidentTypeData?.id) {
+                try {
+                    this.xrm.Utility.showProgressIndicator("Creating Service Tasks...");
+
+                    const workOrderIncidentId = null;
+
+                    const wostResults = await WOSTHelpers.createWOSTsForWorkOrder(
+                        workOrderId,
+                        incidentTypeData.id,
+                        workOrderIncidentId
+                    );
+
+                    this.xrm.Utility.closeProgressIndicator();
+                    console.log(
+                        `[WOST] Created ${wostResults.length} service task(s).`,
+                        wostResults.map((r: any) =>
+                            `WOST: ${r.wostId} | Questions: ${r.questionsCreated} | Penalties: ${r.penaltiesCreated}`
+                        )
+                    );
+                } catch (wostError: any) {
+                    this.xrm.Utility.closeProgressIndicator();
+                    alert(`[STEP 9.6] CATCH ERROR: ${wostError?.message || JSON.stringify(wostError)}`);
+                    console.warn("[WOST] Service task creation failed (non-blocking):", wostError);
+                }
+            }
 
             // STEP 10: Create auto booking if from mobile — using cached values
             if (createdFromMobile && InitCache.hasBookableResource) {

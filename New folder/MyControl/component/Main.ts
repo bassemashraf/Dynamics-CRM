@@ -326,7 +326,7 @@ export const Main = (props: IProps) => {
             const orgUnitName = orgUnitResult.duc_englishname || "";
             const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
             let unknownAccountName: string | undefined = undefined;
-            
+
             const siteAccountId = orgUnitResult._duc_siteaccount_value || undefined;
             let siteAccountName: string | undefined = undefined;
 
@@ -520,8 +520,11 @@ export const Main = (props: IProps) => {
                 }
 
                 if (!resourceId) {
+                    alert("DEBUG loadTodaysCounts: resourceId is null or empty!");
                     return { completedToday, remainingToday, campaignsToday, pendingActions };
                 }
+
+                alert(`DEBUG loadTodaysCounts: userId=${userId}, resourceId=${resourceId}`);
 
                 // Use ISO date range — works both online and offline in Field Service Mobile
                 const todayStart = new Date();
@@ -531,18 +534,32 @@ export const Main = (props: IProps) => {
                 const todayStartISO = todayStart.toISOString();
                 const todayEndISO = todayEnd.toISOString();
 
-                const completedQuery = `?$select=msdyn_workorderid&$filter=duc_assignedresource eq '${resourceId}' and duc_completiondate ge ${todayStartISO} and duc_completiondate le ${todayEndISO}`;
-                const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
-                completedToday = completedResults.entities.length;
+                const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and duc_completiondate ge ${todayStartISO} and duc_completiondate le ${todayEndISO}`;
+                try {
+                    const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
+                    completedToday = completedResults.entities.length;
+                } catch(err: any) {
+                    alert("DEBUG completedQuery failed: " + (err?.message || err));
+                }
 
                 const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
-                const remainingQuery = `?$select=bookableresourcebookingid&$filter=resource eq '${resourceId}' and bookingstatus eq '${bookingStatusGuid}' and starttime ge ${todayStartISO} and starttime le ${todayEndISO}`;
-                const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
-                remainingToday = remainingResults.entities.length;
+                const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and _bookingstatus_value eq '${bookingStatusGuid}' and starttime ge ${todayStartISO} and starttime le ${todayEndISO}`;
+                try {
+                    const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
+                    remainingToday = remainingResults.entities.length;
+                } catch(err: any) {
+                    alert("DEBUG remainingQuery failed: " + (err?.message || err));
+                }
 
-                const pendingActionsQuery = `?$select=duc_inspectionactionid&$filter=ownerid eq '${userId}' and duc_status ne 100000003 and duc_status ne 100000005`;
-                const pendingActionsResult = await xrm.WebApi.retrieveMultipleRecords("duc_inspectionaction", pendingActionsQuery);
-                pendingActions = pendingActionsResult.entities.length;
+                const pendingActionsQuery = `?$select=duc_inspectionactionid&$filter=_ownerid_value eq '${userId}' and duc_status ne 100000003 and duc_status ne 100000005`;
+                try {
+                    const pendingActionsResult = await xrm.WebApi.retrieveMultipleRecords("duc_inspectionaction", pendingActionsQuery);
+                    pendingActions = pendingActionsResult.entities.length;
+                } catch(err: any) {
+                    alert("DEBUG pendingActionsQuery failed: " + (err?.message || err));
+                }
+
+                alert(`DEBUG loadTodaysCounts: completed=${completedToday}, remaining=${remainingToday}, pending=${pendingActions}`);
 
                 return { completedToday, remainingToday, campaignsToday, pendingActions };
 

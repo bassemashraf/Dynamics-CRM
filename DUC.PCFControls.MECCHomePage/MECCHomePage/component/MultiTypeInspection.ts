@@ -897,6 +897,11 @@ export class MultiTypeInspection extends React.Component<
             boatNumber
         } = this.state;
 
+
+        if (name && name.trim() !== "") {
+            return name.trim();
+        }
+
         if (!selectedInspectionType)
             return "Account";
 
