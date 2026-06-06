@@ -551,10 +551,42 @@ export const Main = (props: IProps) => {
                     alert("DEBUG remainingQuery failed: " + (err?.message || err));
                 }
 
-                const pendingActionsQuery = `?$select=duc_inspectionactionid&$filter=_ownerid_value eq '${userId}' and duc_status ne 100000003 and duc_status ne 100000005`;
+                // Split into two separate queries (offline doesn't support FetchXML link-entity)
+                // Step 1: Get inspection actions owned by user with status not in [100000003, 100000005]
                 try {
-                    const pendingActionsResult = await xrm.WebApi.retrieveMultipleRecords("duc_inspectionaction", pendingActionsQuery);
-                    pendingActions = pendingActionsResult.entities.length;
+                    const inspectionActionsQuery = `?$select=duc_inspectionactionid&$filter=ownerid eq '${userId}' and duc_status ne 100000003 and duc_status ne 100000005`;
+                    const inspectionActionsResult = await xrm.WebApi.retrieveMultipleRecords("duc_inspectionaction", inspectionActionsQuery);
+
+                    if (inspectionActionsResult.entities.length > 0) {
+                        // Step 2: For each inspection action, check if an active work order references it
+                        const actionIds = inspectionActionsResult.entities.map(
+                            (e: any) => e.duc_inspectionactionid as string
+                        );
+
+                        // Build filter for work orders whose duc_primaryinspectionaction is one of the action IDs
+                        const woFilterParts = actionIds.map(
+                            (id: string) => `duc_primaryinspectionaction eq '${id}'`
+                        );
+
+                        // Query in batches to avoid URL length limits
+                        const BATCH_SIZE = 15;
+                        const uniqueWorkOrderIds = new Set<string>();
+
+                        for (let i = 0; i < woFilterParts.length; i += BATCH_SIZE) {
+                            const batch = woFilterParts.slice(i, i + BATCH_SIZE);
+                            const woQuery = `?$select=msdyn_workorderid&$filter=statecode eq 0 and (${batch.join(' or ')})`;
+                            try {
+                                const woResult = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", woQuery);
+                                for (const wo of woResult.entities) {
+                                    uniqueWorkOrderIds.add(wo.msdyn_workorderid);
+                                }
+                            } catch (woErr: any) {
+                                alert("DEBUG batch work order query failed: " + (woErr?.message || woErr));
+                            }
+                        }
+
+                        pendingActions = uniqueWorkOrderIds.size;
+                    }
                 } catch(err: any) {
                     alert("DEBUG pendingActionsQuery failed: " + (err?.message || err));
                 }
