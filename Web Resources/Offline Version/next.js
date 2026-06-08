@@ -236,7 +236,10 @@ function isViolationSelected(formContext) {
 	const value = attr.getValue();
 	if (!value) return false;
 
-	return value.trim() === "مخالفة";
+	const normalizedValue = value.trim();
+
+	return normalizedValue === "مخالفة" ||
+		normalizedValue === "غير مستوف الشروط";
 }
 
 

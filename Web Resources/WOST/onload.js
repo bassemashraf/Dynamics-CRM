@@ -1,11 +1,12 @@
 var surveyObserver = null;
 var surveyLocked = false;
+var shouldLockEditableGridRow = false;
 const PERMIT_LOOKUP_FIELD = "duc_permit";
 const PERMIT_ENTITY_NAME = "duc_permit";
 const PERMIT_TYPE_FIELD = "duc_permittype";
 const CITES_OPTION_VALUE = 100000002;
 
-function onLoad(executionContext) {
+async function onLoad(executionContext) {
     var formContext = executionContext.getFormContext();
     setTimeout(() => {
         formContext.getControl("msdyn_inspection").setVisible(false);
@@ -13,9 +14,13 @@ function onLoad(executionContext) {
         formContext.getControl("msdyn_inspectiontaskresult").setVisible(false);
     }, 3000);
 
-    hideRibbonOnLoad(executionContext); disablesurveyform(executionContext);
+    var isOff = isOffline();
 
-    HideGrid(executionContext);
+    hideRibbonOnLoad(executionContext);
+
+    disablesurveyform(executionContext);
+
+    await HideGrid(executionContext);
     var sectionsToToggle = [
         { tab: "GeneralTab", section: "Samples_Section", code: "Work Order Service Task - Sample Section" },
         { tab: "GeneralTab", section: "Products_Production_Capacity_Section", code: "Work Order Service Task - Products Section" },
@@ -25,11 +30,24 @@ function onLoad(executionContext) {
         { tab: "GeneralTab", section: "Property_Assets_Section", code: "Work Order Service Task - Property_Assets_Section" },
         { tab: "GeneralTab", section: "Work_Order_Penalties_Section", code: "Work Order Service Task - Work_Order_Penalties_Section" },
         { tab: "GeneralTab", section: "VIOLATING_VEHICLES_Section", code: "Work Order Service Task - VIOLATING_VEHICLES_Section" },
-        { tab: "GeneralTab", section: "GeneralTab_section_permitsDetails", code: "GeneralTab_section_permitsDetails" }
+        { tab: "GeneralTab", section: "Vehicle_Information_Section", code: "Work Order Service Task - Vehicle_Information_Section" },
+        { tab: "GeneralTab", section: "GeneralTab_section_permitsDetails", code: "GeneralTab_section_permitsDetails" },
+        { tab: "GeneralTab", section: "InspectionTerms", code: "GeneralTab_section_InspectionTerms" },
+        { tab: "GeneralTab", section: "InspectionTerms_Chemical", code: "GeneralTab_section_InspectionTerms_Chemical" },
+        { tab: "GeneralTab", section: "Radiation_Devices_Section", code: "Work Order Service Task - Radiation_Devices_Section" },
+        { tab: "GeneralTab", section: "Additional_Inspectors", code: "Work Order Service Task - Additional_Inspectors" },
+        { tab: "GeneralTab", section: "Additional_Violators_Section", code: "Work Order Service Task - Additional_Violators" },
+        { tab: "GeneralTab", section: "nadeeb_section", code: "Work Order Service Task - nadeeb_section" }
     ];
 
     sectionsToToggle.forEach(function (x) {
-        toggleSectionFromConfigByCode(executionContext, x.tab, x.section, x.code);
+        if (isOff) {
+            toggleSectionFromConfigByCode_Offline(executionContext, x.tab, x.section, x.code);
+        }
+        else {
+            toggleSectionFromConfigByCode(executionContext, x.tab, x.section, x.code);
+        }
+
     });
 
     toggleNextButtonFromInspectionResult(executionContext);
@@ -45,15 +63,6 @@ function onLoad(executionContext) {
 
     ctrl.addPreSearch(addPermitCitesFilter);
 }
-
-function isOffline() {
-    try {
-        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
-        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
-    } catch (e) { }
-    return false;
-}
-
 
 async function toggleNextButtonFromInspectionResult(executionContext) {
     var formContext = executionContext.getFormContext();
@@ -85,12 +94,9 @@ async function toggleNextButtonFromInspectionResult(executionContext) {
         // This assumes the lookup on Inspection Survey Result to Work Order is ALSO named "msdyn_workorder"
         // so the Web API field is: _msdyn_workorder_value
         // If different, replace _msdyn_workorder_value with _<yourlookup>_value
-        var isOff = isOffline();
-        var woFilterField = isOff ? "duc_workorder" : "_duc_workorder_value";
-
         var query =
             "?$select=duc_answer1" +
-            "&$filter=" + woFilterField + " eq " + woId +
+            "&$filter=_duc_workorder_value eq " + woId +
             "&$orderby=createdon desc" +
             "&$top=1";
 
@@ -106,15 +112,10 @@ async function toggleNextButtonFromInspectionResult(executionContext) {
 
         nextCtrl.setVisible(isFilled);
     } catch (e) {
-        var errMsg = "[toggleNextButtonFromInspectionResult] Error."
-            + "\nOffline: " + isOffline()
-            + "\nError: " + (e.message || JSON.stringify(e));
-        console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        console.error("toggleNextButtonFromInspectionResult error:", e);
         // keep hidden on error
     }
 }
-
 
 function toggleSectionFromConfigByCode(executionContext, tabName, sectionName, configCode) {
 
@@ -128,89 +129,166 @@ function toggleSectionFromConfigByCode(executionContext, tabName, sectionName, c
         // hide by default
         setSectionVisible(formContext, tabName, sectionName, false);
 
-        // 1) Work Order Incident
-        var woiAttr = formContext.getAttribute("msdyn_workorderincident");
-        if (!woiAttr || !woiAttr.getValue()) {
-            console.warn("No Work Order Incident on form");
+        // 1) Incident Type
+        var incidentTypeAttr = formContext.getAttribute("duc_incidenttype");
+        if (!incidentTypeAttr || !incidentTypeAttr.getValue()) {
+            console.warn("No Incident Type  on form");
             return;
         }
 
-        var woiId = woiAttr.getValue()[0].id.replace(/[{}]/g, "");
+        var incidentTypeId = incidentTypeAttr.getValue()[0].id.replace(/[{}]/g, "");
+        if (!incidentTypeId) {
+            console.warn("No Incident Type on Work Order Incident");
+            return;
+        }
 
-        // 2) retrieve Incident Type
-        Xrm.WebApi.retrieveRecord(
-            "msdyn_workorderincident",
-            woiId,
-            "?$select=_msdyn_incidenttype_value"
-        ).then(function (woiResult) {
+        // 3) config by code + incident type
+        var query =
+            "?$select=" + visibilityField +
+            "&$filter=" + codeField + " eq '" + configCode + "'" +
+            " and _duc_incidenttype_value eq " + incidentTypeId;
 
-            var incidentTypeId = woiResult._msdyn_incidenttype_value;
-            if (!incidentTypeId) {
-                console.warn("No Incident Type on Work Order Incident");
-                return;
-            }
+        Xrm.WebApi.retrieveMultipleRecords(configEntity, query).then(
+            async function success(result) {
 
-            // 3) config by code + incident type
-            var isOff = isOffline();
-            var incTypeFilterField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
-
-            var query =
-                "?$select=" + visibilityField +
-                "&$filter=" + codeField + " eq '" + configCode + "'" +
-                " and " + incTypeFilterField + " eq " + incidentTypeId;
-
-            Xrm.WebApi.retrieveMultipleRecords(configEntity, query).then(
-                function success(result) {
-
-                    if (result.entities.length === 0) {
-                        console.warn("No matching configuration found");
-                        return;
-                    }
-
-                    var show = (result.entities[0][visibilityField] === 1);
-
-                    // CONDITION ONLY FOR Work_Order_Penalties_Section
-                    if (show && tabName === "GeneralTab" && sectionName === "Work_Order_Penalties_Section") {
-                        var q1 = formContext.getAttribute("duc_question1");
-                        var q1Val = q1 ? (q1.getValue() || "") : "";
-                        var hasViolation = (q1Val.toString().trim().indexOf("مخالفة") > -1) || (q1Val.toString().trim().indexOf("غير مستوف الشروط") > -1);
-
-                        show = hasViolation; // must be true
-                    }
-
-                    setSectionVisible(formContext, tabName, sectionName, show);
-                },
-                function error(err) {
-                    var errMsg = "[toggleSectionFromConfigByCode] Error retrieving config."
-                        + "\nCode: " + configCode
-                        + "\nIncidentTypeId: " + incidentTypeId
-                        + "\nOffline: " + isOffline()
-                        + "\nError: " + (err.message || JSON.stringify(err));
-                    console.error(errMsg, err);
-                    Xrm.Navigation.openAlertDialog({ text: errMsg });
+                if (result.entities.length === 0) {
+                    console.warn("No matching configuration found");
+                    return;
                 }
-            );
 
-        }, function (error) {
-            var errMsg = "[toggleSectionFromConfigByCode] Error retrieving WOI."
-                + "\nWOI Id: " + woiId
-                + "\nOffline: " + isOffline()
-                + "\nError: " + (error.message || JSON.stringify(error));
-            console.error(errMsg, error);
-            Xrm.Navigation.openAlertDialog({ text: errMsg });
-        });
+                var show = (result.entities[0][visibilityField] === 1);
+
+                // CONDITION ONLY FOR Work_Order_Penalties_Section
+                if (show && tabName === "GeneralTab" && sectionName === "Work_Order_Penalties_Section") {
+                    var q1 = formContext.getAttribute("duc_question1");
+                    var q1Val = q1 ? (q1.getValue() || "") : "";
+                    var hasViolation = (q1Val.toString().trim().indexOf("مخالفة") > -1) || (q1Val.toString().trim().indexOf("غير مستوف الشروط") > -1);
+
+                    show = hasViolation; // must be true
+                }
+
+                // CONDITION ONLY FOR Vehicle_Information_Section
+                if (show && tabName === "GeneralTab" && sectionName === "Vehicle_Information_Section") {
+                    var WOSTId = formContext.data.entity.getId();
+                    WOSTId = WOSTId ? WOSTId.replace(/[{}]/g, "") : "";
+
+                    var q5Val = "";
+
+                    try {
+                        var results = await Xrm.WebApi.retrieveMultipleRecords(
+                            "duc_inspectionsurveyresult",
+                            "?$select=duc_answer5,duc_question5&$filter=_duc_workorderservicetask_value eq " + WOSTId
+                        );
+
+                        if (results.entities.length > 0) {
+                            q5Val = results.entities[0]["duc_answer5"] || "";
+                        }
+                    } catch (error) {
+                        console.log(error.message);
+                    }
+
+                    var hasVehicle = q5Val.toString().trim().indexOf("طلب نقل نفايات") > -1;
+
+                    show = hasVehicle;
+                }
+
+                setSectionVisible(formContext, tabName, sectionName, show);
+            },
+            function error(err) {
+                console.error("Config retrieve error:", err.message);
+            }
+        );
 
     } catch (e) {
-        var errMsg = "[toggleSectionFromConfigByCode] Error."
-            + "\nTab: " + tabName + ", Section: " + sectionName + ", Code: " + configCode
-            + "\nOffline: " + isOffline()
-            + "\nError: " + (e.message || JSON.stringify(e));
-        console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        console.error("toggleSectionFromConfigByCode error:", e);
     }
 }
 
+function toggleSectionFromConfigByCode_Offline(executionContext, tabName, sectionName, configCode) {
 
+    try {
+
+        var formContext = executionContext.getFormContext();
+
+        var configEntity = "duc_incidenttypeconfigurations";
+        var visibilityField = "duc_actionvalue";
+        var codeField = "duc_code";
+
+        // hide by default
+        setSectionVisible(formContext, tabName, sectionName, false);
+
+        // 1) Incident Type
+        var incidentTypeAttr = formContext.getAttribute("duc_incidenttype");
+        if (!incidentTypeAttr || !incidentTypeAttr.getValue()) {
+            console.warn("No Incident Type  on form");
+            return;
+        }
+
+        var incidentTypeId = incidentTypeAttr.getValue()[0].id.replace(/[{}]/g, "");
+
+        // 2) config by code + incident type
+        var query =
+            "?$select=" + visibilityField +
+            "&$filter=" + codeField + " eq '" + configCode + "'" +
+            " and duc_incidenttype eq " + incidentTypeId;
+
+        Xrm.WebApi.retrieveMultipleRecords(configEntity, query).then(
+            async function success(result) {
+
+                if (result.entities.length === 0) {
+                    console.warn("No matching configuration found");
+                    return;
+                }
+
+                var show = (result.entities[0][visibilityField] === 1);
+
+                // CONDITION ONLY FOR Work_Order_Penalties_Section
+                if (show && tabName === "GeneralTab" && sectionName === "Work_Order_Penalties_Section") {
+                    var q1 = formContext.getAttribute("duc_question1");
+                    var q1Val = q1 ? (q1.getValue() || "") : "";
+                    var hasViolation = (q1Val.toString().trim().indexOf("مخالفة") > -1) || (q1Val.toString().trim().indexOf("غير مستوف الشروط") > -1);
+
+                    show = hasViolation; // must be true
+
+                    //alert("Browser: has violation? " + show);
+                }
+
+                // CONDITION ONLY FOR Vehicle_Information_Section
+                if (show && tabName === "GeneralTab" && sectionName === "Vehicle_Information_Section") {
+                    var WOSTId = formContext.data.entity.getId();
+                    WOSTId = WOSTId ? WOSTId.replace(/[{}]/g, "") : "";
+
+                    var q5Val = "";
+
+                    try {
+                        var results = await Xrm.WebApi.retrieveMultipleRecords(
+                            "duc_inspectionsurveyresult",
+                            "?$select=duc_answer5,duc_question5&$filter=_duc_workorderservicetask_value eq " + WOSTId
+                        );
+
+                        if (results.entities.length > 0) {
+                            q5Val = results.entities[0]["duc_answer5"] || "";
+                        }
+                    } catch (error) {
+                        console.log(error.message);
+                    }
+
+                    var hasVehicle = q5Val.toString().trim().indexOf("طلب نقل نفايات") > -1;
+
+                    show = hasVehicle;
+                }
+
+                setSectionVisible(formContext, tabName, sectionName, show);
+            },
+            function error(err) {
+                console.error("Config retrieve error:", err.message);
+            }
+        );
+
+    } catch (e) {
+        console.error("toggleSectionFromConfigByCode error:", e);
+    }
+}
 
 function hideRibbonOnLoad(executionContext) {
     var formContext = executionContext.getFormContext();
@@ -225,39 +303,82 @@ function hideRibbonOnLoad(executionContext) {
 function disablesurveyform(executionContext) {
     var f = executionContext.getFormContext();
 
-    if (!f.getAttribute("msdyn_surveyboundedoutput")) {
-        console.warn("Survey field not available yet.");
-        return;
-    }
-
-    if (!f.getAttribute("duc_enableforadmin").getValue()) {
-        disablesurvey(executionContext);
-    }
-
-    var tab = f.ui.tabs.get("GeneralTab");
-    tab.addTabStateChange(disablesurvey);
-
-}
-
-function disablesurvey(executionContext) {
-    var f = executionContext.getFormContext();
-    if (!f.getAttribute("msdyn_percentcomplete") || f.getAttribute("msdyn_percentcomplete").getValue() !== 100) {
-        return;
-    }
-
-    surveyLocked = true;
-
     var globalContext = Xrm.Utility.getGlobalContext();
     var langId = globalContext.userSettings.languageId;
     var message = (langId === 1025) ? "جاري المعالجة..." : "Processing...";
 
     Xrm.Utility.showProgressIndicator(message);
 
-    setTimeout(function () {
-        lockInspectionSurveyWithObserver();
-
+    if (!f.getAttribute("msdyn_surveyboundedoutput")) {
+        console.warn("Survey field not available yet.");
         Xrm.Utility.closeProgressIndicator();
-    }, 6000);
+
+        return;
+    }
+
+    setTimeout(function () {
+        if (!f.getAttribute("duc_enableforadmin").getValue()) {
+            disablesurvey(executionContext);
+        }
+
+        var tab = f.ui.tabs.get("GeneralTab");
+        tab.addTabStateChange(disablesurvey);
+
+        prepareEditableGridLocking(executionContext);
+
+    }, 10000);
+}
+
+async function disablesurvey(executionContext) {
+    var f = executionContext.getFormContext();
+
+    var workOrderAttr = f.getAttribute("msdyn_workorder");
+
+    var workOrderId = workOrderAttr.getValue()[0].id.replace(/[{}]/g, "");
+
+    var currentUserId = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+
+    // Only these statuses will keep the form enabled
+    var allowedStatuses = [
+        690970002
+    ];
+
+    await Xrm.WebApi.retrieveRecord("msdyn_workorder", workOrderId, "?$select=msdyn_systemstatus,_duc_assignedinspector_value").then(
+        function (result) {
+            var woStatus = result.msdyn_systemstatus;
+
+            var assignedInspectorId = result._duc_assignedinspector_value;
+
+            var isAllowedStatus = allowedStatuses.indexOf(woStatus) !== -1;
+
+            var isAssignedInspector = assignedInspectorId && assignedInspectorId.toLowerCase() === currentUserId.toLowerCase();
+
+            if (!isAllowedStatus || !isAssignedInspector) {
+                surveyLocked = true;
+                lockInspectionSurveyWithObserver();
+
+                Xrm.Utility.closeProgressIndicator();
+                return;
+            }
+        },
+        function (error) {
+            console.error("Failed to retrieve Work Order status: " + error.message);
+
+            Xrm.Utility.closeProgressIndicator();
+        }
+    );
+
+    if (!f.getAttribute("msdyn_percentcomplete") || f.getAttribute("msdyn_percentcomplete").getValue() !== 100) {
+        Xrm.Utility.closeProgressIndicator();
+
+        return;
+    }
+
+    surveyLocked = true;
+
+    lockInspectionSurveyWithObserver();
+
+    Xrm.Utility.closeProgressIndicator();
 }
 
 function lockInspectionSurveyWithObserver() {
@@ -380,7 +501,122 @@ function disableSurveyUI(container) {
         el.disabled = true;
     });
 
+    hideSurveyDeleteButtons(container);
+
+    if (!container.getAttribute("data-survey-delete-observer-attached")) {
+        var surveyObserverInner = new MutationObserver(function (mutations) {
+            hideSurveyDeleteButtons(container);
+        });
+
+        surveyObserverInner.observe(container, { childList: true, subtree: true });
+        container.setAttribute("data-survey-delete-observer-attached", "true");
+    }
+
     hideSurveyButtons();
+}
+
+function hideSurveyDeleteButtons(container) {
+    var allElements = container.querySelectorAll("button, [role='button'], a, i, span, svg, div[class*='Button'], div[class*='button'], div[class*='Icon'], *[data-icon-name]");
+    var deleteKeywords = ["delete", "remove", "حذف", "إزالة", "clear", "cancel"];
+
+    allElements.forEach(function (btn) {
+        var title = (btn.getAttribute("title") || "").toLowerCase();
+        var ariaLabel = (btn.getAttribute("aria-label") || "").toLowerCase();
+        var iconName = (btn.getAttribute("data-icon-name") || "").toLowerCase();
+        var className = (typeof btn.className === 'string') ? btn.className.toLowerCase() : "";
+        var text = (btn.innerText || btn.textContent || "").toLowerCase().trim();
+
+        var isDeleteBtn = false;
+
+        // Substring match for attributes
+        isDeleteBtn = deleteKeywords.some(function (kw) {
+            return (title && title.indexOf(kw) > -1) ||
+                (ariaLabel && ariaLabel.indexOf(kw) > -1) ||
+                (iconName && iconName.indexOf(kw) > -1);
+        });
+
+        // Exact or reasonable substring match for text inside small elements
+        if (!isDeleteBtn && text.length > 0 && text.length < 30) {
+            // Avoid matching if it explicitly contains edit or edit arabic to be super safe
+            if (text.indexOf("edit") === -1 && text.indexOf("تعديل") === -1 && text.indexOf("تحرير") === -1) {
+                if (deleteKeywords.some(function (kw) { return text.indexOf(kw) > -1; })) {
+                    isDeleteBtn = true;
+                }
+            }
+        }
+
+        // Check for child icon
+        if (!isDeleteBtn && btn.querySelector) {
+            if (btn.querySelector('[data-icon-name="Delete"], [data-icon-name="Remove"], [data-icon-name="Cancel"], [data-icon-name="Clear"], [aria-label*="Delete"], [aria-label*="delete"], [aria-label*="حذف"]')) {
+                isDeleteBtn = true;
+            }
+        }
+
+        // Use class name heuristically for specific tags
+        if (!isDeleteBtn && (btn.tagName.toLowerCase() === 'button' || btn.getAttribute('role') === 'button' || btn.tagName.toLowerCase() === 'i' || btn.tagName.toLowerCase() === 'svg')) {
+            if (className.indexOf("delete") > -1 || className.indexOf("remove") > -1 || className.indexOf("cancel") > -1) {
+                isDeleteBtn = true;
+            }
+        }
+
+        if (isDeleteBtn) {
+            // Avoid hiding parent container if it has too many children (e.g., misidentified container)
+            if (btn.children && btn.children.length > 5) {
+                return;
+            }
+            btn.style.setProperty("display", "none", "important");
+            btn.style.setProperty("visibility", "hidden", "important");
+            btn.style.setProperty("pointer-events", "none", "important");
+            btn.disabled = true;
+        }
+    });
+
+    // Event capture blocker on container as an ultimate fallback against dynamic clicks
+    if (!container.getAttribute("data-survey-click-blocker")) {
+        container.addEventListener("click", function (e) {
+            var target = e.target;
+            var isDeleteClick = false;
+
+            while (target && target !== container && target.nodeType === 1) {
+                var title = (target.getAttribute("title") || "").toLowerCase();
+                var ariaLabel = (target.getAttribute("aria-label") || "").toLowerCase();
+                var iconName = (target.getAttribute("data-icon-name") || "").toLowerCase();
+                var className = (typeof target.className === 'string') ? target.className.toLowerCase() : "";
+                var text = (target.innerText || target.textContent || "").toLowerCase().trim();
+
+                if (deleteKeywords.some(function (kw) {
+                    return (title && title.indexOf(kw) > -1) ||
+                        (ariaLabel && ariaLabel.indexOf(kw) > -1) ||
+                        (iconName && iconName.indexOf(kw) > -1);
+                })) {
+                    isDeleteClick = true;
+                    break;
+                }
+
+                if (text.length > 0 && text.length < 30 && text.indexOf("edit") === -1 && text.indexOf("تعديل") === -1 && text.indexOf("تحرير") === -1) {
+                    if (deleteKeywords.some(function (kw) { return text.indexOf(kw) > -1; })) {
+                        isDeleteClick = true;
+                        break;
+                    }
+                }
+
+                if ((target.tagName.toLowerCase() === 'button' || target.getAttribute('role') === 'button' || target.tagName.toLowerCase() === 'i' || target.tagName.toLowerCase() === 'svg') &&
+                    (className.indexOf("delete") > -1 || className.indexOf("remove") > -1 || className.indexOf("cancel") > -1)) {
+                    isDeleteClick = true;
+                    break;
+                }
+
+                target = target.parentNode;
+            }
+
+            if (isDeleteClick) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }
+        }, true); // Important: capture phase
+        container.setAttribute("data-survey-click-blocker", "true");
+    }
 }
 
 function hideSurveyButtons() {
@@ -404,23 +640,35 @@ function registerSurveyTabReLock(executionContext) {
     });
 }
 
-function HideGrid(executionContext) {
+async function HideGrid(executionContext) {
     var formContext = executionContext.getFormContext();
 
     var percentAttr = formContext.getAttribute("msdyn_percentcomplete");
     if (!percentAttr) return;
 
-    var grid = formContext.getControl("cc_1765579582463");
     var tab = formContext.ui.tabs.get("GeneralTab");
     var section = tab.sections.get("InspectionTerms");
     var saveButton = formContext.getControl("duc_savebutton");
 
-    // ---- Grid logic ----
-    if (grid && grid.getGrid) {
-        grid.addOnLoad(function () {
-            var count = grid.getGrid().getTotalRecordCount();
-            section.setVisible(count > 0);
-        });
+    try {
+        var entityId = formContext.data.entity.getId();
+        var entityName = formContext.data.entity.getEntityName();
+
+        if (!entityId || entityName !== 'msdyn_workorderservicetask') {
+            section.setVisible(false);
+            return;
+        }
+
+        // Remove curly braces
+        var result = await Xrm.WebApi.retrieveMultipleRecords(
+            'duc_questionanswersconfiguration',
+            `?$top=1&$select=duc_questionanswersconfigurationid&$filter=_duc_msdyn_workorderservicetask_value eq ${entityId.replace(/[{}]/g, "")}`
+        );
+
+        section.setVisible(result.entities.length > 0);
+    } catch (error) {
+        console.error("Error checking question answers configuration:", error);
+        section.setVisible(false);
     }
 
     // ---- Save button visibility logic ----
@@ -461,20 +709,14 @@ function toggleSectionFromConfig(executionContext, sectionName, tabName) {
         console.log("Hiding section by default...");
         setSectionVisible(formContext, tabName, sectionName, false);
 
-        // Get lookup attribute
-        var lookupAttr = formContext.getAttribute(lookupFieldName);
-        if (!lookupAttr) {
-            console.warn("Lookup attribute not found:", lookupFieldName);
+        // Incident Type
+        var incidentTypeAttr = formContext.getAttribute("duc_incidenttype");
+        if (!incidentTypeAttr || !incidentTypeAttr.getValue()) {
+            console.warn("No Incident Type  on form");
             return;
         }
 
-        var lookupVal = lookupAttr.getValue();
-        if (!lookupVal || lookupVal.length === 0) {
-            console.log("Lookup is empty. Section remains hidden.");
-            return;
-        }
-
-        var incidentTypeId = (lookupVal[0].id || "").replace(/[{}]/g, "");
+        var incidentTypeId = incidentTypeAttr.getValue()[0].id.replace(/[{}]/g, "");
         if (!incidentTypeId) {
             console.warn("Incident type ID is empty.");
             return;
@@ -484,12 +726,9 @@ function toggleSectionFromConfig(executionContext, sectionName, tabName) {
         console.log("Incident type ID:", incidentTypeId);
 
         // Retrieve the configuration for this incident type
-        var isOff = isOffline();
-        var incTypeFilterField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
-
         Xrm.WebApi.retrieveMultipleRecords(
             configEntity,
-            "?$select=duc_actionvalue&$filter=" + incTypeFilterField + " eq " + incidentTypeId
+            "?$select=duc_actionvalue&$filter=_duc_incidenttype_value eq " + incidentTypeId
         )
             .then(function (result) {
                 console.log("Configuration query returned:", result.entities.length, "records");
@@ -503,21 +742,11 @@ function toggleSectionFromConfig(executionContext, sectionName, tabName) {
                 }
             })
             .catch(function (error) {
-                var errMsg = "[toggleSectionFromConfig] Error retrieving configuration."
-                    + "\nIncidentTypeId: " + incidentTypeId
-                    + "\nOffline: " + isOffline()
-                    + "\nError: " + (error.message || JSON.stringify(error));
-                console.error(errMsg, error);
-                Xrm.Navigation.openAlertDialog({ text: errMsg });
+                console.error("Error retrieving configuration:", error);
             });
 
     } catch (e) {
-        var errMsg = "[toggleSectionFromConfig] Error."
-            + "\nTab: " + tabName + ", Section: " + sectionName
-            + "\nOffline: " + isOffline()
-            + "\nError: " + (e.message || JSON.stringify(e));
-        console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        console.error("toggleSectionFromConfig_OnLoad error:", e);
     }
 }
 
@@ -539,87 +768,10 @@ function setSectionVisible(formContext, tabName, sectionName, isVisible) {
         section.setVisible(!!isVisible);
     }
     catch (e) {
-        var errMsg = "[setSectionVisible] Error."
-            + "\nTab: " + tabName + ", Section: " + sectionName
-            + "\nError: " + (e.message || JSON.stringify(e));
-        console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        console.error("setSectionVisible error:", e);
     }
 }
 
-//function disablesurveyform(executionContext) {
-//    var f = executionContext.getFormContext();
-
-//    //try {
-//    //    var formFactor = Xrm.Utility.getGlobalContext().client.getFormFactor();
-//    //    if (formFactor > 1) return;  // Phone/Tablet
-//    //} catch (ex) {
-//    //    return;  // Legacy mobile
-//    //}
-
-//    if (f.data.entity.attributes.getByName("msdyn_surveyboundedoutput") != null) {
-//        if (!f.getAttribute("duc_enableforadmin").getValue()) {
-//            disablesurvey(executionContext);
-//        }
-//        var tab = f.ui.tabs.get("GeneralTab");
-//        tab.addTabStateChange(disablesurvey);
-//    }
-//    else {
-//        disablesurveyform(executionContext);
-//    }
-//}
-
-//function disablesurvey(executionContext) {
-//    var f = executionContext.getFormContext();
-//    if (f.getAttribute("msdyn_percentcomplete") !== undefined && f.getAttribute("msdyn_percentcomplete").getValue() == 100) {
-//        var elems = [];
-//        if (elems.length == 0) {
-//            Xrm.Utility.showProgressIndicator("Please Wait");
-//            setTimeout(function () {
-//                elems = window.parent.document.getElementsByClassName("customControl MscrmControls InspectionControls.SurveyControl MscrmControls.InspectionControls.SurveyControl");
-//                if (elems.length == 0) {
-//                    setTimeout(function () { disablesurveycontrols(); }, 1000);
-//                } else {
-//                    let elmtypes = ["input", "text", "textarea", "select", "radio"];
-//                    for (var i = 0; i < elmtypes.length; i++) {
-//                        for (var j = 0; j < elems[0].getElementsByTagName(elmtypes[i]).length; j++) {
-//                            elems[0].getElementsByTagName(elmtypes[i])[j].disabled = true;
-//                        }
-//                    }
-
-//                    var col = document.getElementsByClassName("ms-control-align");
-//                    Object.keys(col).forEach((key) => col[key].style.visibility = 'hidden');
-//                    col = document.getElementsByClassName("ms-Button ms-Button--default default-Button root-266");
-//                    Object.keys(col).forEach((key) => col[key].style.visibility = 'hidden');
-
-//                    Xrm.Utility.closeProgressIndicator();
-//                }
-//            }, 5000);
-//        }
-//    }
-//}
-
-//function disablesurveycontrols() {
-//    var elems = window.parent.document.getElementsByClassName("customControl MscrmControls InspectionControls.SurveyControl MscrmControls.InspectionControls.SurveyControl");
-
-//    if (elems.length == 0) {
-//        setTimeout(function () { disablesurveycontrols(); }, 1000);
-//    }
-//    else {
-//        let elmtypes = ["input", "text", "textarea", "select", "radio"];
-//        for (var i = 0; i < elmtypes.length; i++) {
-//            for (var j = 0; j < elems[0].getElementsByTagName(elmtypes[i]).length; j++) {
-//                elems[0].getElementsByTagName(elmtypes[i])[j].disabled = true;
-//            }
-//        }
-//        var col = document.getElementsByClassName("ms-control-align");
-//        Object.keys(col).forEach((key) => col[key].style.visibility = 'hidden');
-//        col = document.getElementsByClassName("ms-Button ms-Button--default default-Button root-266");
-//        Object.keys(col).forEach((key) => col[key].style.visibility = 'hidden');
-
-//        Xrm.Utility.closeProgressIndicator();
-//    }
-//}
 function hideFieldOnWeb(executionContext) {
     var formContext = executionContext.getFormContext();
 
@@ -649,7 +801,7 @@ function hideFieldOnWeb(executionContext) {
     });
 }
 
-function lockColumnsInEditableGrid(executionContext) {
+function lockColumnsInEditableGrid(executionContext) { // Question Answer Configuration subgrid cc_1765579582463
     var rowFormContext = executionContext.getFormContext();
     if (!rowFormContext) return;
 
@@ -657,11 +809,57 @@ function lockColumnsInEditableGrid(executionContext) {
 
     var percentage = percentageAttr ? percentageAttr.getValue() : null;
 
-    var columnsToLock = ["duc_questioncategory", "duc_questionname", "statuscode"];
+    var columnsToLock = ["duc_questioncategory", "duc_questionname", "statuscode", "duc_order"];
 
-    if (Math.round(percentage || 0) === 100) {
+    if (Math.round(percentage || 0) === 100 || shouldLockEditableGridRow) {
         columnsToLock.push("duc_applicableanswer");
         columnsToLock.push("duc_inspectorcomment");
+    }
+    columnsToLock.forEach(function (col) {
+        var attribute = rowFormContext.getAttribute(col);
+        if (attribute) {
+            var control = attribute.controls.get(0);
+            if (control && typeof control.setDisabled === 'function') {
+                control.setDisabled(true);
+            }
+        }
+    });
+}
+
+function lockColumnsInEditableGrid_Chemical(executionContext) { // Question Answer Configuration subgrid Subgrid_new_8
+    var rowFormContext = executionContext.getFormContext();
+    if (!rowFormContext) return;
+
+    var percentageAttr = Xrm.Page.getAttribute("msdyn_percentcomplete");
+
+    var percentage = percentageAttr ? percentageAttr.getValue() : null;
+
+    var columnsToLock = ["duc_questioncategory", "duc_questionname", "statuscode", "duc_order"];
+
+    if (Math.round(percentage || 0) === 100 || shouldLockEditableGridRow) {
+        columnsToLock.push("duc_inspectorcomments");
+    }
+    columnsToLock.forEach(function (col) {
+        var attribute = rowFormContext.getAttribute(col);
+        if (attribute) {
+            var control = attribute.controls.get(0);
+            if (control && typeof control.setDisabled === 'function') {
+                control.setDisabled(true);
+            }
+        }
+    });
+}
+
+function lockWorkOrderPenaltiesGrid(executionContext) { //Work Order Penalties subgrid Subgrid_new_4
+    var rowFormContext = executionContext.getFormContext();
+    if (!rowFormContext) return;
+
+    var lockForm = rowFormContext.getAttribute("duc_lockform")?.getValue();
+
+    var columnsToLock = ["duc_penalty", "duc_lockform", "duc_penaltyorder"];
+
+    if (lockForm || shouldLockEditableGridRow) {
+        columnsToLock.push("duc_compliancestatus");
     }
     columnsToLock.forEach(function (col) {
         var attribute = rowFormContext.getAttribute(col);
@@ -704,30 +902,23 @@ function addColor(rowData) {
     }
 }
 
-
-
 function getIncidentTypeAutoStatusCalculation(executionContext) {
     debugger;
     try {
         var formContext = executionContext.getFormContext();
 
-        var lookupFieldName = "duc_incidenttype";     // lookup on current form
+        var lookupFieldName = "msdyn_workorderincident";     // lookup on current form
         var incidentTypeEntity = "msdyn_incidenttype";       // entity logical name
         var booleanFieldName = "duc_autostatuscalculation";  // boolean on Incident Type
 
-        var lookupAttr = formContext.getAttribute(lookupFieldName);
-        if (!lookupAttr) {
-            console.warn("Lookup attribute not found:", lookupFieldName);
-            return null;
+        // Incident Type
+        var incidentTypeAttr = formContext.getAttribute("duc_incidenttype");
+        if (!incidentTypeAttr || !incidentTypeAttr.getValue()) {
+            console.warn("No Incident Type  on form");
+            return;
         }
 
-        var lookupVal = lookupAttr.getValue();
-        if (!lookupVal || lookupVal.length === 0) {
-            console.log("Incident Type lookup is empty.");
-            return null;
-        }
-
-        var incidentTypeId = (lookupVal[0].id || "").replace(/[{}]/g, "");
+        var incidentTypeId = incidentTypeAttr.getValue()[0].id.replace(/[{}]/g, "");
         if (!incidentTypeId) {
             console.warn("Incident type ID is empty.");
             return null;
@@ -743,21 +934,12 @@ function getIncidentTypeAutoStatusCalculation(executionContext) {
             console.log(booleanFieldName + ":", val);
             return val;
         }).catch(function (error) {
-            var errMsg = "[getIncidentTypeAutoStatusCalculation] Error retrieving Incident Type."
-                + "\nIncidentTypeId: " + incidentTypeId
-                + "\nOffline: " + isOffline()
-                + "\nError: " + (error.message || JSON.stringify(error));
-            console.error(errMsg, error);
-            Xrm.Navigation.openAlertDialog({ text: errMsg });
+            console.error("Error retrieving Incident Type:", error);
             return null;
         });
 
     } catch (e) {
-        var errMsg = "[getIncidentTypeAutoStatusCalculation] Error."
-            + "\nOffline: " + isOffline()
-            + "\nError: " + (e.message || JSON.stringify(e));
-        console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        console.error("getIncidentTypeAutoStatusCalculation error:", e);
         return null;
     }
 }
@@ -773,4 +955,130 @@ function addPermitCitesFilter(executionContext) {
      </filter>`;
 
     ctrl.addCustomFilter(filterXml, PERMIT_ENTITY_NAME);
+}
+
+var shouldLockEditableGridRow = false;
+
+async function prepareEditableGridLocking(executionContext) {
+
+    var formContext = executionContext.getFormContext();
+
+    if (!formContext) return;
+
+    var workOrderAttr = formContext.getAttribute("msdyn_workorder");
+
+    if (
+        !workOrderAttr ||
+        !workOrderAttr.getValue() ||
+        workOrderAttr.getValue().length === 0
+    ) {
+        shouldLockEditableGridRow = false;
+        return;
+    }
+
+    var workOrderId = workOrderAttr.getValue()[0].id.replace(/[{}]/g, "");
+
+    var currentUserId = Xrm.Utility.getGlobalContext().userSettings.userId.replace(/[{}]/g, "");
+
+    // Only these statuses keep the row editable
+    var allowedStatuses = [690970002];
+
+    try {
+
+        var result = await Xrm.WebApi.retrieveRecord("msdyn_workorder", workOrderId, "?$select=msdyn_systemstatus,_duc_assignedinspector_value");
+
+        var woStatus = result.msdyn_systemstatus;
+
+        var assignedInspectorId = result._duc_assignedinspector_value;
+
+        var isAllowedStatus = allowedStatuses.indexOf(woStatus) !== -1;
+
+        var isAssignedInspector = assignedInspectorId && assignedInspectorId.toLowerCase() === currentUserId.toLowerCase();
+
+        shouldLockEditableGridRow = !isAllowedStatus || !isAssignedInspector;
+
+    } catch (e) {
+
+        console.error("Failed to retrieve Work Order details: " + e.message);
+
+        shouldLockEditableGridRow = false;
+    }
+}
+
+function isOffline() {
+    try {
+        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
+}
+
+async function SubgridButtonEnableRule(f) {
+
+    var workOrderAttr = f.getAttribute("msdyn_workorder");
+
+    var workOrderId = workOrderAttr.getValue()[0].id.replace(/[{}]/g, "");
+
+    // Only these statuses will keep the form enabled
+    var allowedStatuses = [
+        690970002
+    ];
+
+    await Xrm.WebApi.retrieveRecord("msdyn_workorder", workOrderId, "?$select=msdyn_systemstatus").then(
+        function (result) {
+            var woStatus = result.msdyn_systemstatus;
+
+            var isAllowedStatus = allowedStatuses.indexOf(woStatus) !== -1;
+
+            if (!isAllowedStatus) {
+
+                return false;
+            }
+        },
+        function (error) {
+            console.error("Failed to retrieve Work Order status: " + error.message);
+        }
+    );
+
+    if (f.getAttribute("msdyn_percentcomplete") && f.getAttribute("msdyn_percentcomplete").getValue() === 100) {
+
+        return false;
+    }
+
+    return true;
+}
+
+function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineFieldName) {
+    var formContext = executionContext.getFormContext();
+
+    try {
+        var isCurrentlyOffline = isUserOffline();
+
+        var onlineField = formContext.getControl(onlineFieldName);
+        var offlineField = formContext.getControl(offlineFieldName);
+
+        if (isCurrentlyOffline) {
+            // --- OFFLINE mode ---
+            if (onlineField && onlineField.getVisible()) {
+                if (offlineField) offlineField.setVisible(true);
+                onlineField.setVisible(false);
+                console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
+            }
+        }
+    } catch (e) {
+        console.log("[toggleSpecificOfflineFields] error: " + e.message);
+    }
+}
+
+function isUserOffline() {
+    try {
+        // Check if user is on an offline profile (works even WITH internet connection).
+        // isAvailableOffline returns true when the entity is part of the active
+        // Mobile Offline profile — meaning the user is on the offline-first app.
+        if (Xrm.WebApi.isAvailableOffline &&
+            Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
+        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
 }

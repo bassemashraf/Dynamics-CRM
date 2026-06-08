@@ -4,12 +4,14 @@ function getMSG() {
         waitingTask: "جاري إنشاء مهام الخدمة، يرجى الانتظار...",
         taskTimeout: "لم يتم إنشاء مهام الخدمة بعد. يرجى المحاولة مرة أخرى بعد قليل.",
         taskNotFound: "لم يتم العثور على مهام الخدمة.",
-        woNotFound: "لم يتم العثور على رقم أمر العمل."
+        woNotFound: "لم يتم العثور على رقم أمر العمل.",
+        noPermission: "ليس لديك صلاحية لبدء التفتيش."
     } : {
         waitingTask: "Creating service tasks, please wait...",
         taskTimeout: "Service tasks are not created yet. Please try again in a few moments.",
         taskNotFound: "No service tasks found.",
-        woNotFound: "Work Order ID not found."
+        woNotFound: "Work Order ID not found.",
+        noPermission: "You don't have permission to start the inspection."
     };
 }
 async function waitForWorkOrderServiceTask(workOrderId, maxWaitMs = 30000, intervalMs = 2000) {
@@ -693,8 +695,33 @@ function WO_CheckAllowedDistance() {
         var subAccountVal = subAccountAttr ? subAccountAttr.getValue() : null;
 
         if (!subAccountVal || !subAccountVal[0] || !subAccountVal[0].id) {
-            // No sub-account, proceed without distance check
-            return getCurrentLocationAndUpdate(null, null, null);
+            //==============Here The New Logic Added===============================
+
+            // Fallback to Work Order stored coordinates
+            return Xrm.WebApi.retrieveRecord(
+                "msdyn_workorder",
+                workorderId,
+                "?$select=msdyn_latitude,msdyn_longitude"
+            ).then(function (wo) {
+
+                var destLat = wo.msdyn_latitude;
+                var destLng = wo.msdyn_longitude;
+
+                if (destLat != null && destLng != null) {
+                    return getCurrentLocationAndUpdate(destLat, destLng, allowedDistance);
+                }
+
+                // If even WO has no coordinates, proceed without distance check
+                return getCurrentLocationAndUpdate(null, null, null);
+
+            }).catch(function (error) {
+                var errMsg = "[WO_CheckAllowedDistance > checkNearestAccountAddress] Error retrieving work order coordinates."
+                    + "\nWorkOrderId: " + workorderId
+                    + "\nOffline: " + isOff
+                    + "\nError: " + ((error && error.message) ? error.message : JSON.stringify(error));
+                console.error(errMsg, error);
+                return getCurrentLocationAndUpdate(null, null, null);
+            });
         }
 
         var accountId = subAccountVal[0].id.replace(/[{}]/g, "");
@@ -863,11 +890,118 @@ function GetDistance(lat1, lon1, lat2, lon2) {
     var distance = R * c;
     return distance;
 }
+async function setWorkOrderFieldsFromAccount_WO() {
+    var step = "";
+    try {
+        if (!Xrm || !Xrm.Page) return;
+
+        var form = Xrm.Page;
+
+        // Get inspection type
+        var inspectionTypeAttr = form.getAttribute("duc_accountinspectiontype");
+        if (!inspectionTypeAttr) return;
+
+        var inspectionType = inspectionTypeAttr.getValue();
+        if (inspectionType !== 2 && inspectionType !== 15) return;
+
+        // Get Account lookup
+        var accountAttr = form.getAttribute("msdyn_serviceaccount");
+        if (!accountAttr || !accountAttr.getValue()) return;
+
+        var accountId = accountAttr.getValue()[0].id.replace(/[{}]/g, "");
+
+        step = "Retrieving account record";
+        // Retrieve Account
+        var account = await Xrm.WebApi.retrieveRecord(
+            "account",
+            accountId,
+            "?$select=duc_accountidentifier,name"
+        );
+
+        // Set fields on Work Order form
+        var empIdAttr = form.getAttribute("duc_employeeid");
+        var empNameAttr = form.getAttribute("duc_employeename");
+
+        if (empIdAttr) {
+            empIdAttr.setValue(account.duc_accountidentifier || null);
+        }
+
+        if (empNameAttr) {
+            empNameAttr.setValue(account.name || null);
+        }
+
+    } catch (error) {
+        var errMsg = "[setWorkOrderFieldsFromAccount_WO] Error at step: " + step
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (error.message || JSON.stringify(error));
+        console.error(errMsg, error);
+    }
+}
+
+async function checkInspectorPermission() {
+    var step = "";
+    try {
+        const MSG = getMSG();
+
+        const currentUserId = Xrm.Utility.getGlobalContext().userSettings.userId
+            .replace(/[{}]/g, "")
+            .toLowerCase();
+
+        const workOrderId = Xrm.Page.data.entity.getId().replace(/[{}]/g, "");
+
+        step = "Retrieving work order assigned inspector";
+        const wo = await Xrm.WebApi.retrieveRecord(
+            "msdyn_workorder",
+            workOrderId,
+            "?$select=_duc_assignedinspector_value"
+        );
+
+        if (!wo._duc_assignedinspector_value) return false;
+
+        const inspectorId = wo._duc_assignedinspector_value
+            .replace(/[{}]/g, "")
+            .toLowerCase();
+
+        if (currentUserId !== inspectorId) {
+            await Xrm.Navigation.openAlertDialog({ text: MSG.noPermission });
+            return false;
+        }
+
+        return true;
+
+    } catch (error) {
+        var errMsg = "[checkInspectorPermission] Error at step: " + step
+            + "\nOffline: " + isOffline()
+            + "\nError: " + (error.message || JSON.stringify(error));
+        console.error(errMsg, error);
+        return false;
+    }
+}
+
 // ============================================
 // MAIN EXECUTION - ONLY CHECK DISTANCE ON MOBILE
 // ============================================
 (async function () {
     try {
+        // Check if Xrm.Page is available
+        if (!Xrm || !Xrm.Page || !Xrm.Page.data || !Xrm.Page.data.entity) {
+            console.error("Error #1: Xrm.Page is not available in main execution. This script must run in a form context.");
+            Xrm.Navigation.openAlertDialog({ text: "Error #1: Form context not available in main execution." });
+            return;
+        }
+
+        const hasPermission = await checkInspectorPermission();
+        if (!hasPermission) {
+            return; // STOP everything
+        }
+
+        await setWorkOrderFieldsFromAccount_WO();
+
+        // Wait for save to complete before moving on
+        if (Xrm.Page.data.entity.getIsDirty()) {
+            await Xrm.Page.data.save();
+        }
+
         const workOrderId = Xrm.Page.data.entity.getId();
         const isMobile = IsFromMobile();
         const isOff = isOffline();

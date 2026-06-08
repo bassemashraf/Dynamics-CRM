@@ -480,7 +480,7 @@ export const Main = (props: IProps) => {
 
         } catch (error: any) {
             console.error("Error checking patrol status:", error);
-            alert("Error checking patrol status: " + (error?.message || error));
+            // alert("Error checking patrol status: " + (error?.message || error));
             setState(prev => ({
                 ...prev,
                 patrolStatus: 'none',
@@ -520,11 +520,11 @@ export const Main = (props: IProps) => {
                 }
 
                 if (!resourceId) {
-                    alert("DEBUG loadTodaysCounts: resourceId is null or empty!");
+                    // alert("DEBUG loadTodaysCounts: resourceId is null or empty!");
                     return { completedToday, remainingToday, campaignsToday, pendingActions };
                 }
 
-                alert(`DEBUG loadTodaysCounts: userId=${userId}, resourceId=${resourceId}`);
+                // alert(`DEBUG loadTodaysCounts: userId=${userId}, resourceId=${resourceId}`);
 
                 // Use ISO date range — works both online and offline in Field Service Mobile
                 const todayStart = new Date();
@@ -539,7 +539,7 @@ export const Main = (props: IProps) => {
                     const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
                     completedToday = completedResults.entities.length;
                 } catch(err: any) {
-                    alert("DEBUG completedQuery failed: " + (err?.message || err));
+                    // alert("DEBUG completedQuery failed: " + (err?.message || err));
                 }
 
                 const bookingStatusGuid = 'f16d80d1-fd07-4237-8b69-187a11eb75f9';
@@ -548,18 +548,27 @@ export const Main = (props: IProps) => {
                     const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                     remainingToday = remainingResults.entities.length;
                 } catch(err: any) {
-                    alert("DEBUG remainingQuery failed: " + (err?.message || err));
+                    // alert("DEBUG remainingQuery failed: " + (err?.message || err));
                 }
 
                 // Split into two separate queries (offline doesn't support FetchXML link-entity)
-                // Step 1: Get inspection actions owned by user with status not in [100000003, 100000005]
+                // Step 1: Get inspection actions owned by user
+                // NOTE: Offline mode does NOT support the 'ne' (not-equal) operator — it is silently ignored,
+                // which causes ALL records to be returned. Instead, we retrieve all actions for the user
+                // and filter out the excluded statuses (100000003, 100000005) client-side.
                 try {
-                    const inspectionActionsQuery = `?$select=duc_inspectionactionid&$filter=ownerid eq '${userId}' and duc_status ne 100000003 and duc_status ne 100000005`;
+                    const inspectionActionsQuery = `?$select=duc_inspectionactionid,duc_status&$filter=_ownerid_value eq '${userId}'`;
                     const inspectionActionsResult = await xrm.WebApi.retrieveMultipleRecords("duc_inspectionaction", inspectionActionsQuery);
 
-                    if (inspectionActionsResult.entities.length > 0) {
+                    // Client-side filter: exclude statuses 100000003 and 100000005
+                    const EXCLUDED_STATUSES = [100000003, 100000005];
+                    const filteredActions = inspectionActionsResult.entities.filter(
+                        (e: any) => !EXCLUDED_STATUSES.includes(e.duc_status)
+                    );
+
+                    if (filteredActions.length > 0) {
                         // Step 2: For each inspection action, check if an active work order references it
-                        const actionIds = inspectionActionsResult.entities.map(
+                        const actionIds = filteredActions.map(
                             (e: any) => e.duc_inspectionactionid as string
                         );
 
@@ -581,17 +590,17 @@ export const Main = (props: IProps) => {
                                     uniqueWorkOrderIds.add(wo.msdyn_workorderid);
                                 }
                             } catch (woErr: any) {
-                                alert("DEBUG batch work order query failed: " + (woErr?.message || woErr));
+                                // alert("DEBUG batch work order query failed: " + (woErr?.message || woErr));
                             }
                         }
 
                         pendingActions = uniqueWorkOrderIds.size;
                     }
                 } catch(err: any) {
-                    alert("DEBUG pendingActionsQuery failed: " + (err?.message || err));
+                    // alert("DEBUG pendingActionsQuery failed: " + (err?.message || err));
                 }
 
-                alert(`DEBUG loadTodaysCounts: completed=${completedToday}, remaining=${remainingToday}, pending=${pendingActions}`);
+                // alert(`DEBUG loadTodaysCounts: completed=${completedToday}, remaining=${remainingToday}, pending=${pendingActions}`);
 
                 return { completedToday, remainingToday, campaignsToday, pendingActions };
 

@@ -564,6 +564,14 @@ async function runProcess() {
         return;
     }
 
+    var validatePercentage = await updateServiceTasksPercent();
+    if (!validatePercentage) {
+        var alertText = "Please make sure to fill all required fields in the inspection template, يرجى التأكد من تعبئة جميع الحقول الإلزامية في نموذج التفتيش.";
+        Xrm.Navigation.openAlertDialog({ text: alertText });
+        Xrm.Utility.closeProgressIndicator();
+        return;
+    }
+
     try {
         var form = Xrm.Page;
         var workOrderId = form.data.entity.getId().replace(/[{}]/g, "");

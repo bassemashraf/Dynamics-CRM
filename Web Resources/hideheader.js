@@ -96,19 +96,71 @@ function toggleOfflineFields(executionContext) {
 
         var offlineField = formContext.getControl("duc_name");       // Offline PCF component
         var onlineField = formContext.getControl("duc_onlinehome"); // Online PCF component
+        var modeMessage = "";
 
         if (isCurrentlyOffline) {
             // --- OFFLINE mode ---
             if (offlineField) offlineField.setVisible(true);
             if (onlineField) onlineField.setVisible(false);
+            modeMessage = "You are currently in Offline Mode.";
             console.log("[HomeOnload] Offline mode detected — showing duc_name, hiding duc_onlinehome.");
         } else {
             // --- ONLINE mode ---
             if (offlineField) offlineField.setVisible(false);
             if (onlineField) onlineField.setVisible(true);
+            modeMessage = "You are currently in Online Mode.";
             console.log("[HomeOnload] Online mode detected — showing duc_onlinehome, hiding duc_name.");
+        }
+
+        // Show alert notification
+        if (typeof Xrm !== "undefined" && Xrm.Navigation && Xrm.Navigation.openAlertDialog) {
+            Xrm.Navigation.openAlertDialog({ text: modeMessage }).catch(function (error) {
+                console.log("[HomeOnload] Alert notification error: " + error.message);
+            });
         }
     } catch (e) {
         console.log("[HomeOnload] toggleOfflineFields error: " + e.message);
     }
+}
+
+/**
+ * Toggles visibility between two custom fields based on offline mode.
+ *
+ * @param {Object} executionContext - The form execution context passed by CRM.
+ * @param {string} onlineFieldName - The logical name of the online field.
+ * @param {string} offlineFieldName - The logical name of the offline field.
+ */
+function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineFieldName) {
+    var formContext = executionContext.getFormContext();
+
+    try {
+        var isCurrentlyOffline = isOffline();
+
+        var onlineField = formContext.getControl(onlineFieldName);
+        var offlineField = formContext.getControl(offlineFieldName);
+
+        if (isCurrentlyOffline) {
+            // --- OFFLINE mode ---
+            if (onlineField && onlineField.getVisible()) {
+                if (offlineField) offlineField.setVisible(true);
+                onlineField.setVisible(false);
+                console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
+            }
+        }
+    } catch (e) {
+        console.log("[toggleSpecificOfflineFields] error: " + e.message);
+    }
+}
+
+function isOffline() {
+    try {
+        // Check if user is on an offline profile (works even WITH internet connection).
+        // isAvailableOffline returns true when the entity is part of the active
+        // Mobile Offline profile — meaning the user is on the offline-first app.
+        if (Xrm.WebApi.isAvailableOffline &&
+            Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
+        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
 }
