@@ -189,8 +189,11 @@ async function uLA(woId) {
         });
 
         // Run offline plugin logic inline (no external dependency)
-        step = "Running offline action logic";
-        await runOfflineActionLogic(actionIdToSet, peId, woId);
+        // Only run offline — when online the server-side plugin handles this
+        if (isOffline()) {
+            step = "Running offline action logic";
+            await runOfflineActionLogic(actionIdToSet, peId, woId);
+        }
 
     } catch (e) {
         var errMsg = "[uLA] Error at step: " + step
@@ -526,21 +529,21 @@ async function createDailyInspection() {
             // Create new attendance record
             step = "Creating new attendance record";
             const attendanceData = {
-                "duc_User@odata.bind": `/systemusers(${createdBy})`,
+                "duc_User@odata.bind": `systemusers(${createdBy})`,
                 "duc_createdoffline": offline
             };
 
             const attendanceResult = await Xrm.WebApi.createRecord("duc_attendance", attendanceData);
-            attendanceId = attendanceResult.id;
+            attendanceId = attendanceResult.id.replace(/[{}]/g, "");
             console.log("Created new attendance record: " + attendanceId);
         }
 
         // Create daily inspection record with attendance lookup
         step = "Creating daily inspection record";
         const recordData = {
-            "duc_WorkOrder@odata.bind": `/msdyn_workorders(${workOrderId})`,
-            "duc_BookableResource@odata.bind": `/bookableresources(${resourceId})`,
-            "duc_Attendance@odata.bind": `/duc_attendances(${attendanceId})`,
+            "duc_WorkOrder@odata.bind": `msdyn_workorders(${workOrderId})`,
+            "duc_BookableResource@odata.bind": `bookableresources(${resourceId})`,
+            "duc_Attendance@odata.bind": `duc_attendances(${attendanceId})`,
             "duc_startinspectiontime": currentDateTime,
             "duc_createdoffline": offline
         };

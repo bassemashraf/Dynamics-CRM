@@ -54,6 +54,12 @@ async function onLoad(executionContext) {
 
     registerSurveyTabReLock(executionContext);
 
+    // Toggle specific offline buttons
+
+    toggleSpecificOfflineFields(executionContext, "duc_nextbutton", "duc_nextbuttonoffline");
+    toggleSpecificOfflineFields(executionContext, "duc_savebutton", "duc_savebuttonoffline");
+
+
     //Add Permit Prefilter
     const ctrl = formContext.getControl(PERMIT_LOOKUP_FIELD);
 
@@ -1059,8 +1065,8 @@ function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineF
 
         if (isCurrentlyOffline) {
             // --- OFFLINE mode ---
-            if (onlineField && onlineField.getVisible()) {
-                if (offlineField) offlineField.setVisible(true);
+            if (onlineField.getVisible()) {
+                offlineField.setVisible(true);
                 onlineField.setVisible(false);
                 console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
             }
@@ -1069,7 +1075,6 @@ function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineF
         console.log("[toggleSpecificOfflineFields] error: " + e.message);
     }
 }
-
 function isUserOffline() {
     try {
         // Check if user is on an offline profile (works even WITH internet connection).

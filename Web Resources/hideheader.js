@@ -113,11 +113,11 @@ function toggleOfflineFields(executionContext) {
         }
 
         // Show alert notification
-        if (typeof Xrm !== "undefined" && Xrm.Navigation && Xrm.Navigation.openAlertDialog) {
-            Xrm.Navigation.openAlertDialog({ text: modeMessage }).catch(function (error) {
-                console.log("[HomeOnload] Alert notification error: " + error.message);
-            });
-        }
+        // if (typeof Xrm !== "undefined" && Xrm.Navigation && Xrm.Navigation.openAlertDialog) {
+        //     Xrm.Navigation.openAlertDialog({ text: modeMessage }).catch(function (error) {
+        //         console.log("[HomeOnload] Alert notification error: " + error.message);
+        //     });
+        // }
     } catch (e) {
         console.log("[HomeOnload] toggleOfflineFields error: " + e.message);
     }
@@ -134,15 +134,15 @@ function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineF
     var formContext = executionContext.getFormContext();
 
     try {
-        var isCurrentlyOffline = isOffline();
+        var isCurrentlyOffline = isUserOffline();
 
         var onlineField = formContext.getControl(onlineFieldName);
         var offlineField = formContext.getControl(offlineFieldName);
 
         if (isCurrentlyOffline) {
             // --- OFFLINE mode ---
-            if (onlineField && onlineField.getVisible()) {
-                if (offlineField) offlineField.setVisible(true);
+            if (onlineField.getVisible()) {
+                offlineField.setVisible(true);
                 onlineField.setVisible(false);
                 console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
             }
@@ -152,7 +152,7 @@ function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineF
     }
 }
 
-function isOffline() {
+function isUserOffline() {
     try {
         // Check if user is on an offline profile (works even WITH internet connection).
         // isAvailableOffline returns true when the entity is part of the active

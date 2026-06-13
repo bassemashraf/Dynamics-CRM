@@ -1442,7 +1442,7 @@ export class MultiTypeInspection extends React.Component<
             await this.xrm.Navigation.openForm({
                 entityName: "msdyn_workorder",
                 entityId: workOrderId,
-                formId: "eded7d77-6dc4-ed11-b596-6045bdf00fa1",
+                formId: "b7b3d199-8809-f111-8341-6045bd8e2841",
                 openInNewWindow: true,
             });
 

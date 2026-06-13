@@ -30,70 +30,200 @@ function setSectionVisible(formContext, tabName, sectionName, visible) {
  * - Online:  _duc_incidenttype_value eq <GUID>
  * - Offline: duc_incidenttype eq <GUID>
  ***************************************/
+//async function toggleSectionFromConfigByCode(formContext, tabName, sectionName, configCode) {
+//    try {
+//        var isOff = isOffline();
+
+//        // Hide section by default
+//        setSectionVisible(formContext, tabName, sectionName, false);
+
+//        // Step 1: Get Work Order Incident lookup
+//        var woiAttr = formContext.getAttribute("msdyn_workorderincident");
+//        if (!woiAttr || !woiAttr.getValue()) {
+//            console.warn("[toggleSection] No Work Order Incident on form for section: " + sectionName);
+//            return;
+//        }
+//        var woiId = woiAttr.getValue()[0].id.replace(/[{}]/g, "");
+
+//        // Step 2: Retrieve Incident Type from Work Order Incident
+//        // Online uses _msdyn_incidenttype_value, offline reads it from the record object directly
+//        var woiRecord = await Xrm.WebApi.retrieveRecord(
+//            "msdyn_workorderincident",
+//            woiId,
+//            "?$select=_msdyn_incidenttype_value"
+//        );
+
+//        var incidentTypeId = woiRecord._msdyn_incidenttype_value;
+//        if (!incidentTypeId) {
+//            console.warn("[toggleSection] No Incident Type on Work Order Incident.");
+//            return;
+//        }
+//        incidentTypeId = incidentTypeId.replace(/[{}]/g, "");
+
+//        // Step 3: Query config — use schema field for offline, _value alias for online
+//        var incidentTypeField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
+
+//        var query = "?$select=duc_actionvalue" +
+//            "&$filter=duc_code eq '" + configCode + "'" +
+//            " and " + incidentTypeField + " eq " + incidentTypeId;
+
+//        var result = await Xrm.WebApi.retrieveMultipleRecords("duc_incidenttypeconfigurations", query);
+
+//        if (!result.entities || result.entities.length === 0) {
+//            console.warn("[toggleSection] No config found for code: " + configCode);
+//            return;
+//        }
+
+//        var show = (result.entities[0].duc_actionvalue === 1);
+
+//        // Special rule: Penalties section requires duc_question1 = "مخالفة"
+//        if (show && sectionName === "Work_Order_Penalties_Section") {
+//            var q1 = formContext.getAttribute("duc_question1");
+//            var q1Val = q1 ? (q1.getValue() || "") : "";
+//            show = q1Val.toString().trim().indexOf("مخالفة") > -1;
+//        }
+
+//        setSectionVisible(formContext, tabName, sectionName, show);
+
+//    } catch (e) {
+//        var errMsg = "[toggleSectionFromConfigByCode] Error for code: " + configCode
+//            + "\nSection: " + sectionName
+//            + "\nOffline: " + isOffline()
+//            + "\nError: " + (e.message || JSON.stringify(e));
+//        console.error(errMsg, e);
+//        Xrm.Navigation.openAlertDialog({ text: errMsg });
+//    }
+//}
+
+
 async function toggleSectionFromConfigByCode(formContext, tabName, sectionName, configCode) {
     try {
-        var isOff = isOffline();
-
-        // Hide section by default
+        // Hide by default
         setSectionVisible(formContext, tabName, sectionName, false);
 
-        // Step 1: Get Work Order Incident lookup
-        var woiAttr = formContext.getAttribute("msdyn_workorderincident");
-        if (!woiAttr || !woiAttr.getValue()) {
-            console.warn("[toggleSection] No Work Order Incident on form for section: " + sectionName);
-            return;
-        }
-        var woiId = woiAttr.getValue()[0].id.replace(/[{}]/g, "");
-
-        // Step 2: Retrieve Incident Type from Work Order Incident
-        // Online uses _msdyn_incidenttype_value, offline reads it from the record object directly
-        var woiRecord = await Xrm.WebApi.retrieveRecord(
-            "msdyn_workorderincident",
-            woiId,
-            "?$select=_msdyn_incidenttype_value"
-        );
-
-        var incidentTypeId = woiRecord._msdyn_incidenttype_value;
-        if (!incidentTypeId) {
-            console.warn("[toggleSection] No Incident Type on Work Order Incident.");
-            return;
-        }
-        incidentTypeId = incidentTypeId.replace(/[{}]/g, "");
-
-        // Step 3: Query config — use schema field for offline, _value alias for online
-        var incidentTypeField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
-
-        var query = "?$select=duc_actionvalue" +
-            "&$filter=duc_code eq '" + configCode + "'" +
-            " and " + incidentTypeField + " eq " + incidentTypeId;
-
-        var result = await Xrm.WebApi.retrieveMultipleRecords("duc_incidenttypeconfigurations", query);
-
-        if (!result.entities || result.entities.length === 0) {
-            console.warn("[toggleSection] No config found for code: " + configCode);
+        // Incident Type always from formContext
+        const incidentTypeAttr = formContext.getAttribute("duc_incidenttype");
+        if (!incidentTypeAttr || !incidentTypeAttr.getValue()) {
+            console.warn("No Incident Type on form");
             return;
         }
 
-        var show = (result.entities[0].duc_actionvalue === 1);
+        const incidentTypeId = incidentTypeAttr.getValue()[0].id.replace(/[{}]/g, "");
 
-        // Special rule: Penalties section requires duc_question1 = "مخالفة"
+        // Offline vs Online only affects filter field names
+        const isOff = isOffline();
+        const incTypeFilterField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
+
+        // Query configuration by code + incident type
+        const query = `?$select=duc_actionvalue&$filter=duc_code eq '${configCode}' and ${incTypeFilterField} eq ${incidentTypeId}`;
+        const result = await Xrm.WebApi.retrieveMultipleRecords("duc_incidenttypeconfigurations", query);
+
+        if (result.entities.length === 0) {
+            console.warn("No matching configuration found");
+            return;
+        }
+
+        let show = (result.entities[0].duc_actionvalue === 1);
+
+        // =========================
+        // Special case (OFFLINE SAFE)
+        // =========================
         if (show && sectionName === "Work_Order_Penalties_Section") {
-            var q1 = formContext.getAttribute("duc_question1");
-            var q1Val = q1 ? (q1.getValue() || "") : "";
-            show = q1Val.toString().trim().indexOf("مخالفة") > -1;
+
+            const recordId = formContext.data.entity.getId().replace(/[{}]/g, "");
+
+            try {
+                // Step 1: Get Inspection Response Id from Work Order Service Task
+                const wost = await Xrm.WebApi.retrieveRecord(
+                    "msdyn_workorderservicetask",
+                    recordId,
+                    "?$select=_msdyn_inspectionresponseid_value"
+                );
+
+                const inspectionResponseId = wost["_msdyn_inspectionresponseid_value"];
+
+                if (!inspectionResponseId) {
+                    show = false;
+                } else {
+
+                    // Step 2: Retrieve Inspection Response
+                    const inspection = await Xrm.WebApi.retrieveRecord(
+                        "msdyn_inspectionresponse",
+                        inspectionResponseId,
+                        "?$select=msdyn_responsejsoncontent"
+                    );
+
+                    const raw = inspection["msdyn_responsejsoncontent"];
+
+                    if (raw) {
+                        try {
+                            let decoded;
+
+                            // =========================
+                            // STEP 1: Base64 decode
+                            // =========================
+                            let base64Decoded = atob(raw);
+
+                            // =========================
+                            // STEP 2: Convert to UTF-8 (important for Arabic)
+                            // =========================
+                            let utf8Decoded = decodeURIComponent(
+                                Array.prototype.map.call(base64Decoded, c =>
+                                    '%' + c.charCodeAt(0).toString(16).padStart(2, '0')
+                                ).join('')
+                            );
+
+                            // =========================
+                            // STEP 3: URL decode (handle multiple encoding)
+                            // =========================
+                            decoded = utf8Decoded;
+                            let prev;
+
+                            do {
+                                prev = decoded;
+                                decoded = decodeURIComponent(decoded);
+                            } while (decoded !== prev && decoded.includes("%"));
+
+                            // =========================
+                            // STEP 4: Parse JSON
+                            // =========================
+                            const parsed = JSON.parse(decoded);
+
+                            const q1 = parsed?.Question1;
+
+                            //alert("Q1: " + q1);
+
+                            const hasViolation =
+                                typeof q1 === "string" &&
+                                (q1.includes("مخالفة") || q1.includes("غير مستوف الشروط"));
+
+                            show = hasViolation;
+
+                        } catch (err) {
+                            //alert("Decoding/parsing error: " + err.message);
+                            console.error("Decoding/parsing error:", err.message, raw);
+                            show = false;
+                        }
+                    } else {
+                        show = false;
+                    }
+                }
+
+            } catch (err) {
+                alert("Inspection retrieve error:", err.message);
+                console.error("Inspection retrieve error:", err.message);
+                show = false;
+            }
         }
 
+        // Apply final visibility
         setSectionVisible(formContext, tabName, sectionName, show);
 
     } catch (e) {
-        var errMsg = "[toggleSectionFromConfigByCode] Error for code: " + configCode
-            + "\nSection: " + sectionName
-            + "\nOffline: " + isOffline()
-            + "\nError: " + (e.message || JSON.stringify(e));
-        console.error(errMsg, e);
-        Xrm.Navigation.openAlertDialog({ text: errMsg });
+        console.error("[toggleSectionFromConfigByCode] " + configCode + ": " + (e.message || e));
     }
 }
+
 
 /***************************************
  * SECTION TOGGLE: Run all sections
@@ -143,6 +273,8 @@ async function saveAndRefresh(formContext) {
         step = "Refreshing form";
         Xrm.Utility.closeProgressIndicator();
 
+        //reopenFormAfterSave(formContext);
+
         // Use data.refresh() instead of openForm() —
         // openForm with an entityId can fail in offline mode (platform can't locate
         // record in local cache by ID). data.refresh(false) reloads the current form
@@ -151,7 +283,7 @@ async function saveAndRefresh(formContext) {
             try { formContext.data.refresh(false); } catch (e) {
                 console.warn("[saveAndRefresh] data.refresh failed: " + e.message);
             }
-        }, 1500);
+        }, 1500); // 1.5 sec
 
     } catch (e) {
         Xrm.Utility.closeProgressIndicator();
@@ -163,23 +295,42 @@ async function saveAndRefresh(formContext) {
     }
 }
 
+
+function reopenFormAfterSave(formContext) {
+    var entityId = formContext.data.entity.getId();
+    var entityName = formContext.data.entity.getEntityName();
+
+    var entityFormOptions = {
+        entityName: entityName,
+        entityId: entityId
+    };
+
+    // Open the form again
+    Xrm.Navigation.openForm(entityFormOptions).then(
+        function (success) {
+            console.log("Form reopened successfully");
+        },
+        function (error) {
+            console.error("Error reopening form: " + error.message);
+        }
+    );
+}
+
 /***************************************
  * ONLOAD LOGIC (copied from WOST/onload.js)
  * Re-applies form state after save
  ***************************************/
 async function runOnLoadLogicAfterSave(formContext) {
     try {
-        // 1. Hide inspection controls
-        setTimeout(function () {
-            try {
-                var inspCtrl = formContext.getControl("msdyn_inspection");
-                if (inspCtrl) inspCtrl.setVisible(false);
-                var resultCtrl = formContext.getControl("msdyn_inspectiontaskresult");
-                if (resultCtrl) resultCtrl.setVisible(false);
-            } catch (e) {
-                console.warn("[runOnLoadLogicAfterSave] Hide inspection controls: " + e.message);
-            }
-        }, 3000);
+        // 1. Hide inspection controls (avoid brittle setTimeout if possible)
+        try {
+            const inspCtrl = formContext.getControl("msdyn_inspection");
+            if (inspCtrl) inspCtrl.setVisible(false);
+            const resultCtrl = formContext.getControl("msdyn_inspectiontaskresult");
+            if (resultCtrl) resultCtrl.setVisible(false);
+        } catch (e) {
+            console.warn("[runOnLoadLogicAfterSave] Hide inspection controls: " + e.message);
+        }
 
         // 2. Hide ribbon
         try {
@@ -193,7 +344,7 @@ async function runOnLoadLogicAfterSave(formContext) {
         // 3. Disable survey form if needed
         try {
             if (formContext.getAttribute("msdyn_surveyboundedoutput")) {
-                var enableForAdmin = formContext.getAttribute("duc_enableforadmin");
+                const enableForAdmin = formContext.getAttribute("duc_enableforadmin");
                 if (enableForAdmin && !enableForAdmin.getValue()) {
                     disableSurveyAfterSave(formContext);
                 }
@@ -209,8 +360,10 @@ async function runOnLoadLogicAfterSave(formContext) {
             console.warn("[runOnLoadLogicAfterSave] HideGrid: " + e.message);
         }
 
+        const isOff = isOffline();
+
         // 5. Toggle sections from config
-        var sectionsToToggle = [
+        const sectionsToToggle = [
             { tab: "GeneralTab", section: "Samples_Section", code: "Work Order Service Task - Sample Section" },
             { tab: "GeneralTab", section: "Products_Production_Capacity_Section", code: "Work Order Service Task - Products Section" },
             { tab: "GeneralTab", section: "Raw_Materials_Section", code: "Work Order Service Task - Raw Materials Section" },
@@ -222,72 +375,16 @@ async function runOnLoadLogicAfterSave(formContext) {
             { tab: "GeneralTab", section: "GeneralTab_section_permitsDetails", code: "GeneralTab_section_permitsDetails" }
         ];
 
-        sectionsToToggle.forEach(function (x) {
-            toggleSectionFromConfigByCode_OnLoad(formContext, x.tab, x.section, x.code);
-        });
+        // Await each toggle to ensure visibility logic completes before moving on
+        for (const x of sectionsToToggle) {
+            await toggleSectionFromConfigByCode(formContext, x.tab, x.section, x.code);
+        }
 
         // 6. Toggle next button from inspection result
         await toggleNextButtonAfterSave(formContext);
 
     } catch (e) {
         console.warn("[runOnLoadLogicAfterSave] Error: " + (e.message || JSON.stringify(e)));
-    }
-}
-
-/***************************************
- * ONLOAD HELPERS (adapted from WOST/onload.js
- * to work with formContext directly)
- ***************************************/
-function toggleSectionFromConfigByCode_OnLoad(formContext, tabName, sectionName, configCode) {
-    try {
-        setSectionVisible(formContext, tabName, sectionName, false);
-
-        var woiAttr = formContext.getAttribute("msdyn_workorderincident");
-        if (!woiAttr || !woiAttr.getValue()) return;
-
-        var woiId = woiAttr.getValue()[0].id.replace(/[{}]/g, "");
-
-        Xrm.WebApi.retrieveRecord(
-            "msdyn_workorderincident",
-            woiId,
-            "?$select=_msdyn_incidenttype_value"
-        ).then(function (woiResult) {
-            var incidentTypeId = woiResult._msdyn_incidenttype_value;
-            if (!incidentTypeId) return;
-
-            var isOff = isOffline();
-            var incTypeFilterField = isOff ? "duc_incidenttype" : "_duc_incidenttype_value";
-
-            var query = "?$select=duc_actionvalue" +
-                "&$filter=duc_code eq '" + configCode + "'" +
-                " and " + incTypeFilterField + " eq " + incidentTypeId;
-
-            Xrm.WebApi.retrieveMultipleRecords("duc_incidenttypeconfigurations", query).then(
-                function (result) {
-                    if (result.entities.length === 0) return;
-
-                    var show = (result.entities[0].duc_actionvalue === 1);
-
-                    if (show && sectionName === "Work_Order_Penalties_Section") {
-                        var q1 = formContext.getAttribute("duc_question1");
-                        var q1Val = q1 ? (q1.getValue() || "") : "";
-                        var hasViolation = (q1Val.toString().trim().indexOf("مخالفة") > -1)
-                            || (q1Val.toString().trim().indexOf("غير مستوف الشروط") > -1);
-                        show = hasViolation;
-                    }
-
-                    setSectionVisible(formContext, tabName, sectionName, show);
-                },
-                function (err) {
-                    console.warn("[toggleSectionFromConfigByCode_OnLoad] " + configCode + ": " + (err.message || err));
-                }
-            );
-        }, function (error) {
-            console.warn("[toggleSectionFromConfigByCode_OnLoad] WOI retrieval: " + (error.message || error));
-        });
-
-    } catch (e) {
-        console.warn("[toggleSectionFromConfigByCode_OnLoad] " + configCode + ": " + (e.message || e));
     }
 }
 
