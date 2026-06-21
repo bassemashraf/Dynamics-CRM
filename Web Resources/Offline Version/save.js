@@ -488,7 +488,7 @@ function hideGridAfterSave(formContext) {
     if (!tab) return;
 
     var section = tab.sections.get("InspectionTerms");
-    var saveButton = formContext.getControl("duc_savebutton");
+    var saveButton = formContext.getControl("duc_savebuttonoffline");
 
     if (grid && grid.getGrid) {
         try {

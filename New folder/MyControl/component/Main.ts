@@ -95,7 +95,7 @@ const STYLES = {
     bgGreenLight: { backgroundColor: "#CCEEE9" },
     welcomeBanner: {
         fontSize: "18px",
-        backgroundColor: "#CFE0E5",
+        backgroundColor: "#113f6170",
         paddingTop: 8,
         paddingBottom: 8,
         textAlign: "center" as const,
@@ -538,7 +538,7 @@ export const Main = (props: IProps) => {
                 try {
                     const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
                     completedToday = completedResults.entities.length;
-                } catch(err: any) {
+                } catch (err: any) {
                     // alert("DEBUG completedQuery failed: " + (err?.message || err));
                 }
 
@@ -547,7 +547,7 @@ export const Main = (props: IProps) => {
                 try {
                     const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
                     remainingToday = remainingResults.entities.length;
-                } catch(err: any) {
+                } catch (err: any) {
                     // alert("DEBUG remainingQuery failed: " + (err?.message || err));
                 }
 
@@ -596,7 +596,7 @@ export const Main = (props: IProps) => {
 
                         pendingActions = uniqueWorkOrderIds.size;
                     }
-                } catch(err: any) {
+                } catch (err: any) {
                     // alert("DEBUG pendingActionsQuery failed: " + (err?.message || err));
                 }
 

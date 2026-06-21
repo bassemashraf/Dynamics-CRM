@@ -897,35 +897,23 @@ export class MultiTypeInspection extends React.Component<
             boatNumber
         } = this.state;
 
+        if (!selectedInspectionType)
+            return "Account";
 
         if (name && name.trim() !== "") {
             return name.trim();
         }
 
-        if (!selectedInspectionType)
-            return "Account";
+        const typeInfo = this.state.inspectionTypes.find(t => t.value === selectedInspectionType);
 
-        var entityResult = await Xrm.WebApi.retrieveMultipleRecords('duc_organizationunitaccounttypes',
-            `?$top=1&$select=duc_name,duc_namear&$expand=duc_AccountType($select=duc_overrideaccountname)&$filter=duc_AccountType/duc_accounttype eq ${selectedInspectionType}`);
-
-        var prefixEn = '';
-        var prefixAr = '';
-
-        // Check if there's an override account name
-        if (entityResult.entities.length > 0) {
-            const record = entityResult.entities[0];
-
-            // If override account name exists, use it
-            if (record.duc_AccountType?.duc_overrideaccountname) {
-                return record.duc_AccountType.duc_overrideaccountname;
-            }
-
-            if (record.duc_name) {
-                prefixEn = `${record.duc_name} | `;
-            }
-
-            if (record.duc_namear) {
-                prefixAr = ` | ${record.duc_namear}`;
+        if (typeInfo && typeInfo.accountTypeId) {
+            try {
+                const accTypeResult = await Xrm.WebApi.retrieveRecord("duc_accounttype", typeInfo.accountTypeId, "?$select=duc_overrideaccountname");
+                if (accTypeResult.duc_overrideaccountname) {
+                    return accTypeResult.duc_overrideaccountname;
+                }
+            } catch (e) {
+                console.warn("Failed to get override account name");
             }
         }
 
@@ -936,38 +924,34 @@ export class MultiTypeInspection extends React.Component<
                         ? vehicleBrands.find((v) => v.value === vehicleBrand)?.label ||
                         vehicleBrand
                         : "";
-                return `${prefixEn}${id} ${carColor} ${brandLabel}${prefixAr}`.trim();
+                return `${id} ${carColor} ${brandLabel}`.trim() || "Account";
 
             case 2: // Individual
             case 15: // Individual-like
-                return `${prefixEn}${qataryId} ${name}${prefixAr}`.trim();
-
             case 3: // Cabin
-                return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
-
             case 6: // Wilderness Camp
-                return name || `${prefixEn}${qataryId}${prefixAr}`.trim();
+                return qataryId || "Account";
 
             case 5: // Company
             case 7: // Manor
-                return `${prefixEn}${this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber}${prefixAr}`.trim();
+                return (this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber) || "Account";
 
             case 10: // Establishment
             case 11: // Hospital
-                return `${prefixEn}${registrationNumber}${prefixAr}`.trim();
+                return registrationNumber || "Account";
 
             case 14: // Boat
-                return `${prefixEn}${boatNumber}${prefixAr}`.trim();
+                return boatNumber || "Account";
 
             case 16: // Project
-                return this.state.projectName || `${prefixEn}Project${prefixAr}`.trim();
+                return this.state.projectName || "Project";
 
             case 13: // Important maritime areas
                 return "Important maritime areas";
 
             case 4: // Anonymous
             default:
-                return `${prefixEn}Account${prefixAr}`.trim();
+                return "Account";
         }
     };
 
