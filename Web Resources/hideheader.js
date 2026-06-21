@@ -77,13 +77,17 @@ function hideFormHeader(executionContext) {
  */
 function isOffline() {
     try {
-        // Check if user is on an offline profile (works even WITH internet connection).
-        // isAvailableOffline returns true when the entity is part of the active
-        // Mobile Offline profile — meaning the user is on the offline-first app.
+        var ctx = Xrm.Utility.getGlobalContext().client;
+        // User is on mobile app AND the offline API namespace exists
+        // → they are on an offline profile (works before first sync)
+        if (ctx.getClient() === "Mobile" &&
+            Xrm.WebApi.offline &&
+            typeof Xrm.WebApi.offline.isAvailableOffline === "function") return true;
+        // Standard checks (work after sync completes)
         if (Xrm.WebApi.isAvailableOffline &&
             Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
-        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
-        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+        if (ctx.isOffline()) return true;
+        if (ctx.getClientState() === "Offline") return true;
     } catch (e) { }
     return false;
 }
@@ -123,44 +127,44 @@ function toggleOfflineFields(executionContext) {
     }
 }
 
-/**
- * Toggles visibility between two custom fields based on offline mode.
- *
- * @param {Object} executionContext - The form execution context passed by CRM.
- * @param {string} onlineFieldName - The logical name of the online field.
- * @param {string} offlineFieldName - The logical name of the offline field.
- */
-function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineFieldName) {
-    var formContext = executionContext.getFormContext();
+// /**
+//  * Toggles visibility between two custom fields based on offline mode.
+//  *
+//  * @param {Object} executionContext - The form execution context passed by CRM.
+//  * @param {string} onlineFieldName - The logical name of the online field.
+//  * @param {string} offlineFieldName - The logical name of the offline field.
+//  */
+// function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineFieldName) {
+//     var formContext = executionContext.getFormContext();
 
-    try {
-        var isCurrentlyOffline = isUserOffline();
+//     try {
+//         var isCurrentlyOffline = isUserOffline();
 
-        var onlineField = formContext.getControl(onlineFieldName);
-        var offlineField = formContext.getControl(offlineFieldName);
+//         var onlineField = formContext.getControl(onlineFieldName);
+//         var offlineField = formContext.getControl(offlineFieldName);
 
-        if (isCurrentlyOffline) {
-            // --- OFFLINE mode ---
-            if (onlineField.getVisible()) {
-                offlineField.setVisible(true);
-                onlineField.setVisible(false);
-                console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
-            }
-        }
-    } catch (e) {
-        console.log("[toggleSpecificOfflineFields] error: " + e.message);
-    }
-}
+//         if (isCurrentlyOffline) {
+//             // --- OFFLINE mode ---
+//             if (onlineField.getVisible()) {
+//                 offlineField.setVisible(true);
+//                 onlineField.setVisible(false);
+//                 console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
+//             }
+//         }
+//     } catch (e) {
+//         console.log("[toggleSpecificOfflineFields] error: " + e.message);
+//     }
+// }
 
-function isUserOffline() {
-    try {
-        // Check if user is on an offline profile (works even WITH internet connection).
-        // isAvailableOffline returns true when the entity is part of the active
-        // Mobile Offline profile — meaning the user is on the offline-first app.
-        if (Xrm.WebApi.isAvailableOffline &&
-            Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
-        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
-        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
-    } catch (e) { }
-    return false;
-}
+// function isUserOffline() {
+//     try {
+//         // Check if user is on an offline profile (works even WITH internet connection).
+//         // isAvailableOffline returns true when the entity is part of the active
+//         // Mobile Offline profile — meaning the user is on the offline-first app.
+//         if (Xrm.WebApi.isAvailableOffline &&
+//             Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
+//         if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+//         if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+//     } catch (e) { }
+//     return false;
+// }

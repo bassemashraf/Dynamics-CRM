@@ -392,32 +392,13 @@ async function toggleVehicleOwnerButton(executionContext) {
         // or type = 3 Cabin
         // or type = 6 Wilderness camps
         //new change on 5 july 2026 , no need to appears for both 3 & 6
-        var showButton = false;
+        var result = await Xrm.WebApi.retrieveMultipleRecords(
+            "account",
+            `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 1  or duc_NewAccountType/duc_accounttype eq 3)&$top=1`
+        );
 
-        if (isOffline()) {
-            // OFFLINE: navigation property filters not supported, use two-step retrieve
-            var accountRecord = await Xrm.WebApi.retrieveRecord(
-                "account", accountId,
-                "?$select=accountid,_parentaccountid_value,_duc_newaccounttype_value"
-            );
-            if (accountRecord._parentaccountid_value === null && accountRecord._duc_newaccounttype_value) {
-                var accountTypeRecord = await Xrm.WebApi.retrieveRecord(
-                    "duc_accounttype", accountRecord._duc_newaccounttype_value,
-                    "?$select=duc_accounttype"
-                );
-                var at = accountTypeRecord.duc_accounttype;
-                showButton = (at === 1 || at === 3);
-            }
-        } else {
-            // ONLINE: use navigation property filter
-            var result = await Xrm.WebApi.retrieveMultipleRecords(
-                "account",
-                `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 1  or duc_NewAccountType/duc_accounttype eq 3)&$top=1`
-            );
-            showButton = result.entities.length > 0;
-        }
-
-        if (showButton) {
+        // Show button only if account type = 1
+        if (result.entities.length > 0) {
             btnCtrl.setVisible(true);
         }
     } catch (error) {
@@ -459,30 +440,15 @@ async function toggleSelectEstablishmentButton(executionContext) {
 
     try {
         // Filter for accounts with account type = 2 (Individual Owner)
-        if (isOffline()) {
-            // OFFLINE: navigation property filters not supported, use two-step retrieve
-            var accountRecord = await Xrm.WebApi.retrieveRecord(
-                "account", accountId,
-                "?$select=accountid,_parentaccountid_value,_duc_newaccounttype_value"
-            );
-            if (accountRecord._parentaccountid_value === null && accountRecord._duc_newaccounttype_value) {
-                var accountTypeRecord = await Xrm.WebApi.retrieveRecord(
-                    "duc_accounttype", accountRecord._duc_newaccounttype_value,
-                    "?$select=duc_accounttype"
-                );
-                if (accountTypeRecord.duc_accounttype === 2) {
-                    isIndividual = true;
-                }
-            }
-        } else {
-            // ONLINE: use navigation property filter
-            var result = await Xrm.WebApi.retrieveMultipleRecords(
-                "account",
-                `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 2)&$top=1`
-            );
-            if (result.entities.length > 0) {
-                isIndividual = true;
-            }
+
+        var result = await Xrm.WebApi.retrieveMultipleRecords(
+            "account",
+            `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 2)&$top=1`
+        );
+
+        if (result.entities.length > 0) {
+
+            isIndividual = true;
         }
 
         var result1 = await Xrm.WebApi.retrieveMultipleRecords(
@@ -523,33 +489,18 @@ async function toggleVehicleOwnerTab(executionContext) {
     var accountId = serviceAccount[0].id.replace(/[{}]/g, "");
 
     try {
-        var showTab = false;
-
-        if (isOffline()) {
-            // OFFLINE: navigation property filters not supported, use two-step retrieve
-            var accountRecord = await Xrm.WebApi.retrieveRecord(
-                "account", accountId,
-                "?$select=accountid,_parentaccountid_value,_duc_newaccounttype_value"
-            );
-            if (accountRecord._parentaccountid_value === null && accountRecord._duc_newaccounttype_value) {
-                var accountTypeRecord = await Xrm.WebApi.retrieveRecord(
-                    "duc_accounttype", accountRecord._duc_newaccounttype_value,
-                    "?$select=duc_accounttype"
-                );
-                var at = accountTypeRecord.duc_accounttype;
-                showTab = (at === 1 || at === 3 || at === 6);
-            }
-        } else {
-            // ONLINE: use navigation property filter
-            var result = await Xrm.WebApi.retrieveMultipleRecords(
-                "account",
-                `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 1 or duc_NewAccountType/duc_accounttype eq 3 or duc_NewAccountType/duc_accounttype eq 6)&$top=1`
-            );
-            showTab = result.entities.length > 0;
-        }
+        var result = await Xrm.WebApi.retrieveMultipleRecords(
+            "account",
+            `?$select=accountid&$filter=accountid eq ${accountId} 
+            and _parentaccountid_value eq null 
+            and (duc_NewAccountType/duc_accounttype eq 1 
+                 or duc_NewAccountType/duc_accounttype eq 3 
+                 or duc_NewAccountType/duc_accounttype eq 6)
+            &$top=1`
+        );
 
         // Show tab if condition matches
-        if (showTab) {
+        if (result.entities.length > 0) {
             tab.setVisible(true);
         }
 
@@ -1416,9 +1367,7 @@ function WO_ManageAddressSections(executionContext) {
     // Function to check for addresses related to work order
     function checkWorkOrderAddresses() {
         var woOptions = "?$select=duc_addressinformationid";
-        // OFFLINE: use schema name in $filter for lookup fields
-        var woFilterField = isOffline() ? "duc_msdyn_workorder" : "_duc_msdyn_workorder_value";
-        woOptions += "&$filter=" + woFilterField + " eq " + workOrderId;
+        woOptions += "&$filter=_duc_msdyn_workorder_value eq " + workOrderId;
         woOptions += "&$top=1"; // We only need to know if at least one exists
 
         Xrm.WebApi.retrieveMultipleRecords("duc_addressinformation", woOptions).then(
@@ -1442,9 +1391,7 @@ function WO_ManageAddressSections(executionContext) {
     // Function to check for addresses related to sub-account
     function checkAccountAddresses(accountId) {
         var accountOptions = "?$select=duc_addressinformationid";
-        // OFFLINE: use schema name in $filter for lookup fields
-        var accFilterField = isOffline() ? "duc_account" : "_duc_account_value";
-        accountOptions += "&$filter=" + accFilterField + " eq " + accountId;
+        accountOptions += "&$filter=_duc_account_value eq " + accountId;
         accountOptions += "&$top=1"; // We only need to know if at least one exists
 
         Xrm.WebApi.retrieveMultipleRecords("duc_addressinformation", accountOptions).then(
@@ -1580,13 +1527,6 @@ async function handleBookingSuggestionVisiblity(executionContext) {
         // Owner is a team, check membership
         const teamId = owner.id.replace(/[{}]/g, "");
         try {
-            // teammembership intersect entity may not be available offline
-            // Skip team membership check when offline (section stays hidden)
-            if (isOffline()) {
-                console.log("Offline mode: skipping team membership check. Section remains hidden.");
-                return;
-            }
-
             const membersResponse = await Xrm.WebApi.retrieveMultipleRecords(
                 "teammembership",
                 `?$filter=teamid eq ${teamId} and systemuserid eq ${loggedUserId}&$select=systemuserid`
