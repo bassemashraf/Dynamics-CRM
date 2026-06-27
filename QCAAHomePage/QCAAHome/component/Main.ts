@@ -107,8 +107,8 @@ const STYLES = {
         textAlign: "center" as const,
         width: "110%",
         maxwidth: "110%",
-        backgroundColor: "#CFE0E5",
-
+        backgroundColor: "#8a1538",
+        color: "#FFFFFF",
         marginBottom: 0,
         fontWeight: "500" as const,
         borderTop: '1px solid rgba(255, 255, 255, 0.28)'
@@ -1042,7 +1042,8 @@ export const Main = (props: IProps) => {
                 {
                     style: {
                         // backgroundImage: `url(${headerBase64})`,
-                        backgroundColor: "#FFACC6",
+                        backgroundColor: "#FFFFFF",
+                        borderBottom: "4px solid #8a1538",
                         backgroundSize: 'cover',
                         backgroundRepeat: 'no-repeat',
                         width: '103%',
