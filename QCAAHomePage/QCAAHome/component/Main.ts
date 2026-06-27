@@ -1,0 +1,1345 @@
+/* eslint-disable */
+import * as React from "react";
+import { IInputs } from "../generated/ManifestTypes";
+import { SearchResults } from "./SearchResults";
+import { logoBase64 } from "../images/logo64";
+import { startSvgContent } from "../images/start";
+import { magnify } from "../images/magnify";
+import { calender } from "../images/calender";
+import { clock } from "../images/clock";
+import { check } from "../images/check";
+import { filters } from "../images/filters";
+import { AdvancedSearch } from './AdvancedSearch';
+import { MultiTypeInspection } from './MultiTypeInspection';
+import { close } from '../images/close';
+import { headerBase64 } from "../images/header";
+import { stickynote } from "../images/stickynote";
+
+// Cache interface for organization unit data
+interface OrgUnitCache {
+    orgUnitId: string;
+    orgUnitName: string;
+    isNaturalReserve: boolean;
+    isWildlifeSection: boolean;
+    unknownAccountId?: string;
+    siteAccountId?: string;
+    unknownAccountName?: string;
+    siteAccountName?: string;
+    incidentTypeId?: string;
+    incidentTypeName?: string;
+    // COMMENTED OUT: inspectionCustomerClassification field no longer used
+    // inspectionCustomerClassification?: number;
+    timestamp: number;
+}
+
+// Define the interface for the component's internal state.
+interface State {
+    searchText: string;
+    pendingTodayBookings: number | null;
+    completedTodayWorkorders: number | null;
+    pendingWorkOrderActions: number | null;
+    TodayCampaigns: number | null;
+    userName: string;
+    message?: string;
+    isLoading: boolean;
+    showResults: boolean;
+    searchResults: any[];
+    showAdvancedSearch: boolean;
+    patrolStatus: 'none' | 'start' | 'end'; // Track patrol button state
+    activePatrolId?: string; // Store active patrol campaign ID
+    activePatrolName?: string; // Store active patrol campaign name
+    isNaturalReserve: boolean; // Track if org unit is Natural Reserve
+    isWildlifeSection: boolean; // Track if org unit is Wildlife section
+    unknownAccountId?: string; // Store unknown account ID for anonymous inspections
+    unknownAccountName?: string; // Store unknown account name
+    siteAccountId?: string; // Store site account ID for site inspections
+    siteAccountName?: string; // Store site account name
+    incidentTypeName?: string; // Store incident type name for Natural Reserve
+    incidentTypeId?: string; // Store incident type ID for Natural Reserve
+    orgUnitId?: string; // Store organization unit ID
+    organizationUnitName?: string; // Store organization unit name
+    showMultiTypeInspection: boolean; // Track if MultiTypeInspection modal is open
+    // COMMENTED OUT: inspectionCustomerClassification field no longer used
+    // inspectionCustomerClassification?: number;
+    defaultInspectionType?: number; // NEW: Store default inspection type for MultiTypeInspection
+    lockInspectionType?: boolean; // NEW: Flag to lock inspection type field
+}
+
+// Define the interface for the component's properties (props) coming from the Power Apps Component Framework (PCF).
+interface IProps {
+    context: ComponentFramework.Context<IInputs>;
+}
+
+// Localized strings interface
+interface LocalizedStrings {
+    WelcomeBack: string;
+    FindFacility: string;
+    RemainingInspections: string;
+    CompletedInspections: string;
+    PendingWorkOrderActions: string;
+    ScheduledInspections: string;
+    TodaysPatrols: string;
+    StartInspection: string;
+    SearchPlaceholder: string;
+    NoResults: string;
+    Loading: string;
+    SearchPrompt: string;
+    OfflineNavigationBlocked: string;
+    OfflineQuickCreateBlocked: string;
+    StartPatrol: string;
+    EndPatrol: string;
+    StartAnonymousInspection: string;
+    PendingInspections: string;
+    StartMultiTypeInspection: string;
+}
+
+// --- Custom Styles Derived from main.css & Bootstrap ---
+const STYLES = {
+    textBrown: { color: "#A89360" },
+    textGreen: { color: "#29A283" },
+    bgBrownLight: { backgroundColor: "#ECE7DA" },
+    bgGreenLight: { backgroundColor: "#CCEEE9" },
+    bgpinkLight: { backgroundColor: "#FFACC6" },
+    welcomeBanner: {
+        fontSize: "18px",
+        paddingTop: 12,
+        paddingBottom: 12,
+        textAlign: "center" as const,
+        width: "110%",
+        maxwidth: "110%",
+        backgroundColor: "#CFE0E5",
+
+        marginBottom: 0,
+        fontWeight: "500" as const,
+        borderTop: '1px solid rgba(255, 255, 255, 0.28)'
+    },
+    actions: {
+        // backgroundColor: "#F3F3F3",
+        padding: 12,
+        paddingTop: 16,
+        paddingBottom: 16,
+        display: "flex",
+        width: "100%",
+        maxWidth: "100%",
+        justifyContent: "space-between",
+        flexDirection: "column" as const,
+        gap: 12,
+        marginleft: "2%",
+    },
+    icon: {
+        width: 56,
+        height: 56,
+        minWidth: 56,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 4,
+    },
+    btnBlueDark: {
+        backgroundColor: "#113f61",
+        border: "none",
+    },
+    btnRedDark: {
+        backgroundColor: "#8A1538",
+        border: "none",
+    },
+    btnGreenDark: {
+        backgroundColor: "#8A1538",
+        border: "none",
+    },
+    flexGrow1: { flexGrow: 1 },
+    dFlex: { display: "flex" },
+    alignItemsCenter: { alignItems: "center" },
+    justifyContentBetween: { justifyContent: "space-between" },
+    justifyContentCenter: { justifyContent: "center" },
+    gap3: { gap: 12 },
+    p3: { padding: 12 },
+    py4: { paddingTop: 16, paddingBottom: 16 },
+    mb3: { marginBottom: 12 },
+    h1: { fontSize: 32, fontWeight: "bold" as const, margin: 0 },
+    h6: { fontSize: 16, margin: 0 },
+    rounded4: { borderRadius: 16 },
+    rounded3: { borderRadius: 4 },
+    border: { border: "1px solid #ccc" },
+    textWhite: { color: "white" },
+    textCenter: { textAlign: "center" as const },
+    width: { width: '90%' }
+};
+
+// Global Xrm reference
+const xrm: Xrm.XrmStatic = (window.parent as any).Xrm || (window as any).Xrm;
+
+// Cache constants
+const ORG_UNIT_CACHE_KEY = 'QCAA_OrgUnit_Cache';
+const CACHE_DURATION = 60_000; // 1 minute
+
+export const Main = (props: IProps) => {
+    // Load localized strings
+    const strings: LocalizedStrings = React.useMemo(() => {
+        const ctx = props.context;
+        return {
+            WelcomeBack: ctx.resources.getString("WelcomeBack"),
+            FindFacility: ctx.resources.getString("FindFacility"),
+            RemainingInspections: ctx.resources.getString("RemainingInspections"),
+            CompletedInspections: ctx.resources.getString("CompletedInspections"),
+            PendingWorkOrderActions: ctx.resources.getString("PendingWorkOrderActions"),
+            ScheduledInspections: ctx.resources.getString("ScheduledInspections"),
+            StartInspection: ctx.resources.getString("StartInspection"),
+            SearchPlaceholder: ctx.resources.getString("SearchPlaceholder"),
+            NoResults: ctx.resources.getString("NoResults"),
+            Loading: ctx.resources.getString("Loading"),
+            TodaysPatrols: ctx.resources.getString("TodaysPatrols"),
+            SearchPrompt: ctx.resources.getString("SearchPrompt"),
+            OfflineNavigationBlocked: ctx.resources.getString("OfflineNavigationBlocked"),
+            OfflineQuickCreateBlocked: ctx.resources.getString("OfflineQuickCreateBlocked"),
+            StartPatrol: ctx.resources.getString("StartPatrol"),
+            EndPatrol: ctx.resources.getString("EndPatrol"),
+            StartAnonymousInspection: ctx.resources.getString("StartAnonymousInspection"),
+            PendingInspections: ctx.resources.getString("PendingInspections"),
+            StartMultiTypeInspection: ctx.resources.getString("StartMultiTypeInspection"),
+        };
+    }, [props.context]);
+
+    // Detect RTL
+    const isRTL = React.useMemo(() => {
+        const rtlLanguages = [1025, 1037, 1054, 1056, 1065, 1068, 1069, 1101, 1114, 1119];
+        return rtlLanguages.includes(props.context.userSettings.languageId);
+    }, [props.context.userSettings.languageId]);
+
+    const [state, setState] = React.useState<State>({
+        searchText: "",
+        pendingTodayBookings: null,
+        completedTodayWorkorders: null,
+        pendingWorkOrderActions: null,
+        TodayCampaigns: null,
+        userName: strings.Loading,
+        message: undefined,
+        isLoading: false,
+        searchResults: [],
+        showResults: false,
+        showAdvancedSearch: false,
+        patrolStatus: 'none',
+        activePatrolId: undefined,
+        activePatrolName: undefined,
+        isNaturalReserve: false,
+        isWildlifeSection: false,
+        unknownAccountId: undefined,
+        siteAccountId: undefined,
+        incidentTypeId: undefined,
+        orgUnitId: undefined,
+        organizationUnitName: undefined,
+        showMultiTypeInspection: false,
+        // COMMENTED OUT: inspectionCustomerClassification field no longer used
+        // inspectionCustomerClassification: undefined,
+        defaultInspectionType: undefined,
+        lockInspectionType: false,
+    });
+
+    const startDataUri = "data:image/svg+xml;base64," + btoa(startSvgContent);
+    const magnifyDataUri = "data:image/svg+xml;base64," + btoa(magnify);
+    const calenderDataUri = "data:image/svg+xml;base64," + btoa(calender);
+    const checkDataUri = "data:image/svg+xml;base64," + btoa(check);
+    const clockDataUri = "data:image/svg+xml;base64," + btoa(clock);
+    const stickynoteDataUri = "data:image/svg+xml;base64," + btoa(stickynote);
+    const filtersDataUri = "data:image/svg+xml;base64," + btoa(filters);
+    const closeDataUri = "data:image/svg+xml;base64," + btoa(close);
+
+    const isOffline = (): boolean => {
+        const ctx: any = props.context;
+        return ctx.mode?.isInOfflineMode === true;
+    };
+
+    const handleAdvancedSearchResults = (results: any[]): void => {
+        setState(prev => ({
+            ...prev,
+            searchResults: results,
+            showResults: true
+        }));
+    };
+
+    // Get organization unit data from cache
+    const getOrgUnitFromCache = (userId: string): OrgUnitCache | null => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cached = localStorage.getItem(cacheKey);
+            if (!cached) return null;
+
+            const cacheData: OrgUnitCache = JSON.parse(cached);
+            const now = Date.now();
+
+            // Check if cache is still valid
+            if (now - cacheData.timestamp > CACHE_DURATION) {
+                localStorage.removeItem(cacheKey);
+                return null;
+            }
+
+            return cacheData;
+        } catch (error: any) {
+            console.error("Error reading org unit cache:", error);
+            // alert("Error reading org unit cache: " + (error?.message || error));
+            return null;
+        }
+    };
+
+    // Save organization unit data to cache
+    const saveOrgUnitToCache = (userId: string, data: Omit<OrgUnitCache, 'timestamp'>): void => {
+        try {
+            const cacheKey = `${ORG_UNIT_CACHE_KEY}_${userId}`;
+            const cacheData: OrgUnitCache = {
+                ...data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            //console.log("Organization unit data cached successfully");
+        } catch (error: any) {
+            console.error("Error saving org unit cache:", error);
+            // alert("Error saving org unit cache: " + (error?.message || error));
+        }
+    };
+
+    const checkOrganizationUnit = React.useCallback(async (ctx: any, userId: string): Promise<void> => {
+        try {
+            // Try to get from cache first
+            const cachedData = getOrgUnitFromCache(userId);
+            if (cachedData) {
+                //console.log("Using cached organization unit data");
+                setState(prev => ({
+                    ...prev,
+                    isNaturalReserve: cachedData.isNaturalReserve,
+                    isWildlifeSection: cachedData.isWildlifeSection,
+                    unknownAccountId: cachedData.unknownAccountId,
+                    unknownAccountName: cachedData.unknownAccountName,
+                    siteAccountId: cachedData.siteAccountId,
+                    siteAccountName: cachedData.siteAccountName,
+                    incidentTypeId: cachedData.incidentTypeId,
+                    incidentTypeName: cachedData.incidentTypeName,
+                    orgUnitId: cachedData.orgUnitId,
+                    organizationUnitName: cachedData.orgUnitName,
+                }));
+                return;
+            }
+
+            // Get user's organizational unit
+            const userResult = await xrm.WebApi.retrieveRecord(
+                "systemuser",
+                userId,
+                "?$select=_duc_organizationalunitid_value"
+            );
+
+            if (!userResult._duc_organizationalunitid_value) {
+                //console.log("No organizational unit found for the user.");
+                return;
+            }
+
+            const orgUnitId = userResult._duc_organizationalunitid_value;
+
+            // Retrieve the organizational unit details with default incident type
+            const orgUnitResult = await xrm.WebApi.retrieveRecord(
+                "msdyn_organizationalunit",
+                orgUnitId,
+                "?$select=_duc_siteaccount_value,_duc_unknownaccount_value,duc_englishname,_duc_defaultincidenttype_value&$expand=duc_unknownaccount($select=name),duc_DefaultIncidenttype($select=msdyn_incidenttypeid,msdyn_name),duc_SiteAccount($select=name)"
+            );
+
+            const orgUnitName = orgUnitResult.duc_englishname || "";
+            const unknownAccountId = orgUnitResult._duc_unknownaccount_value || undefined;
+            const unknownAccountName = orgUnitResult.duc_unknownaccount?.name || undefined;
+
+            const siteAccountId = orgUnitResult._duc_siteaccount_value || undefined;
+            const siteAccountName = orgUnitResult.duc_SiteAccount?.name || undefined;
+
+            // Check if organization unit name is "Natural Reserve" (case insensitive)
+            const isNaturalReserve = orgUnitName.includes("Inspection Section – Natural Reserves");
+
+            // Check if organization unit is Wildlife section
+            const isWildlifePlantLife = orgUnitName.includes("Wildlife - Plant Life Section");
+            const isWildlifeNaturalResources = orgUnitName.includes("Wildlife - Natural Resources Section");
+            const isWildlifeSection = isWildlifePlantLife || isWildlifeNaturalResources;
+
+            let incidentTypeId: string | undefined = undefined;
+            let incidentTypeName: string | undefined = undefined;
+
+            // Get incident type from default field if available
+            if (orgUnitResult._duc_defaultincidenttype_value && orgUnitResult.duc_DefaultIncidenttype) {
+                incidentTypeId = orgUnitResult.duc_DefaultIncidenttype.msdyn_incidenttypeid;
+                incidentTypeName = orgUnitResult.duc_DefaultIncidenttype.msdyn_name;
+                //console.log("Default Incident Type ID found:", incidentTypeId);
+                //console.log("Default Incident Type Name found:", incidentTypeName);
+            } else {
+                // If no default, pass undefined (will be handled in MultiTypeInspection)
+                incidentTypeId = undefined;
+                incidentTypeName = undefined;
+                console.warn("No default incident type found for org unit");
+            }
+
+            // Save to cache
+            saveOrgUnitToCache(userId, {
+                orgUnitId,
+                orgUnitName,
+                isNaturalReserve,
+                isWildlifeSection,
+                unknownAccountId,
+                unknownAccountName,
+                incidentTypeId,
+                incidentTypeName,
+                siteAccountId,
+                siteAccountName,
+            });
+
+            setState(prev => ({
+                ...prev,
+                isNaturalReserve: isNaturalReserve,
+                isWildlifeSection: isWildlifeSection,
+                unknownAccountId: unknownAccountId,
+                unknownAccountName: unknownAccountName,
+                incidentTypeId: incidentTypeId,
+                incidentTypeName: incidentTypeName,
+                orgUnitId: orgUnitId,
+                organizationUnitName: orgUnitName,
+                siteAccountId: siteAccountId,
+                siteAccountName: siteAccountName,
+            }));
+
+            //console.log("Organization Unit:", orgUnitName);
+            //console.log("Organization Unit ID:", orgUnitId);
+            //console.log("Is Natural Reserve:", isNaturalReserve);
+            //console.log("Is Wildlife Section:", isWildlifeSection);
+            //console.log("Unknown Account ID:", unknownAccountId);
+            //console.log("Unknown Account Name:", unknownAccountName);
+            //console.log("Incident Type ID:", incidentTypeId);
+            //console.log("Incident Type Name:", incidentTypeName);
+
+        } catch (error: any) {
+            console.error("Error checking organization unit:", error);
+            // alert("Error checking organization unit: " + (error?.message || error));
+            setState(prev => ({
+                ...prev,
+                isNaturalReserve: false,
+                isWildlifeSection: false,
+                unknownAccountId: undefined,
+                unknownAccountName: undefined,
+                siteAccountId: undefined,
+                siteAccountName: undefined,
+                incidentTypeId: undefined,
+                incidentTypeName: undefined,
+                orgUnitId: undefined,
+                organizationUnitName: undefined,
+            }));
+        }
+    }, []);
+
+    // Check patrol status on load
+    const checkPatrolStatus = React.useCallback(async (orgUnitIdParam?: string): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+
+            // Try to get orgUnitId from parameter, state, or cache
+            let orgUnitId = orgUnitIdParam || state.orgUnitId;
+
+            if (!orgUnitId) {
+                const cachedData = getOrgUnitFromCache(userId);
+                orgUnitId = cachedData?.orgUnitId;
+            }
+
+            // If still no orgUnitId, we can't check patrol status
+            if (!orgUnitId) {
+                //console.log("No organization unit ID available for patrol status check");
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'none',
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
+                }));
+                return;
+            }
+
+            // Get today's date in ISO format
+            const today = new Date().toISOString().split('T')[0];
+
+            // Check for active patrol (status = 2)
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and statecode eq 0 and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+
+            const activePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                activePatrolQuery
+            );
+
+            if (activePatrolResults.entities.length > 0) {
+                // Found active patrol, show End Patrol button
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'end',
+                    activePatrolId: activePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: activePatrolResults.entities[0].new_name
+                }));
+                return;
+            }
+
+            // Check for available patrol to start (status = 1 or 100000004)
+            const availablePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and _duc_organizationalunitid_value eq '${orgUnitId}' and duc_campaigninternaltype eq 100000004 and (duc_campaignstatus eq 1 or duc_campaignstatus eq 100000004) and duc_fromdate le ${today} and duc_todate ge ${today}&$select=new_inspectioncampaignid,new_name&$top=1`;
+
+            const availablePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                availablePatrolQuery
+            );
+
+            if (availablePatrolResults.entities.length > 0) {
+                // Found available patrol, show Start Patrol button
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'start',
+                    activePatrolId: availablePatrolResults.entities[0].new_inspectioncampaignid,
+                    activePatrolName: availablePatrolResults.entities[0].new_name
+                }));
+            } else {
+                // No patrol available
+                setState(prev => ({
+                    ...prev,
+                    patrolStatus: 'none',
+                    activePatrolId: undefined,
+                    activePatrolName: undefined
+                }));
+            }
+
+        } catch (error: any) {
+            console.error("Error checking patrol status:", error);
+            // alert("Error checking patrol status: " + (error?.message || error));
+            setState(prev => ({
+                ...prev,
+                patrolStatus: 'none',
+                activePatrolId: undefined,
+                activePatrolName: undefined
+            }));
+        }
+    }, [props.context, state.orgUnitId]);
+
+    const loadTodaysCounts = async (ctx: any, userId: string): Promise<{ completedToday: number; remainingToday: number; campaignsToday: number; pendingActions: number }> => {
+        const CACHE_KEY = `MOCI_User_ResourceID_${userId}`;
+
+        try {
+            let completedToday = 0;
+            let remainingToday = 0;
+            let campaignsToday = 0;
+            let pendingActions = 0;
+
+            try {
+
+                let resourceId: string | null = localStorage.getItem(CACHE_KEY);
+
+                if (!resourceId) {
+                    const userQuery = `?$select=_duc_bookableresourceid_value&$filter=systemuserid eq '${userId}'`;
+                    const userResults = await xrm.WebApi.retrieveMultipleRecords("systemuser", userQuery);
+
+                    const retrievedResourceId = userResults.entities.length > 0
+                        ? userResults.entities[0]["_duc_bookableresourceid_value"]
+                        : null;
+
+                    if (retrievedResourceId) {
+                        resourceId = retrievedResourceId;
+                        localStorage.setItem(CACHE_KEY, resourceId?.toString() ?? "");
+                        //console.log("Resource ID fetched and cached:", resourceId);
+                    } else {
+                        console.warn(`User ${userId} is not linked to a Bookable Resource.`);
+                        return { completedToday, remainingToday, campaignsToday, pendingActions };
+                    }
+                } else {
+                    //console.log("Resource ID retrieved from cache:", resourceId);
+                }
+
+                if (!resourceId) {
+                    return { completedToday, remainingToday, campaignsToday, pendingActions };
+                }
+
+                const completedQuery = `?$select=msdyn_workorderid&$filter=_duc_assignedresource_value eq '${resourceId}' and Microsoft.Dynamics.CRM.Today(PropertyName='duc_completiondate')`;
+                const completedResults = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", completedQuery);
+                completedToday = completedResults.entities.length;
+                //console.log("Completed Work Orders Count:", completedToday);
+
+                const bookingStatusGuid1 = 'f16d80d1-fd07-4237-8b69-187a11eb75f9'; // Scheduled status
+                const bookingStatusGuid2 = 'a2ad7f6a-f763-461a-b724-6d4371506baa'; // In Progress
+                const remainingQuery = `?$select=bookableresourcebookingid&$filter=_resource_value eq '${resourceId}' and (_bookingstatus_value eq '${bookingStatusGuid1}' or _bookingstatus_value eq '${bookingStatusGuid2}') and Microsoft.Dynamics.CRM.Today(PropertyName='starttime')`;
+                const remainingResults = await xrm.WebApi.retrieveMultipleRecords("bookableresourcebooking", remainingQuery);
+                remainingToday = remainingResults.entities.length;
+                //console.log("Remaining Bookings Count:", remainingToday);
+
+                // Fetch pending work order actions using FetchXML
+                const pendingActionsFetchXml = `
+                    <fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="true" no-lock="false">
+                        <entity name="msdyn_workorder">
+                            <attribute name="msdyn_workorderid"/>
+                            <filter type="and">
+                                <condition attribute="statecode" operator="eq" value="0"/>
+                            </filter>
+                            <link-entity name="duc_inspectionaction" alias="aa" link-type="inner" from="duc_inspectionactionid" to="duc_primaryinspectionaction">
+                                <filter type="and">
+                                    <condition attribute="ownerid" operator="eq-useroruserteams"/>
+                                    <condition attribute="duc_status" operator="not-in">
+                                        <value>100000003</value>
+                                        <value>100000005</value>
+                                    </condition>
+                                </filter>
+                            </link-entity>
+                        </entity>
+                    </fetch>`;
+                const pendingActionsResult = await xrm.WebApi.retrieveMultipleRecords("msdyn_workorder", `?fetchXml=${encodeURIComponent(pendingActionsFetchXml)}`);
+                pendingActions = pendingActionsResult.entities.length;
+                //console.log("Pending Work Order Actions Count:", pendingActions);
+
+                return { completedToday, remainingToday, campaignsToday, pendingActions };
+
+            } catch (error: any) {
+                console.error("Error retrieving counts:", error);
+                // alert("Error retrieving counts: " + (error?.message || error));
+                return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingActions: 0 };
+            }
+
+        } catch (e: any) {
+            //console.log("Failed to load today's counts:", e);
+            // alert("Failed to load today's counts: " + (e?.message || e));
+            return { completedToday: 0, remainingToday: 0, campaignsToday: 0, pendingActions: 0 };
+        }
+    };
+
+    const loadUserData = React.useCallback(async (): Promise<void> => {
+        const ctx: any = props.context;
+        try {
+            if (!ctx) return;
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+            let res: any = null;
+
+            if (isOffline()) {
+                const results = await ctx.utils.executeOffline(
+                    "systemuser",
+                    `?$filter=systemuserid eq ${userId}&$select=duc_usernamearabic`
+                );
+                res = results?.entities?.[0] ?? null;
+            } else {
+                res = await xrm.WebApi.retrieveRecord(
+                    "systemuser",
+                    userId,
+                    "?$select=duc_usernamearabic"
+                );
+            }
+
+            if (res) {
+                const username = res.duc_usernamearabic ?? userSettings?.userName ?? "Inspector";
+                const { completedToday, remainingToday, campaignsToday, pendingActions } = await loadTodaysCounts(ctx, userId);
+
+                setState(prev => ({
+                    ...prev,
+                    pendingTodayBookings: remainingToday,
+                    completedTodayWorkorders: completedToday,
+                    pendingWorkOrderActions: pendingActions,
+                    TodayCampaigns: campaignsToday,
+                    userName: username,
+                }));
+
+                localStorage.setItem(
+                    "MOCI_userCounts",
+                    JSON.stringify({ userName: username })
+                );
+
+                // Check organization unit after loading user data
+                if (!isOffline()) {
+                    await checkOrganizationUnit(ctx, userId);
+                    // After checkOrganizationUnit completes, get the orgUnitId and check patrol status
+                    const cachedData = getOrgUnitFromCache(userId);
+                    if (cachedData?.orgUnitId) {
+                        await checkPatrolStatus(cachedData.orgUnitId);
+                    }
+                }
+            }
+        } catch (e: any) {
+            console.warn("User data load failed, using cache.", e);
+            // alert("User data load failed: " + (e?.message || e));
+            restoreCache();
+        }
+    }, [props.context, checkOrganizationUnit, checkPatrolStatus]);
+
+    const handleOpenAdvancedSearch = (): void => {
+        setState(prev => ({ ...prev, showAdvancedSearch: true }));
+    };
+
+    const handleCloseAdvancedSearch = (): void => {
+        setState(prev => ({ ...prev, showAdvancedSearch: false }));
+    };
+
+    const restoreCache = (): void => {
+        const cached = localStorage.getItem("MOCI_userCounts");
+        if (cached) {
+            try {
+                const obj = JSON.parse(cached);
+                setState(prev => ({
+                    ...prev,
+                    remainingToday: obj.remainingToday,
+                    completedTodayWorkorders: obj.completedTodayWorkorders,
+                    TodayCampaigns: obj.TodayCampaigns,
+                    userName: obj.userName ?? "Inspector"
+                }));
+            } catch {
+                // ignore corrupted cache
+            }
+        }
+    };
+
+    React.useEffect(() => {
+        void loadUserData();
+        restoreCache();
+    }, [loadUserData]);
+
+    const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+        if (e.key === "Enter") void onSearchClick();
+    };
+
+    const onSearchClick = async (): Promise<void> => {
+        const text = state.searchText.trim();
+        if (!text) {
+            setState(prev => ({ ...prev, message: strings.SearchPrompt }));
+            return;
+        }
+        setState(prev => ({ ...prev, isLoading: true, message: undefined }));
+        const ctx: any = props.context;
+        const searchKey = `MOCI_lastSearch_${text.toLowerCase()}`;
+
+        try {
+            let results: any = null;
+
+            if (isOffline()) {
+                results = await ctx.utils.executeOffline("account", `?$top=100`);
+                if (text) {
+                    const lowerText = text.toLowerCase();
+                    results.entities = results.entities.filter((entity: any) => {
+                        const entityName = entity.name as string | undefined;
+                        return entityName?.toLowerCase().startsWith(lowerText) ?? false;
+                    });
+                }
+            } else {
+                results = await xrm.WebApi.retrieveMultipleRecords("account", `?$top=100`);
+                if (text) {
+                    const lowerText = text.toLowerCase();
+                    results.entities = results.entities.filter((entity: any) => {
+                        const entityName = entity.name as string | undefined;
+                        return entityName?.toLowerCase().startsWith(lowerText) ?? false;
+                    });
+                }
+            }
+
+            const entities = results?.entities ?? [];
+
+            if (entities.length === 0) {
+                setState(prev => ({ ...prev, message: strings.NoResults }));
+            } else if (entities.length === 1 && !isOffline()) {
+                void ctx.navigation.navigateTo({
+                    pageType: "entityrecord",
+                    entityName: "account",
+                    entityId: entities[0].accountid
+                });
+            } else {
+                setState(prev => ({
+                    ...prev,
+                    showResults: true,
+                    searchResults: entities,
+                    message: undefined
+                }));
+            }
+
+            localStorage.setItem(searchKey, JSON.stringify(results));
+        } catch (err: any) {
+            console.error(err);
+            const cached = localStorage.getItem(searchKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+            } else {
+                setState(prev => ({
+                    ...prev,
+                    message: `${err?.message ?? err}`
+                }));
+            }
+        } finally {
+            setState(prev => ({ ...prev, isLoading: false }));
+        }
+    };
+
+    const onRecordClick = (accountId: string): void => {
+        const ctx: any = props.context;
+        setState(prev => ({ ...prev, showResults: false }));
+
+        void ctx.navigation.navigateTo({
+            pageType: "entityrecord",
+            entityName: "account",
+            entityId: accountId
+        });
+    };
+
+    const onCloseResults = (): void => {
+        setState(prev => ({ ...prev, showResults: false }));
+    };
+
+    const openScheduled = (): void => {
+        const ctx: any = props.context;
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "bookableresourcebooking",
+            viewId: "4073baca-cc5f-e611-8109-000d3a146973"
+        });
+    };
+
+    const openAllScheduled = (): void => {
+        const ctx: any = props.context;
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "bookableresourcebooking",
+            viewId: "f52b7a9b-cae8-f011-8406-6045bd9c20cb"
+        });
+    };
+
+    const openPendingWorkorders = (): void => {
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "msdyn_workorder",
+            viewId: "960bbe64-7c09-f111-8341-6045bd8e23b3"
+        });
+    };
+
+    const closedWorkorders = (): void => {
+        const ctx: any = props.context;
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+        void ctx.navigation.navigateTo({
+            pageType: "entitylist",
+            entityName: "msdyn_workorder",
+            viewId: "aad92cc9-00c6-f011-8544-000d3a2274a5"
+        });
+    };
+
+    // COMMENTED OUT: Original startInspection function kept but commented
+    // const startInspection = (): void => {
+    //     const ctx: any = props.context;
+    //     if (isOffline()) {
+    //         setState(prev => ({ ...prev, message: strings.OfflineQuickCreateBlocked }));
+    //         return;
+    //     }
+
+    //     // Prepare default values
+    //     const defaultValues: any = {};
+
+    //     // If we have an active patrol campaign, set it as default
+    //     if (state.activePatrolId && state.activePatrolName) {
+    //         defaultValues.new_campaign = [
+    //             {
+    //                 id: state.activePatrolId,
+    //                 name: state.activePatrolName,
+    //                 entityType: "new_inspectioncampaign"
+    //             }
+    //         ];
+    //     }
+
+    //     void ctx.navigation.openForm(
+    //         { entityName: "msdyn_workorder", useQuickCreateForm: true },
+    //         defaultValues
+    //     );
+    // };
+
+    const startPatrol = async (): Promise<void> => {
+        const ctx: any = props.context;
+
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+
+        if (!state.activePatrolId) {
+            setState(prev => ({ ...prev, message: "No patrol campaign found" }));
+            return;
+        }
+
+        try {
+            setState(prev => ({ ...prev, isLoading: true }));
+
+            // Update campaign status to 2 (In Progress)
+            const updateData = {
+                duc_campaignstatus: 2
+            };
+
+            await xrm.WebApi.updateRecord(
+                "new_inspectioncampaign",
+                state.activePatrolId,
+                updateData
+            );
+
+            // Update state to show End Patrol button
+            setState(prev => ({
+                ...prev,
+                patrolStatus: 'end',
+                isLoading: false,
+                message: "Patrol started successfully"
+            }));
+
+            // Clear message after 3 seconds
+            setTimeout(() => {
+                setState(prev => ({ ...prev, message: undefined }));
+            }, 3000);
+
+        } catch (error: any) {
+            console.error("Error starting patrol:", error);
+            // alert("Error starting patrol: " + (error?.message || error));
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Failed to start patrol"
+            }));
+        }
+    };
+
+    const endPatrol = async (): Promise<void> => {
+        const ctx: any = props.context;
+
+        if (isOffline()) {
+            setState(prev => ({ ...prev, message: strings.OfflineNavigationBlocked }));
+            return;
+        }
+
+        try {
+            setState(prev => ({ ...prev, isLoading: true }));
+
+            const userSettings = ctx.userSettings;
+            const userId = (userSettings.userId ?? "").replace("{", "").replace("}", "");
+            const today = new Date().toISOString().split('T')[0];
+
+            // Query for active patrol
+            const activePatrolQuery = `?$filter=_owninguser_value eq '${userId}' and duc_campaigninternaltype eq 100000004 and duc_campaignstatus eq 2 and statecode eq 0 and duc_fromdate le ${today} and duc_todate ge ${today}&$top=1`;
+
+            const activePatrolResults = await xrm.WebApi.retrieveMultipleRecords(
+                "new_inspectioncampaign",
+                activePatrolQuery
+            );
+
+            if (activePatrolResults.entities.length === 0) {
+                setState(prev => ({
+                    ...prev,
+                    isLoading: false,
+                    message: "No active patrol found"
+                }));
+                return;
+            }
+
+            const patrolId = activePatrolResults.entities[0].new_inspectioncampaignid;
+
+            // Update campaign status to 100000004 (Completed)
+            const updateData = {
+                duc_campaignstatus: 100000004
+            };
+
+            await xrm.WebApi.updateRecord(
+                "new_inspectioncampaign",
+                patrolId,
+                updateData
+            );
+
+            // Check if there's another patrol available
+            if (state.orgUnitId) {
+                await checkPatrolStatus(state.orgUnitId);
+            }
+
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Patrol ended successfully"
+            }));
+
+            // Clear message after 3 seconds
+            setTimeout(() => {
+                setState(prev => ({ ...prev, message: undefined }));
+            }, 3000);
+
+        } catch (error: any) {
+            console.error("Error ending patrol:", error);
+            // alert("Error ending patrol: " + (error?.message || error));
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                message: "Failed to end patrol"
+            }));
+        }
+    };
+
+    // MODIFIED: Handle opening MultiTypeInspection without classification-based defaults
+    const handleOpenMultiTypeInspection = (): void => {
+        // No longer using inspectionCustomerClassification for defaults
+        // Users can choose inspection type freely
+        setState(prev => ({
+            ...prev,
+            showMultiTypeInspection: true,
+            defaultInspectionType: undefined, // No default
+            lockInspectionType: false // Never lock
+        }));
+    };
+
+    const { searchText, pendingTodayBookings, completedTodayWorkorders, pendingWorkOrderActions, TodayCampaigns, userName, message, isLoading, showResults, searchResults, patrolStatus } = state;
+    const isActionDisabled = isLoading;
+
+    // MODIFIED BUTTON VISIBILITY LOGIC - Always show Multi Type Inspection button
+    // Always show Scheduled Inspections
+    const showScheduledInspections = true;
+
+    // COMMENTED OUT: Start Inspection button logic - kept for reference
+    // Start Inspection button: Show ONLY when classification is 100000000 (Company)
+    // const showStartInspection = inspectionCustomerClassification === 100000000;
+
+    // MODIFIED: Multi Type Inspection button - ALWAYS SHOW (except when patrol needs to be started)
+    const showMultiTypeInspection = (patrolStatus === 'end' || patrolStatus === 'none');
+
+    // Start/End Patrol buttons - show for all org units based on patrol status
+    const showStartPatrol = patrolStatus === 'start';
+    const showEndPatrol = patrolStatus === 'end';
+
+    const getButtonStyle = (baseStyle: React.CSSProperties) => ({
+        ...baseStyle,
+        opacity: isActionDisabled ? 0.6 : 1,
+        cursor: isActionDisabled ? 'not-allowed' : 'pointer',
+    });
+
+    const containerStyle = {
+        ...STYLES.dFlex,
+        flexDirection: 'column' as const,
+        width: '98%',
+        maxWidth: '98%',
+        height: '100%',
+        maxHeight: '100%',
+        direction: isRTL ? 'rtl' as const : 'ltr' as const,
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+        paddingtop: '0.5%',
+        margin: 'auto',
+    };
+
+    return React.createElement(
+        React.Fragment,
+        null,
+
+        React.createElement(
+            "div",
+            { style: containerStyle },
+            // Header
+            React.createElement(
+                "header",
+                {
+                    style: {
+                        // backgroundImage: `url(${headerBase64})`,
+                        backgroundColor: "#FFACC6",
+                        backgroundSize: 'cover',
+                        backgroundRepeat: 'no-repeat',
+                        width: '103%',
+                        margin: '-5px',
+                        padding: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }
+                },
+                React.createElement(
+                    "a",
+                    { href: "#", style: { display: 'block' } },
+                    React.createElement("img", { alt: "", src: logoBase64, style: { height: '60px', width: 'auto' } })
+                )
+            ),
+            // Welcome Banner
+            React.createElement(
+                "div",
+                { style: STYLES.welcomeBanner },
+                `${strings.WelcomeBack}, ${userName}`
+            ),
+            // Main Content
+            React.createElement(
+                "div",
+                { style: { ...STYLES.flexGrow1, ...STYLES.p3, ...STYLES.width, marginleft: '0.5%' } },
+                // Search Bar
+                React.createElement(
+                    "div",
+                    { style: { ...STYLES.dFlex, ...STYLES.gap3, ...STYLES.mb3, opacity: isLoading ? 0.6 : 1 } },
+                    React.createElement(
+                        "div",
+                        { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.border, ...STYLES.rounded3, ...STYLES.alignItemsCenter, ...STYLES.gap3, ...STYLES.p3 } },
+                        React.createElement("img", { src: magnifyDataUri }),
+                        React.createElement(
+                            "div",
+                            { style: STYLES.flexGrow1 },
+                            React.createElement("input", {
+                                type: "text",
+                                placeholder: strings.SearchPlaceholder,
+                                value: searchText,
+                                onChange: (e) => setState(prev => ({ ...prev, searchText: e.target.value })),
+                                onKeyUp: onKeyUp,
+                                disabled: isLoading,
+                                style: { border: 'none', width: '90%', outline: 'none', direction: isRTL ? 'rtl' : 'ltr', background: 'none' }
+                            })
+                        )
+                    ),
+                    React.createElement(
+                        "div",
+                        {
+                            style: {
+                                marginLeft: isRTL ? 0 : "auto",
+                                marginRight: isRTL ? "auto" : 0,
+                                ...STYLES.icon,
+                                ...STYLES.rounded3,
+                                ...STYLES.border,
+                                cursor: 'pointer'
+                            },
+                            onClick: handleOpenAdvancedSearch
+                        },
+                        React.createElement("img", { src: filtersDataUri })
+                    )
+                ),
+                // Inspection Cards
+                React.createElement(
+                    "div",
+                    { style: { display: "flex", flexDirection: "column" as const, gap: 12 } },
+                    // Pending Card
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: openScheduled,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: isActionDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isActionDisabled ? 0.5 : 1,
+                                pointerEvents: isActionDisabled ? 'none' : 'auto'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgBrownLight } },
+                                React.createElement("img", { src: stickynoteDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.RemainingInspections)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textBrown, ...STYLES.h1 } }, pendingTodayBookings ?? "...")
+                    ),
+                    // Completed Card
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: closedWorkorders,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: 'pointer'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgGreenLight } },
+                                React.createElement("img", { src: checkDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.CompletedInspections)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, completedTodayWorkorders ?? "...")
+                    ),
+                    // Pending Actions Card
+                    React.createElement(
+                        "div",
+                        {
+                            onClick: openPendingWorkorders,
+                            style: {
+                                ...STYLES.border,
+                                ...STYLES.rounded4,
+                                ...STYLES.dFlex,
+                                ...STYLES.alignItemsCenter,
+                                ...STYLES.justifyContentBetween,
+                                ...STYLES.p3,
+                                ...STYLES.gap3,
+                                cursor: 'pointer'
+                            }
+                        },
+                        React.createElement(
+                            "div",
+                            { style: { ...STYLES.flexGrow1, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.gap3 } },
+                            React.createElement(
+                                "div",
+                                { style: { ...STYLES.icon, ...STYLES.rounded3, ...STYLES.bgpinkLight } },
+                                React.createElement("img", { src: clockDataUri })
+                            ),
+                            React.createElement("h6", { style: STYLES.h6 }, strings.PendingWorkOrderActions)
+                        ),
+                        React.createElement("div", { style: { ...STYLES.textGreen, ...STYLES.h1 } }, pendingWorkOrderActions ?? "...")
+                    )
+                )
+            ),
+            // Action Buttons
+            React.createElement(
+                "div",
+                { style: STYLES.actions },
+
+                // Scheduled Inspections button - always show
+                showScheduledInspections && React.createElement(
+                    "button",
+                    {
+                        onClick: openAllScheduled,
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({ ...STYLES.btnBlueDark, ...STYLES.textWhite, ...STYLES.rounded4, ...STYLES.p3, ...STYLES.dFlex, ...STYLES.alignItemsCenter, ...STYLES.justifyContentCenter, ...STYLES.gap3 })
+                    },
+                    React.createElement("img", { src: calenderDataUri }),
+                    React.createElement("span", null, strings.ScheduledInspections)
+                ),
+
+                // COMMENTED OUT: Start Inspection button - kept for reference
+                // Start Inspection button - ONLY for Company classification (100000000)
+                // showStartInspection && React.createElement(
+                //     "button",
+                //     {
+                //         onClick: startInspection,
+                //         disabled: isActionDisabled,
+                //         style: getButtonStyle({
+                //             ...STYLES.btnRedDark,
+                //             ...STYLES.textWhite,
+                //             ...STYLES.rounded4,
+                //             ...STYLES.p3,
+                //             ...STYLES.dFlex,
+                //             ...STYLES.alignItemsCenter,
+                //             ...STYLES.justifyContentCenter,
+                //             ...STYLES.gap3
+                //         })
+                //     },
+                //     [
+                //         React.createElement("img", { src: startDataUri, key: "icon" }),
+                //         React.createElement("span", { key: "text" }, strings.StartInspection)
+                //     ]
+                // ),
+
+                // MODIFIED: Multi Type Inspection button - ALWAYS SHOW (when no patrol needs starting)
+                showMultiTypeInspection && React.createElement(
+                    "button",
+                    {
+                        onClick: handleOpenMultiTypeInspection,
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({
+                            ...STYLES.btnRedDark,
+                            ...STYLES.textWhite,
+                            ...STYLES.rounded4,
+                            ...STYLES.p3,
+                            ...STYLES.dFlex,
+                            ...STYLES.alignItemsCenter,
+                            ...STYLES.justifyContentCenter,
+                            ...STYLES.gap3
+                        })
+                    },
+                    [
+                        React.createElement("img", { src: startDataUri, key: "icon" }),
+                        React.createElement("span", { key: "text" }, strings.StartMultiTypeInspection)
+                    ]
+                ),
+
+                // Start Patrol button - show for all org units when patrol is available
+                showStartPatrol && React.createElement(
+                    "button",
+                    {
+                        onClick: startPatrol,
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({
+                            ...STYLES.btnBlueDark,
+                            ...STYLES.textWhite,
+                            ...STYLES.rounded4,
+                            ...STYLES.p3,
+                            ...STYLES.dFlex,
+                            ...STYLES.alignItemsCenter,
+                            ...STYLES.justifyContentCenter,
+                            ...STYLES.gap3
+                        })
+                    },
+                    [
+                        React.createElement("img", { src: startDataUri, key: "icon" }),
+                        React.createElement("span", { key: "text" }, strings.StartPatrol)
+                    ]
+                ),
+
+                // End Patrol button - show for all org units when patrol is active
+                showEndPatrol && React.createElement(
+                    "button",
+                    {
+                        onClick: endPatrol,
+                        disabled: isActionDisabled,
+                        style: getButtonStyle({
+                            ...STYLES.btnGreenDark,
+                            ...STYLES.textWhite,
+                            ...STYLES.rounded4,
+                            ...STYLES.p3,
+                            ...STYLES.dFlex,
+                            ...STYLES.alignItemsCenter,
+                            ...STYLES.justifyContentCenter,
+                            ...STYLES.gap3
+                        })
+                    },
+                    [
+                        React.createElement("img", { src: startDataUri, key: "icon" }),
+                        React.createElement("span", { key: "text" }, strings.EndPatrol)
+                    ]
+                )
+            )
+        ),
+        React.createElement(AdvancedSearch, {
+            context: props.context,
+            isOpen: state.showAdvancedSearch,
+            onClose: handleCloseAdvancedSearch,
+            onSearchResults: handleAdvancedSearchResults
+        }),
+        // MultiTypeInspection Modal
+        state.showMultiTypeInspection && React.createElement(MultiTypeInspection, {
+            context: props.context,
+            isOpen: true,
+            onClose: () => setState(prev => ({ ...prev, showMultiTypeInspection: false })),
+            activePatrolId: state.activePatrolId,
+            activePatrolName: state.activePatrolName,
+            incidentTypeId: state.incidentTypeId,
+            incidentTypeName: state.incidentTypeName,
+            unknownAccountId: state.unknownAccountId,
+            siteAccountId: state.siteAccountId,
+            siteAccountName: state.siteAccountName,
+            unknownAccountName: state.unknownAccountName,
+            organizationUnitId: state.orgUnitId,
+            organizationUnitName: state.organizationUnitName,
+            defaultInspectionType: state.defaultInspectionType,
+            lockInspectionType: state.lockInspectionType
+        } as any),
+        // Search Results Modal
+        showResults && React.createElement(SearchResults, {
+            results: searchResults,
+            onRecordClick: onRecordClick,
+            onClose: onCloseResults,
+            context: props.context
+        })
+    );
+};

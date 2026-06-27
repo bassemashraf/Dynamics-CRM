@@ -5,8 +5,6 @@ import {
     CampaignHelpers,
     IncidentTypeHelpers,
     InitCache,
-    ProcessExtensionHelpers,
-    WOSTHelpers,
 } from "../helpers";
 
 interface IMultiTypeInspectionProps {
@@ -111,10 +109,10 @@ interface LocalizedStrings {
 }
 
 // Cache constants
-const INSPECTION_TYPES_CACHE_KEY = "MOCI_OrgUnit_InspectionTypes_Cache";
-const VEHICLE_TYPES_CACHE_KEY = "MOCI_VehicleTypes_Cache";
-const CAMPAIGNS_CACHE_KEY = "MOCI_Campaigns_Cache";
-const INCIDENT_TYPES_CACHE_KEY = "MOCI_IncidentTypes_Cache";
+const INSPECTION_TYPES_CACHE_KEY = "QCAA_OrgUnit_InspectionTypes_Cache";
+const VEHICLE_TYPES_CACHE_KEY = "QCAA_VehicleTypes_Cache";
+const CAMPAIGNS_CACHE_KEY = "QCAA_Campaigns_Cache";
+const INCIDENT_TYPES_CACHE_KEY = "QCAA_IncidentTypes_Cache";
 const CACHE_DURATION = 60_000; // 1 minute
 
 interface CacheData<T> {
@@ -123,14 +121,16 @@ interface CacheData<T> {
 }
 
 // =====================================================================
-// FLUENT UI STYLE TOKENS
+// QCAA STYLE TOKENS – uses GTA brand colors
 // =====================================================================
 
 const FLUENT = {
     fontFamily:
         '"Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif',
-    colorPrimary: "#0078d4",
-    colorPrimaryHover: "#106ebe",
+    colorPrimary: "#113f61",
+    colorPrimaryHover: "#0d3350",
+    colorAccent: "#8A1538",
+    colorAccentHover: "#701030",
     colorNeutralDark: "#201f1e",
     colorNeutralPrimary: "#323130",
     colorNeutralSecondary: "#605e5c",
@@ -143,7 +143,7 @@ const FLUENT = {
     borderRadiusModal: 8,
     shadowModal: "0 8px 32px rgba(0, 0, 0, 0.14)",
     overlay: "rgba(0, 0, 0, 0.4)",
-    focusOutline: "2px solid #0078d4",
+    focusOutline: "2px solid #113f61",
     transitionFast: "0.1s ease",
 } as const;
 
@@ -373,8 +373,9 @@ export class MultiTypeInspection extends React.Component<
 
             // Fetch from junction entity — include duc_name & duc_namear for labels
             const query =
-                `?$filter=duc_organizationunit eq '${this.props.organizationUnitId}'` +
-                `&$select=_duc_accounttype_value,duc_organizationunitaccounttypesid,duc_name,duc_namear`;
+                `?$filter=_duc_organizationunit_value eq '${this.props.organizationUnitId}'` +
+                `&$select=duc_organizationunitaccounttypesid,duc_name,duc_namear` +
+                `&$expand=duc_AccountType($select=duc_accounttypeid,duc_name,duc_accounttype)`;
 
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 "duc_organizationunitaccounttypes",
@@ -396,33 +397,8 @@ export class MultiTypeInspection extends React.Component<
             }> = [];
 
             for (const entity of results.entities) {
-                const accountTypeId = entity._duc_accounttype_value;
-                if (!accountTypeId) continue;
-
-                // For offline safety, we need the account type numeric value from the duc_accounttype table
-                let accountTypeValue: number | undefined = undefined;
-                try {
-                    const accTypeResult = await this.xrm.WebApi.retrieveRecord("duc_accounttype", accountTypeId, "?$select=duc_accounttype");
-                    if (accTypeResult && accTypeResult.duc_accounttype != null) {
-                        accountTypeValue = accTypeResult.duc_accounttype;
-                    }
-                } catch (e) {
-                    console.warn(`Failed to fetch account type numeric value for ${accountTypeId}`);
-                }
-
-                // If retrieval failed or value is null, try to infer or fallback so it doesn't disappear
-                if (accountTypeValue === undefined) {
-                    const entityName = (entity.duc_name || entity.duc_namear || "").toLowerCase();
-                    if (entityName.includes("anonymous") || entityName.includes("مجهول")) {
-                        accountTypeValue = 4;
-                    } else {
-                        // generic fallback
-                        accountTypeValue = -1;
-                    }
-                }
-
-                if (accountTypeValue !== undefined) {
-                    const optionValue = accountTypeValue;
+                if (entity.duc_AccountType?.duc_accounttype !== undefined) {
+                    const optionValue = entity.duc_AccountType.duc_accounttype;
                     // Pick label based on language direction
                     const label = this.state.isRTL
                         ? (entity.duc_namear || entity.duc_name || `Type ${optionValue}`)
@@ -431,7 +407,7 @@ export class MultiTypeInspection extends React.Component<
                     types.push({
                         value: optionValue,
                         label: label,
-                        accountTypeId: accountTypeId,
+                        accountTypeId: entity.duc_AccountType.duc_accounttypeid,
                         orgUnitAccountTypeId: entity.duc_organizationunitaccounttypesid,
                     });
                 }
@@ -490,25 +466,19 @@ export class MultiTypeInspection extends React.Component<
 
     private checkCampaignVisibility = async (userId: string): Promise<void> => {
         try {
-            // Step 1: Get user's department ID
+            // Fetch the current user's department
+            const userQuery = `?$select=systemuserid&$expand=duc_department($select=duc_hidecampaignonhomepage)`;
             const userResult = await this.xrm.WebApi.retrieveRecord(
-                "systemuser", userId,
-                "?$select=_duc_department_value"
-            );
-            const deptId = userResult._duc_department_value;
-
-            if (!deptId) {
-                this.setState({ shouldShowCampaignField: true });
-                return;
-            }
-
-            // Step 2: Get department's hide flag (separate call, no $expand)
-            const deptResult = await this.xrm.WebApi.retrieveRecord(
-                "msdyn_organizationalunit", deptId,
-                "?$select=duc_hidecampaignonhomepage"
+                "systemuser",
+                userId,
+                userQuery,
             );
 
-            this.setState({ shouldShowCampaignField: !deptResult?.duc_hidecampaignonhomepage });
+            // Check if the department has the hide campaign flag set
+            const hideCampaign = userResult?.duc_department?.duc_hidecampaignonhomepage;
+
+            // Show campaign if the flag is null or false, hide if true
+            this.setState({ shouldShowCampaignField: !hideCampaign });
         } catch (error: any) {
             console.error("Error checking campaign visibility:", error);
             // Default to showing campaign on error
@@ -582,7 +552,7 @@ export class MultiTypeInspection extends React.Component<
         try {
 
             // Campaign status: Active = 2, Campaign type: AdHoc = 100000000
-            const query = `?$filter=duc_organizationalunitid eq '${this.props.organizationUnitId}' and duc_campaignstatus eq 2 and  duc_campaigntype eq 100000000 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
+            const query = `?$filter=_duc_organizationalunitid_value eq '${this.props.organizationUnitId}' and duc_campaignstatus eq 2 and  duc_campaigntype eq 100000000 and statecode eq 0 &$select=new_inspectioncampaignid,new_name&$orderby=new_name asc`;
 
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 "new_inspectioncampaign",
@@ -624,60 +594,41 @@ export class MultiTypeInspection extends React.Component<
                 this.getFromCache<Array<{ id: string; name: string }>>(cacheKey);
             if (cached) return cached;
 
-            // 1. Get direct incident types via lookup
-            let directFilter = `duc_organizationalunitid eq '${this.props.organizationUnitId}'`;
-            if (!hasJudicialAuth) {
-                directFilter += ` and (duc_judicialauthorityisrequired eq false or duc_judicialauthorityisrequired eq null)`;
-            }
+            const judicialFilter = hasJudicialAuth
+                ? ""
+                : `<filter type="or">
+            <condition attribute="duc_judicialauthorityisrequired" operator="null" />
+            <condition attribute="duc_judicialauthorityisrequired" operator="eq" value="0" />
+        </filter>`;
 
-            const directResults = await this.xrm.WebApi.retrieveMultipleRecords(
+            const fetchXml = `<fetch>
+  <entity name="msdyn_incidenttype">
+    <attribute name="msdyn_incidenttypeid" />
+    <attribute name="msdyn_name" />
+        <filter type="and">
+            <filter type="or">
+                <condition attribute="duc_organizationalunitid" operator="eq" value="${this.props.organizationUnitId}" />
+                <link-entity name="duc_msdyn_incidenttype_msdyn_organizational" from="msdyn_incidenttypeid" to="msdyn_incidenttypeid" link-type="any" alias="DMIMO" intersect="true">
+                    <filter>
+                        <condition attribute="msdyn_organizationalunitid" operator="eq" value="${this.props.organizationUnitId}" />
+                    </filter>
+                </link-entity>
+            </filter>
+            ${judicialFilter}
+        </filter>
+    <order attribute="msdyn_name" />
+  </entity>
+</fetch>`;
+
+            const results = await this.xrm.WebApi.retrieveMultipleRecords(
                 "msdyn_incidenttype",
-                `?$filter=${directFilter}&$select=msdyn_incidenttypeid,msdyn_name`
+                `?fetchXml=${encodeURIComponent(fetchXml)}`
             );
 
-            // 2. Get N:N mapped incident types via intersect table
-            // Offline guidelines: Make separate calls instead of joins/expand
-            let mappedEntities: any[] = [];
-            try {
-                const nnResults = await this.xrm.WebApi.retrieveMultipleRecords(
-                    "duc_msdyn_incidenttype_msdyn_organizational",
-                    `?$filter=msdyn_organizationalunitid eq '${this.props.organizationUnitId}'&$select=msdyn_incidenttypeid`
-                );
-
-                const incidentTypeIds = nnResults.entities.map((e: any) => e.msdyn_incidenttypeid).filter(Boolean);
-
-                if (incidentTypeIds.length > 0) {
-                    const idFilters = incidentTypeIds.map((id: string) => `msdyn_incidenttypeid eq '${id}'`).join(" or ");
-                    let nnFilter = `(${idFilters})`;
-                    if (!hasJudicialAuth) {
-                        nnFilter += ` and (duc_judicialauthorityisrequired eq false or duc_judicialauthorityisrequired eq null)`;
-                    }
-
-                    const mappedResults = await this.xrm.WebApi.retrieveMultipleRecords(
-                        "msdyn_incidenttype",
-                        `?$filter=${nnFilter}&$select=msdyn_incidenttypeid,msdyn_name`
-                    );
-                    mappedEntities = mappedResults.entities;
-                }
-            } catch (nnError) {
-                console.warn("Failed to retrieve N:N incident types, falling back to direct only", nnError);
-            }
-
-            // Combine and deduplicate
-            const allEntities = [...directResults.entities, ...mappedEntities];
-            const uniqueMap = new Map();
-            allEntities.forEach((entity: any) => {
-                if (entity.msdyn_incidenttypeid && !uniqueMap.has(entity.msdyn_incidenttypeid)) {
-                    uniqueMap.set(entity.msdyn_incidenttypeid, {
-                        id: entity.msdyn_incidenttypeid,
-                        name: entity.msdyn_name || "",
-                    });
-                }
-            });
-
-            const incidentTypes = Array.from(uniqueMap.values());
-            // Sort alphabetically
-            incidentTypes.sort((a, b) => a.name.localeCompare(b.name));
+            const incidentTypes = results.entities.map((entity: any) => ({
+                id: entity.msdyn_incidenttypeid,
+                name: entity.msdyn_name,
+            }));
 
             this.saveToCache(cacheKey, incidentTypes);
             return incidentTypes;
@@ -1012,19 +963,11 @@ export class MultiTypeInspection extends React.Component<
     } | null> => {
         try {
             if (this.xrm?.Device?.getCurrentPosition) {
-                // Wrap in a timeout to avoid hanging indefinitely if the user
-                // dismisses the permission dialog without responding
-                const locationPromise = this.xrm.Device.getCurrentPosition();
-                const timeoutPromise = new Promise<null>((resolve) =>
-                    setTimeout(() => resolve(null), 30000)
-                );
-                const location: any = await Promise.race([locationPromise, timeoutPromise]);
-                if (location?.coords) {
-                    return {
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                    };
-                }
+                const location: any = await this.xrm.Device.getCurrentPosition();
+                return {
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                };
             }
         } catch (error: any) {
             console.error("Error getting location:", error);
@@ -1035,13 +978,9 @@ export class MultiTypeInspection extends React.Component<
     private createAddressInformation = async (
         accountId: string,
         accountName: string,
-        prefetchedLocation?: { latitude: number; longitude: number } | null,
     ): Promise<void> => {
         try {
-            // Use pre-fetched location if provided, otherwise fetch now
-            const location = prefetchedLocation !== undefined
-                ? prefetchedLocation
-                : await this.getCurrentLocation();
+            const location = await this.getCurrentLocation();
             if (!location) return;
 
             const today = new Date().toISOString().split("T")[0];
@@ -1067,9 +1006,7 @@ export class MultiTypeInspection extends React.Component<
         }
     };
 
-    private searchOrCreateAccount = async (
-        prefetchedLocation?: { latitude: number; longitude: number } | null,
-    ): Promise<string | null> => {
+    private searchOrCreateAccount = async (): Promise<string | null> => {
         try {
             const {
                 accountTypeRecord,
@@ -1108,7 +1045,7 @@ export class MultiTypeInspection extends React.Component<
                 );
                 const newAccountId = createdAccount?.id;
 
-                await this.createAddressInformation(newAccountId, accountName, prefetchedLocation);
+                await this.createAddressInformation(newAccountId, accountName);
 
                 return newAccountId;
             }
@@ -1146,7 +1083,7 @@ export class MultiTypeInspection extends React.Component<
             }
 
             if (accountTypeRecord?.duc_accounttypeid) {
-                filterQuery += ` and duc_newaccounttype eq ${accountTypeRecord.duc_accounttypeid}`;
+                filterQuery += ` and _duc_newaccounttype_value eq ${accountTypeRecord.duc_accounttypeid}`;
             }
 
             const searchResults = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -1227,7 +1164,7 @@ export class MultiTypeInspection extends React.Component<
             );
             const newAccountId = createdAccount?.id;
 
-            await this.createAddressInformation(newAccountId, accountName, prefetchedLocation);
+            await this.createAddressInformation(newAccountId, accountName);
 
             return newAccountId;
         } catch (error: any) {
@@ -1357,7 +1294,11 @@ export class MultiTypeInspection extends React.Component<
                 campaignId: string,
                 campaignName: string
             ): Promise<{ id: string; name: string } | undefined> => {
-                const query = "?$select=_duc_parentcampaign_value";
+                const query = "?$select=_duc_parentcampaign_value&$expand=duc_ParentCampaign($select=new_inspectioncampaignid,new_name)";
+                console.group(`[getParentCampaignFromCampaign] campaignId=${campaignId} | campaignName=${campaignName}`);
+                console.log("[QUERY] entity: new_inspectioncampaign");
+                console.log("[QUERY] id:", campaignId);
+                console.log("[QUERY] options:", query);
                 try {
                     const campaignRecord = await this.xrm.WebApi.retrieveRecord(
                         "new_inspectioncampaign",
@@ -1365,19 +1306,26 @@ export class MultiTypeInspection extends React.Component<
                         query
                     );
 
+                    console.log("[RESPONSE] Full record:", JSON.stringify(campaignRecord, null, 2));
+                    console.log("[RESPONSE] _duc_parentcampaign_value:", campaignRecord._duc_parentcampaign_value);
+                    console.log("[RESPONSE] duc_ParentCampaign (expanded):", campaignRecord.duc_ParentCampaign);
+                    console.log("[RESPONSE] duc_parentcampaign (lowercase):", campaignRecord.duc_parentcampaign);
+                    console.log("[RESPONSE] All keys in record:", Object.keys(campaignRecord));
+
                     // If parent campaign exists, return it
-                    if (campaignRecord._duc_parentcampaign_value) {
-                        try {
-                            const parentRecord = await this.xrm.WebApi.retrieveRecord("new_inspectioncampaign", campaignRecord._duc_parentcampaign_value, "?$select=new_inspectioncampaignid,new_name");
-                            return {
-                                id: parentRecord.new_inspectioncampaignid,
-                                name: parentRecord.new_name,
-                            };
-                        } catch (e) {
-                            console.warn("[RESULT] Failed to get parent campaign name");
-                        }
+                    const parentExpanded = campaignRecord.duc_ParentCampaign ?? campaignRecord.duc_parentcampaign;
+                    if (campaignRecord._duc_parentcampaign_value && parentExpanded) {
+                        const result = {
+                            id: parentExpanded.new_inspectioncampaignid,
+                            name: parentExpanded.new_name,
+                        };
+                        console.log("[RESULT] Parent campaign found:", result);
+                        console.groupEnd();
+                        return result;
                     }
 
+                    console.warn("[RESULT] No parent campaign found — returning campaign itself as parent");
+                    console.groupEnd();
                     return { id: campaignId, name: campaignName };
                 } catch (error: any) {
                     console.error("[ERROR] retrieveRecord failed:", error);
@@ -1450,7 +1398,6 @@ export class MultiTypeInspection extends React.Component<
                 anonymousCustomer: anonymousCustomer,
                 accountInspectionType: this.state.selectedInspectionType || undefined,
                 createdFromMobile: createdFromMobile,
-                assignedInspectorId: userId,
             });
             this.xrm.Utility.closeProgressIndicator();
 
@@ -1459,69 +1406,6 @@ export class MultiTypeInspection extends React.Component<
             }
 
             console.log("Work order created successfully:", workOrderId);
-
-            // STEP 9.5: Create Process Extension
-            if (incidentTypeData?.id) {
-                try {
-                    this.xrm.Utility.showProgressIndicator("Creating Process Extension...");
-                    const { peId, processDef } = await ProcessExtensionHelpers.createProcessExtensionForWorkOrder(
-                        workOrderId,
-                        incidentTypeData.id,
-                        serviceAccountData?.id || accountId
-                    );
-                    this.xrm.Utility.closeProgressIndicator();
-
-                    if (peId) {
-                        console.log("Process extension created:", peId);
-                    }
-
-                    // STEP 9.55: Set work order substatus from process definition
-                    if (processDef?.defaultSubStatusId) {
-                        try {
-                            const subStatusGuid = await ProcessExtensionHelpers.getSubStatusValueFromProcessDefinition(processDef.defaultSubStatusId);
-                            if (subStatusGuid) {
-                                const cleanGuid = subStatusGuid.replace(/[{}]/g, "");
-                                await this.xrm.WebApi.updateRecord("msdyn_workorder", workOrderId, {
-                                    "msdyn_substatus@odata.bind": `/msdyn_workordersubstatuses(${cleanGuid})`
-                                });
-                                console.log("[SubStatus] Work order substatus set to:", cleanGuid);
-                            }
-                        } catch (subStatusError: any) {
-                            console.warn("[SubStatus] Failed to set substatus (non-blocking):", subStatusError);
-                        }
-                    }
-                } catch (peError: any) {
-                    this.xrm.Utility.closeProgressIndicator();
-                    console.error("Non-fatal error creating Process Extension:", peError);
-                }
-            }
-
-            // STEP 9.6: Create Work Order Incident + Service Tasks
-            if (incidentTypeData?.id) {
-                try {
-                    this.xrm.Utility.showProgressIndicator("Creating Service Tasks...");
-
-                    const workOrderIncidentId = null;
-
-                    const wostResults = await WOSTHelpers.createWOSTsForWorkOrder(
-                        workOrderId,
-                        incidentTypeData.id,
-                        workOrderIncidentId
-                    );
-
-                    this.xrm.Utility.closeProgressIndicator();
-                    console.log(
-                        `[WOST] Created ${wostResults.length} service task(s).`,
-                        wostResults.map((r: any) =>
-                            `WOST: ${r.wostId} | Questions: ${r.questionsCreated} | Penalties: ${r.penaltiesCreated}`
-                        )
-                    );
-                } catch (wostError: any) {
-                    this.xrm.Utility.closeProgressIndicator();
-                    alert(`[STEP 9.6] CATCH ERROR: ${wostError?.message || JSON.stringify(wostError)}`);
-                    console.warn("[WOST] Service task creation failed (non-blocking):", wostError);
-                }
-            }
 
             // STEP 10: Create auto booking if from mobile — using cached values
             if (createdFromMobile && InitCache.hasBookableResource) {
@@ -1544,7 +1428,7 @@ export class MultiTypeInspection extends React.Component<
             await this.xrm.Navigation.openForm({
                 entityName: "msdyn_workorder",
                 entityId: workOrderId,
-                formId: "b5ea80ff-301f-f111-88b1-6045bd8e2841",// "eded7d77-6dc4-ed11-b596-6045bdf00fa1",    //workorder form
+                formId: "b7b3d199-8809-f111-8341-6045bd8e2841",
                 openInNewWindow: true,
             });
 
@@ -1571,14 +1455,9 @@ export class MultiTypeInspection extends React.Component<
         try {
             this.setState({ loading: true, error: null });
 
-            // Request location BEFORE showing progress indicator so the native
-            // GPS permission popup appears cleanly (not behind the loading overlay).
-            // If the user denies, location will be null and address creation is skipped.
-            const location = await this.getCurrentLocation();
-
-            // Now show progress indicator — the permission dialog is already resolved
+            // Get or create account — with progress indicator
             this.xrm.Utility.showProgressIndicator(this.strings.CreatingAccount);
-            const accountId = await this.searchOrCreateAccount(location);
+            const accountId = await this.searchOrCreateAccount();
             this.xrm.Utility.closeProgressIndicator();
 
             if (!accountId) {
@@ -1650,7 +1529,7 @@ export class MultiTypeInspection extends React.Component<
 
             // Reuse account ID from handleStart instead of re-searching
             const accountId =
-                this.pendingAccountId || (await this.searchOrCreateAccount(null));
+                this.pendingAccountId || (await this.searchOrCreateAccount());
             this.pendingAccountId = null;
             if (!accountId) {
                 throw new Error("Failed to get account");

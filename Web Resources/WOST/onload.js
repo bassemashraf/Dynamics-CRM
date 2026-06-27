@@ -7,6 +7,8 @@ const PERMIT_TYPE_FIELD = "duc_permittype";
 const CITES_OPTION_VALUE = 100000002;
 
 async function onLoad(executionContext) {
+    sessionStorage.setItem("ducWOSTFormActive", "true");
+
     var formContext = executionContext.getFormContext();
     setTimeout(() => {
         formContext.getControl("msdyn_inspection").setVisible(false);
@@ -135,75 +137,88 @@ function toggleSectionFromConfigByCode(executionContext, tabName, sectionName, c
         // hide by default
         setSectionVisible(formContext, tabName, sectionName, false);
 
-        // 1) Incident Type
-        var incidentTypeAttr = formContext.getAttribute("duc_incidenttype");
-        if (!incidentTypeAttr || !incidentTypeAttr.getValue()) {
-            console.warn("No Incident Type  on form");
+        // 1) Work Order Incident
+        var woiAttr = formContext.getAttribute("msdyn_workorderincident");
+        if (!woiAttr || !woiAttr.getValue()) {
+            console.warn("No Work Order Incident on form");
             return;
         }
 
-        var incidentTypeId = incidentTypeAttr.getValue()[0].id.replace(/[{}]/g, "");
-        if (!incidentTypeId) {
-            console.warn("No Incident Type on Work Order Incident");
-            return;
-        }
+        var woiId = woiAttr.getValue()[0].id.replace(/[{}]/g, "");
 
-        // 3) config by code + incident type
-        var query =
-            "?$select=" + visibilityField +
-            "&$filter=" + codeField + " eq '" + configCode + "'" +
-            " and _duc_incidenttype_value eq " + incidentTypeId;
+        // 2) retrieve Incident Type
+        Xrm.WebApi.retrieveRecord(
+            "msdyn_workorderincident",
+            woiId,
+            "?$select=_msdyn_incidenttype_value"
+        ).then(function (woiResult) {
 
-        Xrm.WebApi.retrieveMultipleRecords(configEntity, query).then(
-            async function success(result) {
+            var incidentTypeId = woiResult._msdyn_incidenttype_value;
+            if (!incidentTypeId) {
+                console.warn("No Incident Type on Work Order Incident");
+                return;
+            }
 
-                if (result.entities.length === 0) {
-                    console.warn("No matching configuration found");
-                    return;
-                }
+            // 3) config by code + incident type
+            var query =
+                "?$select=" + visibilityField +
+                "&$filter=" + codeField + " eq '" + configCode + "'" +
+                " and _duc_incidenttype_value eq " + incidentTypeId;
 
-                var show = (result.entities[0][visibilityField] === 1);
+            Xrm.WebApi.retrieveMultipleRecords(configEntity, query).then(
+                async function success(result) {
 
-                // CONDITION ONLY FOR Work_Order_Penalties_Section
-                if (show && tabName === "GeneralTab" && sectionName === "Work_Order_Penalties_Section") {
-                    var q1 = formContext.getAttribute("duc_question1");
-                    var q1Val = q1 ? (q1.getValue() || "") : "";
-                    var hasViolation = (q1Val.toString().trim().indexOf("مخالفة") > -1) || (q1Val.toString().trim().indexOf("غير مستوف الشروط") > -1);
-
-                    show = hasViolation; // must be true
-                }
-
-                // CONDITION ONLY FOR Vehicle_Information_Section
-                if (show && tabName === "GeneralTab" && sectionName === "Vehicle_Information_Section") {
-                    var WOSTId = formContext.data.entity.getId();
-                    WOSTId = WOSTId ? WOSTId.replace(/[{}]/g, "") : "";
-
-                    var q5Val = "";
-
-                    try {
-                        var results = await Xrm.WebApi.retrieveMultipleRecords(
-                            "duc_inspectionsurveyresult",
-                            "?$select=duc_answer5,duc_question5&$filter=_duc_workorderservicetask_value eq " + WOSTId
-                        );
-
-                        if (results.entities.length > 0) {
-                            q5Val = results.entities[0]["duc_answer5"] || "";
-                        }
-                    } catch (error) {
-                        console.log(error.message);
+                    if (result.entities.length === 0) {
+                        console.warn("No matching configuration found");
+                        return;
                     }
 
-                    var hasVehicle = q5Val.toString().trim().indexOf("طلب نقل نفايات") > -1;
+                    var show = (result.entities[0][visibilityField] === 1);
 
-                    show = hasVehicle;
+                    // CONDITION ONLY FOR Work_Order_Penalties_Section
+                    if (show && tabName === "GeneralTab" && sectionName === "Work_Order_Penalties_Section") {
+                        var q1 = formContext.getAttribute("duc_question1");
+                        var q1Val = q1 ? (q1.getValue() || "") : "";
+                        var hasViolation = (q1Val.toString().trim().indexOf("مخالفة") > -1) || (q1Val.toString().trim().indexOf("غير مستوف الشروط") > -1);
+
+                        show = hasViolation; // must be true
+                    }
+
+                    // CONDITION ONLY FOR Vehicle_Information_Section
+                    if (show && tabName === "GeneralTab" && sectionName === "Vehicle_Information_Section") {
+                        var WOSTId = formContext.data.entity.getId();
+                        WOSTId = WOSTId ? WOSTId.replace(/[{}]/g, "") : "";
+
+                        var q5Val = "";
+
+                        try {
+                            var results = await Xrm.WebApi.retrieveMultipleRecords(
+                                "duc_inspectionsurveyresult",
+                                "?$select=duc_answer5,duc_question5&$filter=_duc_workorderservicetask_value eq " + WOSTId
+                            );
+
+                            if (results.entities.length > 0) {
+                                q5Val = results.entities[0]["duc_answer5"] || "";
+                            }
+                        } catch (error) {
+                            console.log(error.message);
+                        }
+
+                        var hasVehicle = q5Val.toString().trim().indexOf("طلب نقل نفايات") > -1;
+
+                        show = hasVehicle;
+                    }
+
+                    setSectionVisible(formContext, tabName, sectionName, show);
+                },
+                function error(err) {
+                    console.error("Config retrieve error:", err.message);
                 }
+            );
 
-                setSectionVisible(formContext, tabName, sectionName, show);
-            },
-            function error(err) {
-                console.error("Config retrieve error:", err.message);
-            }
-        );
+        }, function (error) {
+            console.error("WOI retrieve error:", error.message);
+        });
 
     } catch (e) {
         console.error("toggleSectionFromConfigByCode error:", e);
@@ -1070,6 +1085,10 @@ function toggleSpecificOfflineFields(executionContext, onlineFieldName, offlineF
                 onlineField.setVisible(false);
                 console.log("[toggleSpecificOfflineFields] Offline mode detected — showing " + offlineFieldName + ", hiding " + onlineFieldName + ".");
             }
+        }
+        else {
+            offlineField.setVisible(false);
+            onlineField.setVisible(true);
         }
     } catch (e) {
         console.log("[toggleSpecificOfflineFields] error: " + e.message);

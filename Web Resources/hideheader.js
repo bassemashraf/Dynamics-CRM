@@ -78,12 +78,13 @@ function hideFormHeader(executionContext) {
 function isOffline() {
     try {
         var ctx = Xrm.Utility.getGlobalContext().client;
-        // User is on mobile app AND the offline API namespace exists
-        // → they are on an offline profile (works before first sync)
-        if (ctx.getClient() === "Mobile" &&
-            Xrm.WebApi.offline &&
-            typeof Xrm.WebApi.offline.isAvailableOffline === "function") return true;
-        // Standard checks (work after sync completes)
+        // Actually check if an entity is available offline — this returns true
+        // ONLY when a Mobile Offline profile is enabled and includes the entity.
+        // Just checking whether the API *exists* is not enough because the
+        // Xrm.WebApi.offline namespace is present on all mobile apps.
+        if (Xrm.WebApi.offline &&
+            typeof Xrm.WebApi.offline.isAvailableOffline === "function" &&
+            Xrm.WebApi.offline.isAvailableOffline("msdyn_workorder")) return true;
         if (Xrm.WebApi.isAvailableOffline &&
             Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
         if (ctx.isOffline()) return true;
