@@ -99,7 +99,7 @@ const STYLES = {
     textGreen: { color: "#29A283" },
     bgBrownLight: { backgroundColor: "#ECE7DA" },
     bgGreenLight: { backgroundColor: "#CCEEE9" },
-    bgpinkLight: { backgroundColor: "#FFACC6" },
+    bgpinkLight: { backgroundColor: "#ECE7DA" },
     welcomeBanner: {
         fontSize: "18px",
         paddingTop: 12,

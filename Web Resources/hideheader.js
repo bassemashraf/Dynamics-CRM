@@ -91,6 +91,20 @@ function isOffline() {
         if (ctx.getClientState() === "Offline") return true;
     } catch (e) { }
     return false;
+    
+}
+
+function isUserOffline() {
+    try {
+        // Check if user is on an offline profile (works even WITH internet connection).
+        // isAvailableOffline returns true when the entity is part of the active
+        // Mobile Offline profile — meaning the user is on the offline-first app.
+        if (Xrm.WebApi.isAvailableOffline &&
+            Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
+        if (Xrm.Utility.getGlobalContext().client.isOffline()) return true;
+        if (Xrm.Utility.getGlobalContext().client.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
 }
 
 function toggleOfflineFields(executionContext) {

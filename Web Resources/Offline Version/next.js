@@ -132,13 +132,18 @@ async function runAsyncOpenWorkOrder(formContext) {
 		}
 
 		// Only when question = "مخالفة"
-		if (isViolationSelected(formContext)) {
+		var violationCheck = await isViolationSelected(formContext);
+		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-1] isViolationSelected result: " + violationCheck });
+
+		if (violationCheck) {
 
 			const complianceResult = await hasValidComplianceStatus(formContext);
+			//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-2] complianceResult: " + complianceResult + " (type: " + typeof complianceResult + ")\nWill block? " + (complianceResult === false) });
 
 			// Block ONLY when penalties exist AND invalid
 			if (complianceResult === false) {
 				hideLoader();
+				//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-3] BLOCKING — showing violation alert" });
 
 				await Xrm.Navigation.openAlertDialog({ text: "يجب تسجيل مخالفة واحد على الأقل." }).then(
 					async function (success) {
@@ -151,6 +156,7 @@ async function runAsyncOpenWorkOrder(formContext) {
 
 				return;
 			}
+			//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-4] NOT blocking — proceeding to redirect" });
 		}
 
 		hideLoader();
@@ -177,6 +183,7 @@ async function redirectToWorkOrder(formContext) {
 	return Xrm.Navigation.openForm({
 		entityName: woEntity,
 		entityId: woId,
+		formId: "b5ea80ff-301f-f111-88b1-6045bd8e2841",
 		pageType: "entityrecord"
 	}, {
 		focusTab: "ResponsibleEmployee"
@@ -229,41 +236,140 @@ async function sBIP(formContext) {
 }
 
 
-function isViolationSelected(formContext) {
-	const attr = formContext.getAttribute("duc_question1");
-	if (!attr) return false;
+async function checkViolationFromJson(formContext) {
+	try {
+		const recordId = formContext.data.entity.getId().replace(/[{}]/g, "");
 
-	const value = attr.getValue();
-	if (!value) return false;
+		try {
+			// Step 1: Get Inspection Response Id from Work Order Service Task
+			const wost = await Xrm.WebApi.retrieveRecord(
+				"msdyn_workorderservicetask",
+				recordId,
+				"?$select=_msdyn_inspectionresponseid_value"
+			);
 
-	const normalizedValue = value.trim();
+			const inspectionResponseId = wost["_msdyn_inspectionresponseid_value"];
 
-	return normalizedValue === "مخالفة" ||
-		normalizedValue === "غير مستوف الشروط";
+			if (!inspectionResponseId) {
+				return false;
+			}
+
+			// Step 2: Retrieve Inspection Response
+			const inspection = await Xrm.WebApi.retrieveRecord(
+				"msdyn_inspectionresponse",
+				inspectionResponseId,
+				"?$select=msdyn_responsejsoncontent"
+			);
+
+			const raw = inspection["msdyn_responsejsoncontent"];
+
+			if (raw) {
+				try {
+					let decoded;
+
+					// =========================
+					// STEP 1: Base64 decode
+					// =========================
+					let base64Decoded = atob(raw);
+
+					// =========================
+					// STEP 2: Convert to UTF-8 (important for Arabic)
+					// =========================
+					let utf8Decoded = decodeURIComponent(
+						Array.prototype.map.call(base64Decoded, c =>
+							'%' + c.charCodeAt(0).toString(16).padStart(2, '0')
+						).join('')
+					);
+
+					// =========================
+					// STEP 3: URL decode (handle multiple encoding)
+					// =========================
+					decoded = utf8Decoded;
+					let prev;
+
+					do {
+						prev = decoded;
+						decoded = decodeURIComponent(decoded);
+					} while (decoded !== prev && decoded.includes("%"));
+
+					// =========================
+					// STEP 4: Parse JSON
+					// =========================
+					const parsed = JSON.parse(decoded);
+
+					const q1 = parsed?.Question1;
+
+					//alert("Q1: " + q1);
+
+					const hasViolation =
+						typeof q1 === "string" &&
+						(q1.includes("مخالفة") || q1.includes("غير مستوف الشروط"));
+
+					return hasViolation;
+				} catch (err) {
+					//alert("Decoding/parsing error: " + err.message);
+					console.error("Decoding/parsing error:", err.message, raw);
+					return false;
+				}
+			} else {
+				return false;
+			}
+
+		} catch (err) {
+			alert("Inspection retrieve error: " + err.message);
+			console.error("Inspection retrieve error:", err.message);
+			return false;
+		}
+
+	} catch (e) {
+		console.error("[checkViolationFromJson] " + (e.message || e));
+		return false;
+	}
+}
+async function isViolationSelected(formContext) {
+	var result = await checkViolationFromJson(formContext);
+	return result === true;
 }
 
 
 async function hasValidComplianceStatus(formContext) {
 	try {
 		const taskId = formContext.data.entity.getId();
+		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 1] taskId: " + taskId });
 		if (!taskId) return null;
 
 		const cleanId = taskId.replace(/[{}]/g, "");
 		var isOff = isOffline();
 		var wostFilterField = isOff ? "duc_workorderservicetask" : "_duc_workorderservicetask_value";
+		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 2] isOffline: " + isOff + "\nFilter field: " + wostFilterField + "\ncleanId: " + cleanId });
 
 		const result = await Xrm.WebApi.retrieveMultipleRecords(
 			"duc_workorderpenalties",
 			`?$select=duc_compliancestatus&$filter=${wostFilterField} eq ${cleanId}`
 		);
 
+		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 3] Penalties count: " + result.entities.length });
+
 		// NO penalties → do NOT block
 		if (!result.entities.length) {
+			await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 4] No penalties found → returning null (will NOT block)" });
 			return null;
 		}
 
+		// Show each penalty record's compliance status
+		var debugDetails = "";
+		result.entities.forEach(function (r, i) {
+			debugDetails += "\nRecord " + i + ":"
+				+ " duc_compliancestatus = " + r.duc_compliancestatus
+				+ " (type: " + typeof r.duc_compliancestatus + ")"
+				+ " | != null → " + (r.duc_compliancestatus != null);
+		});
+		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 5] Penalty details:" + debugDetails });
+
 		// penalties exist → check compliance
-		return result.entities.some(r => r.duc_compliancestatus !== null);
+		var finalResult = result.entities.some(r => r.duc_compliancestatus != null);
+		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 6] Final result: " + finalResult + "\n(false = will BLOCK, true = has valid compliance, null = no penalties)" });
+		return finalResult;
 
 	} catch (e) {
 		var errMsg = "[hasValidComplianceStatus] Error checking penalty compliance."
@@ -271,6 +377,7 @@ async function hasValidComplianceStatus(formContext) {
 			+ "\nOffline: " + isOffline()
 			+ "\nError: " + (e.message || JSON.stringify(e));
 		console.error(errMsg, e);
+		alert(errMsg)
 		return null; // fail-safe: do not block
 	}
 }

@@ -390,15 +390,33 @@ async function toggleVehicleOwnerButton(executionContext) {
     try {
         // Filter for accounts with account type = 1 (Individual/Vehicle Owner)
         // or type = 3 Cabin
-        // or type = 6 Wilderness camps
         //new change on 5 july 2026 , no need to appears for both 3 & 6
-        var result = await Xrm.WebApi.retrieveMultipleRecords(
-            "account",
-            `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 1  or duc_NewAccountType/duc_accounttype eq 3)&$top=1`
-        );
+        var showButton = false;
 
-        // Show button only if account type = 1
-        if (result.entities.length > 0) {
+        if (isOffline()) {
+            // OFFLINE: navigation property filters not supported, use two-step retrieve
+            var accountRecord = await Xrm.WebApi.retrieveRecord(
+                "account", accountId,
+                "?$select=accountid,_parentaccountid_value,_duc_newaccounttype_value"
+            );
+            if (accountRecord._parentaccountid_value === null && accountRecord._duc_newaccounttype_value) {
+                var accountTypeRecord = await Xrm.WebApi.retrieveRecord(
+                    "duc_accounttype", accountRecord._duc_newaccounttype_value,
+                    "?$select=duc_accounttype"
+                );
+                var at = accountTypeRecord.duc_accounttype;
+                showButton = (at === 1 || at === 3);
+            }
+        } else {
+            // ONLINE: use navigation property filter
+            var result = await Xrm.WebApi.retrieveMultipleRecords(
+                "account",
+                `?$select=accountid&$filter=accountid eq ${accountId} and _parentaccountid_value eq null and (duc_NewAccountType/duc_accounttype eq 1  or duc_NewAccountType/duc_accounttype eq 3)&$top=1`
+            );
+            showButton = result.entities.length > 0;
+        }
+
+        if (showButton) {
             btnCtrl.setVisible(true);
         }
     } catch (error) {
@@ -2153,4 +2171,22 @@ async function toggleCaptainFieldVisibility(executionContext) {
         console.log(error.message);
 
     }
+}
+function isOffline() {
+    try {
+        var ctx = Xrm.Utility.getGlobalContext().client;
+        // Actually check if an entity is available offline — this returns true
+        // ONLY when a Mobile Offline profile is enabled and includes the entity.
+        // Just checking whether the API *exists* is not enough because the
+        // Xrm.WebApi.offline namespace is present on all mobile apps.
+        if (Xrm.WebApi.offline &&
+            typeof Xrm.WebApi.offline.isAvailableOffline === "function" &&
+            Xrm.WebApi.offline.isAvailableOffline("msdyn_workorder")) return true;
+        if (Xrm.WebApi.isAvailableOffline &&
+            Xrm.WebApi.isAvailableOffline("msdyn_workorder")) return true;
+        if (ctx.isOffline()) return true;
+        if (ctx.getClientState() === "Offline") return true;
+    } catch (e) { }
+    return false;
+
 }
