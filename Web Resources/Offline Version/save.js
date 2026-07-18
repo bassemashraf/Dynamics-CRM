@@ -198,7 +198,6 @@ async function toggleSectionFromConfigByCode(formContext, tabName, sectionName, 
                                 (q1.includes("مخالفة") || q1.includes("غير مستوف الشروط"));
 
                             show = hasViolation;
-                            formContext.getAttribute("duc_question1").setValue(q1);
                             //alert("Q1: " + q1);
                         } catch (err) {
                             //alert("Decoding/parsing error: " + err.message);
@@ -271,7 +270,6 @@ async function saveAndRefresh(formContext) {
         step = "Running onLoad logic after save";
         await runOnLoadLogicAfterSave(formContext);
 
-        await formContext.data.save();
 
         step = "Refreshing form";
         Xrm.Utility.closeProgressIndicator();

@@ -813,7 +813,8 @@ export class MultiTypeInspection extends React.Component<
         } else if ([2, 3, 6, 15].includes(selectedInspectionType)) {
             requiredFields.push("qataryId", "name");
         } else if ([5, 7].includes(selectedInspectionType)) {
-            requiredFields.push(this.state.crCpToggle === 'cr' ? "crNumber" : "cpNumber");
+            // requiredFields.push(this.state.crCpToggle === 'cr' ? "crNumber" : "cpNumber");
+            requiredFields.push("crNumber");
         } else if (selectedInspectionType === 14) {
             requiredFields.push("boatNumber");
         } else if (selectedInspectionType === 16) {
@@ -856,7 +857,8 @@ export class MultiTypeInspection extends React.Component<
         }
 
         // Validate CR/CP number: slash must be in the middle (not trailing)
-        const crCpField = this.state.crCpToggle === 'cr' ? 'crNumber' : 'cpNumber';
+        // const crCpField = this.state.crCpToggle === 'cr' ? 'crNumber' : 'cpNumber';
+        const crCpField = 'crNumber';
         if (requiredFields.includes(crCpField)) {
             const crCpVal: string = this.state[crCpField] as string;
             if (crCpVal.endsWith('/')) {
@@ -1589,7 +1591,8 @@ export class MultiTypeInspection extends React.Component<
         }
 
         if (field === "cpNumber") {
-            return [5, 7].includes(selectedInspectionType) && this.state.crCpToggle === 'cp';
+            // return [5, 7].includes(selectedInspectionType) && this.state.crCpToggle === 'cp';
+            return false;
         }
 
         if (field === "registrationNumber") {
@@ -1944,7 +1947,7 @@ export class MultiTypeInspection extends React.Component<
                     React.createElement("div", { style: styles.errorStyle }, error),
 
                     // Campaign Selection
-                    showCampaignField &&
+                    /* showCampaignField &&
                     React.createElement(
                         "div",
                         { style: styles.fieldStyle },
@@ -1965,7 +1968,7 @@ export class MultiTypeInspection extends React.Component<
                             loading,
                             styles,
                         ),
-                    ),
+                    ), */
 
                     // Incident Type Selection
                     showIncidentField &&
@@ -2243,7 +2246,7 @@ export class MultiTypeInspection extends React.Component<
                 ),
 
                 // CR / CP Toggle (Company=5, Manor=7)
-                [5, 7].includes(selectedInspectionType!) &&
+                /* [5, 7].includes(selectedInspectionType!) &&
                 React.createElement(
                     "div",
                     { style: { ...styles.fieldStyle, marginBottom: 12 } },
@@ -2300,7 +2303,7 @@ export class MultiTypeInspection extends React.Component<
                             "CP",
                         ),
                     ),
-                ),
+                ), */
 
                 // CR Number (shown when toggle = CR)
                 this.shouldShowField("crNumber") &&
@@ -2359,7 +2362,7 @@ export class MultiTypeInspection extends React.Component<
                 ),
 
                 // CP Number (shown when toggle = CP)
-                this.shouldShowField("cpNumber") &&
+                /* this.shouldShowField("cpNumber") &&
                 React.createElement(
                     "div",
                     { style: styles.fieldStyle },
@@ -2410,7 +2413,7 @@ export class MultiTypeInspection extends React.Component<
                             ),
                         ),
                     ),
-                ),
+                ), */
 
                 this.shouldShowField("registrationNumber") &&
                 React.createElement(

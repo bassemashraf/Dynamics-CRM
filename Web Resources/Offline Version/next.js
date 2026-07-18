@@ -133,17 +133,14 @@ async function runAsyncOpenWorkOrder(formContext) {
 
 		// Only when question = "مخالفة"
 		var violationCheck = await isViolationSelected(formContext);
-		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-1] isViolationSelected result: " + violationCheck });
 
 		if (violationCheck) {
 
 			const complianceResult = await hasValidComplianceStatus(formContext);
-			//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-2] complianceResult: " + complianceResult + " (type: " + typeof complianceResult + ")\nWill block? " + (complianceResult === false) });
 
 			// Block ONLY when penalties exist AND invalid
 			if (complianceResult === false) {
 				hideLoader();
-				//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-3] BLOCKING — showing violation alert" });
 
 				await Xrm.Navigation.openAlertDialog({ text: "يجب تسجيل مخالفة واحد على الأقل." }).then(
 					async function (success) {
@@ -156,7 +153,6 @@ async function runAsyncOpenWorkOrder(formContext) {
 
 				return;
 			}
-			//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG WO-4] NOT blocking — proceeding to redirect" });
 		}
 
 		hideLoader();
@@ -242,13 +238,17 @@ async function checkViolationFromJson(formContext) {
 
 		try {
 			// Step 1: Get Inspection Response Id from Work Order Service Task
+			var selectField = isOffline() ? "?$select=msdyn_inspectionresponseid" : "?$select=_msdyn_inspectionresponseid_value";
+
 			const wost = await Xrm.WebApi.retrieveRecord(
 				"msdyn_workorderservicetask",
 				recordId,
-				"?$select=_msdyn_inspectionresponseid_value"
+				selectField
 			);
 
-			const inspectionResponseId = wost["_msdyn_inspectionresponseid_value"];
+			const inspectionResponseId = isOffline()
+				? (wost["_msdyn_inspectionresponseid_value"] || wost["msdyn_inspectionresponseid"])
+				: wost["_msdyn_inspectionresponseid_value"];
 
 			if (!inspectionResponseId) {
 				return false;
@@ -299,15 +299,12 @@ async function checkViolationFromJson(formContext) {
 
 					const q1 = parsed?.Question1;
 
-					//alert("Q1: " + q1);
-
 					const hasViolation =
 						typeof q1 === "string" &&
 						(q1.includes("مخالفة") || q1.includes("غير مستوف الشروط"));
 
 					return hasViolation;
 				} catch (err) {
-					//alert("Decoding/parsing error: " + err.message);
 					console.error("Decoding/parsing error:", err.message, raw);
 					return false;
 				}
@@ -316,7 +313,6 @@ async function checkViolationFromJson(formContext) {
 			}
 
 		} catch (err) {
-			alert("Inspection retrieve error: " + err.message);
 			console.error("Inspection retrieve error:", err.message);
 			return false;
 		}
@@ -335,41 +331,25 @@ async function isViolationSelected(formContext) {
 async function hasValidComplianceStatus(formContext) {
 	try {
 		const taskId = formContext.data.entity.getId();
-		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 1] taskId: " + taskId });
 		if (!taskId) return null;
 
 		const cleanId = taskId.replace(/[{}]/g, "");
 		var isOff = isOffline();
 		var wostFilterField = isOff ? "duc_workorderservicetask" : "_duc_workorderservicetask_value";
-		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 2] isOffline: " + isOff + "\nFilter field: " + wostFilterField + "\ncleanId: " + cleanId });
 
 		const result = await Xrm.WebApi.retrieveMultipleRecords(
 			"duc_workorderpenalties",
 			`?$select=duc_compliancestatus&$filter=${wostFilterField} eq ${cleanId}`
 		);
 
-		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 3] Penalties count: " + result.entities.length });
-
 		// NO penalties → do NOT block
 		if (!result.entities.length) {
-			await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 4] No penalties found → returning null (will NOT block)" });
 			return null;
 		}
 
-		// Show each penalty record's compliance status
-		var debugDetails = "";
-		result.entities.forEach(function (r, i) {
-			debugDetails += "\nRecord " + i + ":"
-				+ " duc_compliancestatus = " + r.duc_compliancestatus
-				+ " (type: " + typeof r.duc_compliancestatus + ")"
-				+ " | != null → " + (r.duc_compliancestatus != null);
-		});
-		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 5] Penalty details:" + debugDetails });
-
 		// penalties exist → check compliance
-		var finalResult = result.entities.some(r => r.duc_compliancestatus != null);
-		//await Xrm.Navigation.openAlertDialog({ text: "[DEBUG 6] Final result: " + finalResult + "\n(false = will BLOCK, true = has valid compliance, null = no penalties)" });
-		return finalResult;
+		// Note: offline mode returns -1 instead of null for empty option sets
+		return result.entities.some(r => r.duc_compliancestatus != null && r.duc_compliancestatus !== -1);
 
 	} catch (e) {
 		var errMsg = "[hasValidComplianceStatus] Error checking penalty compliance."
@@ -377,7 +357,7 @@ async function hasValidComplianceStatus(formContext) {
 			+ "\nOffline: " + isOffline()
 			+ "\nError: " + (e.message || JSON.stringify(e));
 		console.error(errMsg, e);
-		alert(errMsg)
+		Xrm.Navigation.openAlertDialog({ text: errMsg });
 		return null; // fail-safe: do not block
 	}
 }
