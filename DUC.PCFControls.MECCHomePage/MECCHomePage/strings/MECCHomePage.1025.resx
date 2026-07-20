@@ -248,4 +248,44 @@
     <value>رقم البطاقة القطرية يجب أن يكون 11 رقماً بالضبط</value>
     <comment>Validation message when Qatary ID is not 11 digits</comment>
   </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>اسم المشروع</value>
+    <comment>Label for project name field</comment>
+  </data>
+  <data name="RequestPermitNumber" xml:space="preserve">
+    <value>رقم الطلب/التصريح</value>
+    <comment>Label for request or permit number field</comment>
+  </data>
+  <data name="LocationDetails" xml:space="preserve">
+    <value>تفاصيل الموقع</value>
+    <comment>Label for location details field</comment>
+  </data>
+  <data name="SelectProject" xml:space="preserve">
+    <value>اختر المشروع</value>
+    <comment>Title for the project selection popup</comment>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>رجوع</value>
+    <comment>Back button text</comment>
+  </data>
+  <data name="Select" xml:space="preserve">
+    <value>اختيار</value>
+    <comment>Select button text</comment>
+  </data>
+  <data name="NoProjectsFound" xml:space="preserve">
+    <value>لم يتم العثور على مشاريع قريبة</value>
+    <comment>Message when no nearby projects are found</comment>
+  </data>
+  <data name="SearchingProjects" xml:space="preserve">
+    <value>جاري البحث عن المشاريع القريبة...</value>
+    <comment>Progress message while searching for nearby projects</comment>
+  </data>
+  <data name="ProjectNumber" xml:space="preserve">
+    <value>رقم المشروع</value>
+    <comment>Label for project number in the project list</comment>
+  </data>
+  <data name="AccountNameLabel" xml:space="preserve">
+    <value>الحساب</value>
+    <comment>Label for account name in the project list</comment>
+  </data>
 </root>

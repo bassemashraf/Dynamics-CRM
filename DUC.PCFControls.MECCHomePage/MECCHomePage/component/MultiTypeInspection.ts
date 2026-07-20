@@ -5,7 +5,9 @@ import {
     CampaignHelpers,
     IncidentTypeHelpers,
     InitCache,
+    ProjectHelpers,
 } from "../helpers";
+import { IProjectDetail } from "../helpers/ProjectHelpers";
 
 interface IMultiTypeInspectionProps {
     context: ComponentFramework.Context<any>;
@@ -67,6 +69,11 @@ interface IMultiTypeInspectionState {
     campaignIncidentTypeMap: Record<string, { id: string; name: string }>;
     // NEW: whether to show campaign field based on user's department setting
     shouldShowCampaignField: boolean;
+    // Project selection (type 16)
+    showProjectSelectionPopup: boolean;
+    nearbyProjects: IProjectDetail[];
+    selectedProjectId: string | null;
+    projectSearchLoading: boolean;
 }
 
 interface LocalizedStrings {
@@ -106,6 +113,13 @@ interface LocalizedStrings {
     ProjectName: string;
     RequestPermitNumber: string;
     LocationDetails: string;
+    SelectProject: string;
+    Back: string;
+    Select: string;
+    NoProjectsFound: string;
+    SearchingProjects: string;
+    ProjectNumber: string;
+    AccountNameLabel: string;
 }
 
 // Cache constants
@@ -235,6 +249,20 @@ export class MultiTypeInspection extends React.Component<
                 props.context.resources.getString("RequestPermitNumber") || "Request/Permit Number",
             LocationDetails:
                 props.context.resources.getString("LocationDetails") || "Location Details",
+            SelectProject:
+                props.context.resources.getString("SelectProject") || "Select Project",
+            Back:
+                props.context.resources.getString("Back") || "Back",
+            Select:
+                props.context.resources.getString("Select") || "Select",
+            NoProjectsFound:
+                props.context.resources.getString("NoProjectsFound") || "No projects found nearby",
+            SearchingProjects:
+                props.context.resources.getString("SearchingProjects") || "Searching nearby projects...",
+            ProjectNumber:
+                props.context.resources.getString("ProjectNumber") || "Project #",
+            AccountNameLabel:
+                props.context.resources.getString("AccountNameLabel") || "Account",
         };
 
         this.state = {
@@ -271,6 +299,11 @@ export class MultiTypeInspection extends React.Component<
             campaignIncidentTypeMap: {},
             registrationNumber: "",
             shouldShowCampaignField: true, // Default to true, will be updated after checking user's department
+            // Project selection (type 16)
+            showProjectSelectionPopup: false,
+            nearbyProjects: [],
+            selectedProjectId: null,
+            projectSearchLoading: false,
         };
     }
 
@@ -814,9 +847,9 @@ export class MultiTypeInspection extends React.Component<
             requiredFields.push(this.state.crCpToggle === 'cr' ? "crNumber" : "cpNumber");
         } else if (selectedInspectionType === 14) {
             requiredFields.push("boatNumber");
-        } else if (selectedInspectionType === 16) {
-            requiredFields.push("requestPermitNumber");
         }
+        // Type 16 (Project) — no fields needed on main form;
+        // user picks from project list popup instead
 
         return requiredFields;
     };
@@ -829,8 +862,8 @@ export class MultiTypeInspection extends React.Component<
             return false;
         }
 
-        // Anonymous (4) and type 13 (Anonymous-like) — no fields needed
-        if ([4, 13].includes(selectedInspectionType)) {
+        // Anonymous (4), type 13 (Anonymous-like), and type 16 (Project) — no fields needed on main form
+        if ([4, 13, 16].includes(selectedInspectionType)) {
             return true;
         }
 
@@ -878,7 +911,6 @@ export class MultiTypeInspection extends React.Component<
         if ([5, 7].includes(selectedInspectionType!)) return this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber;
         if ([10, 11].includes(selectedInspectionType!)) return registrationNumber;
         if (selectedInspectionType === 14) return boatNumber;
-        if (selectedInspectionType === 16) return requestPermitNumber;
 
         return "";
     };
@@ -1453,6 +1485,42 @@ export class MultiTypeInspection extends React.Component<
         try {
             this.setState({ loading: true, error: null });
 
+            // PROJECT TYPE (16): Intercept to show nearby projects selection first
+            if (this.state.selectedInspectionType === 16) {
+                this.xrm.Utility.showProgressIndicator(this.strings.SearchingProjects);
+
+                // Get current location for nearby search
+                const location = await this.getCurrentLocation();
+                const latitude = location?.latitude || 0;
+                const longitude = location?.longitude || 0;
+
+                // Search nearby projects via Logic App API
+                const nearbyResults = await ProjectHelpers.searchNearbyProjects({
+                    radius: ProjectHelpers.defaultSearchRadius,
+                    accountType: 16,
+                    longitude: longitude,
+                    latitude: latitude,
+                    departmentId: this.props.organizationUnitId || "",
+                });
+
+                // Enrich with project details (names, account info)
+                const projectIds = nearbyResults.map(r => r.projectId);
+                const projectDetails = await ProjectHelpers.getProjectDetails(projectIds);
+
+                this.xrm.Utility.closeProgressIndicator();
+
+                // Show project selection popup
+                this.setState({
+                    showProjectSelectionPopup: true,
+                    nearbyProjects: projectDetails,
+                    selectedProjectId: null,
+                    projectSearchLoading: false,
+                    loading: false,
+                    error: null,
+                });
+                return; // Stop here — user will pick a project, then handleProjectConfirm continues
+            }
+
             // Get or create account — with progress indicator
             this.xrm.Utility.showProgressIndicator(this.strings.CreatingAccount);
             const accountId = await this.searchOrCreateAccount();
@@ -1546,6 +1614,109 @@ export class MultiTypeInspection extends React.Component<
     };
 
     // =====================================================================
+    // PROJECT SELECTION HANDLERS (TYPE 16)
+    // =====================================================================
+
+    /**
+     * Handle user selecting a project from the nearby projects list.
+     * Single-select: only one project can be selected at a time.
+     */
+    private handleProjectSelect = (projectId: string): void => {
+        this.setState({ selectedProjectId: projectId });
+    };
+
+    /**
+     * Handle user confirming the selected project.
+     * Gets the account linked to the project, then continues the normal flow
+     * (Campaign/Incident popup → work order creation).
+     */
+    private handleProjectConfirm = async (): Promise<void> => {
+        const { selectedProjectId } = this.state;
+
+        if (!selectedProjectId) {
+            this.setState({ error: this.strings.SelectProject });
+            return;
+        }
+
+        try {
+            this.setState({ loading: true, error: null });
+
+            // Get the account linked to the selected project
+            this.xrm.Utility.showProgressIndicator(this.strings.Loading);
+            const accountData = await ProjectHelpers.getAccountForProject(selectedProjectId);
+            this.xrm.Utility.closeProgressIndicator();
+
+            if (!accountData) {
+                throw new Error("No account found for the selected project");
+            }
+
+            // Close project popup and continue to Campaign/Incident popup
+            // (same flow as other types after searchOrCreateAccount)
+            const accountId = accountData.accountId;
+
+            // Determine Campaign and Incident Type values to allow pre-filling the popup
+            let resolvedIncidentTypeId =
+                this.state.selectedIncidentTypeId || this.props.incidentTypeId;
+            let resolvedIncidentTypeName =
+                this.state.selectedIncidentTypeName || this.props.incidentTypeName;
+
+            const campaignId =
+                this.state.selectedCampaignId || this.props.activePatrolId;
+            let incidentTypeDerivedFromCampaign = false;
+
+            // Auto-resolve incident type from campaign if available
+            if (!resolvedIncidentTypeId && campaignId) {
+                const mapped = this.state.campaignIncidentTypeMap[campaignId];
+                if (mapped) {
+                    resolvedIncidentTypeId = mapped.id;
+                    resolvedIncidentTypeName = mapped.name;
+                    incidentTypeDerivedFromCampaign = true;
+                }
+            }
+
+            // Store account ID and show Campaign/Incident popup (normal flow)
+            this.pendingAccountId = accountId;
+            this.setState((prev) => ({
+                ...prev,
+                showProjectSelectionPopup: false,
+                showCampaignIncidentPopup: true,
+                popupShowCampaign: this.state.shouldShowCampaignField,
+                popupShowIncidentType: true,
+                loading: false,
+                error: null,
+
+                // Pre-fill popup with resolved values
+                selectedCampaignId: campaignId,
+                selectedIncidentTypeId: resolvedIncidentTypeId,
+                selectedIncidentTypeName: resolvedIncidentTypeName,
+
+                // If incident type is derived from campaign, make it read-only
+                incidentTypeReadOnly: incidentTypeDerivedFromCampaign,
+            }));
+        } catch (error: any) {
+            this.xrm.Utility.closeProgressIndicator();
+            console.error("Error confirming project selection:", error);
+            this.setState({
+                error: this.strings.ContactAdministrator,
+                loading: false,
+            });
+        }
+    };
+
+    /**
+     * Handle user clicking "Back" on the project selection popup.
+     * Returns to the main form.
+     */
+    private handleProjectBack = (): void => {
+        this.setState({
+            showProjectSelectionPopup: false,
+            nearbyProjects: [],
+            selectedProjectId: null,
+            error: null,
+        });
+    };
+
+    // =====================================================================
     // FIELD VISIBILITY
     // =====================================================================
 
@@ -1599,8 +1770,10 @@ export class MultiTypeInspection extends React.Component<
             return selectedInspectionType === 14;
         }
 
+        // Type 16 (Project) — no fields shown on main form;
+        // user picks from project list popup instead
         if (["projectName", "requestPermitNumber", "locationDetails"].includes(field)) {
-            return selectedInspectionType === 16;
+            return false;
         }
 
         return false;
@@ -1912,6 +2085,177 @@ export class MultiTypeInspection extends React.Component<
 
         const styles = this.getStyles();
         const isInspectionTypeDisabled = this.props.lockInspectionType || loading;
+
+        // ------
+        // Project Selection Popup (type 16)
+        // ------
+        if (this.state.showProjectSelectionPopup) {
+            const { nearbyProjects, selectedProjectId } = this.state;
+
+            // Styles specific to the project selection list
+            const projectListStyle: React.CSSProperties = {
+                maxHeight: "50vh",
+                overflowY: "auto",
+                marginBottom: 16,
+                border: `1px solid ${FLUENT.colorNeutralLight}`,
+                borderRadius: FLUENT.borderRadius,
+            };
+
+            const projectCardStyle = (isSelected: boolean): React.CSSProperties => ({
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderBottom: `1px solid ${FLUENT.colorNeutralLighter}`,
+                backgroundColor: isSelected ? "#e6f2ff" : FLUENT.colorWhite,
+                cursor: loading ? "not-allowed" : "pointer",
+                transition: `background-color ${FLUENT.transitionFast}`,
+            });
+
+            const radioStyle: React.CSSProperties = {
+                width: 18,
+                height: 18,
+                accentColor: FLUENT.colorPrimary,
+                cursor: loading ? "not-allowed" : "pointer",
+                flexShrink: 0,
+            };
+
+            const projectInfoStyle: React.CSSProperties = {
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+            };
+
+            const projectNumberStyle: React.CSSProperties = {
+                fontSize: 14,
+                fontWeight: 600,
+                color: FLUENT.colorNeutralDark,
+                fontFamily: FLUENT.fontFamily,
+            };
+
+            const projectNameStyle: React.CSSProperties = {
+                fontSize: 13,
+                color: FLUENT.colorNeutralPrimary,
+                fontFamily: FLUENT.fontFamily,
+            };
+
+            const projectAccountStyle: React.CSSProperties = {
+                fontSize: 12,
+                color: FLUENT.colorNeutralSecondary,
+                fontFamily: FLUENT.fontFamily,
+            };
+
+            return React.createElement(
+                "div",
+                { style: styles.containerStyle },
+                React.createElement(
+                    "div",
+                    { style: styles.modalStyle },
+                    // Title
+                    React.createElement(
+                        "h2",
+                        { style: styles.titleStyle },
+                        this.strings.SelectProject,
+                    ),
+
+                    // Error message
+                    error &&
+                    React.createElement("div", { style: styles.errorStyle }, error),
+
+                    // No projects found message
+                    nearbyProjects.length === 0 &&
+                    React.createElement(
+                        "div",
+                        {
+                            style: {
+                                padding: 24,
+                                textAlign: "center",
+                                color: FLUENT.colorNeutralSecondary,
+                                fontFamily: FLUENT.fontFamily,
+                                fontSize: 14,
+                            },
+                        },
+                        this.strings.NoProjectsFound,
+                    ),
+
+                    // Project list
+                    nearbyProjects.length > 0 &&
+                    React.createElement(
+                        "div",
+                        { style: projectListStyle },
+                        nearbyProjects.map((project) =>
+                            React.createElement(
+                                "div",
+                                {
+                                    key: project.projectId,
+                                    style: projectCardStyle(selectedProjectId === project.projectId),
+                                    onClick: () => !loading && this.handleProjectSelect(project.projectId),
+                                },
+                                // Radio button
+                                React.createElement("input", {
+                                    type: "radio",
+                                    name: "projectSelection",
+                                    checked: selectedProjectId === project.projectId,
+                                    onChange: () => this.handleProjectSelect(project.projectId),
+                                    disabled: loading,
+                                    style: radioStyle,
+                                }),
+                                // Project info
+                                React.createElement(
+                                    "div",
+                                    { style: projectInfoStyle },
+                                    React.createElement(
+                                        "span",
+                                        { style: projectNumberStyle },
+                                        this.strings.ProjectNumber + ": " + project.projectNumber,
+                                    ),
+                                    React.createElement(
+                                        "span",
+                                        { style: projectNameStyle },
+                                        project.arabicName,
+                                    ),
+                                    React.createElement(
+                                        "span",
+                                        { style: projectAccountStyle },
+                                        this.strings.AccountNameLabel + ": " + project.accountName,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+
+                    // Buttons
+                    React.createElement(
+                        "div",
+                        { style: styles.buttonContainerStyle },
+                        // Select button (primary)
+                        React.createElement(
+                            "button",
+                            {
+                                onClick: this.handleProjectConfirm,
+                                disabled: loading || !selectedProjectId,
+                                style: {
+                                    ...styles.startButtonStyle,
+                                    opacity: !selectedProjectId ? 0.5 : 1,
+                                },
+                            },
+                            loading ? this.strings.Loading : this.strings.Select,
+                        ),
+                        // Back button (secondary)
+                        React.createElement(
+                            "button",
+                            {
+                                onClick: this.handleProjectBack,
+                                disabled: loading,
+                                style: styles.closeButtonStyle,
+                            },
+                            this.strings.Back,
+                        ),
+                    ),
+                ),
+            );
+        }
 
         // ------
         // Campaign/Incident Popup

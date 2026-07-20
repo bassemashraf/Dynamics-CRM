@@ -248,4 +248,44 @@
     <value>Qatary ID must be exactly 11 digits</value>
     <comment>Validation message when Qatary ID is not 11 digits</comment>
   </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>Project Name</value>
+    <comment>Label for project name field</comment>
+  </data>
+  <data name="RequestPermitNumber" xml:space="preserve">
+    <value>Request/Permit Number</value>
+    <comment>Label for request or permit number field</comment>
+  </data>
+  <data name="LocationDetails" xml:space="preserve">
+    <value>Location Details</value>
+    <comment>Label for location details field</comment>
+  </data>
+  <data name="SelectProject" xml:space="preserve">
+    <value>Select Project</value>
+    <comment>Title for the project selection popup</comment>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>Back</value>
+    <comment>Back button text</comment>
+  </data>
+  <data name="Select" xml:space="preserve">
+    <value>Select</value>
+    <comment>Select button text</comment>
+  </data>
+  <data name="NoProjectsFound" xml:space="preserve">
+    <value>No projects found nearby</value>
+    <comment>Message when no nearby projects are found</comment>
+  </data>
+  <data name="SearchingProjects" xml:space="preserve">
+    <value>Searching nearby projects...</value>
+    <comment>Progress message while searching for nearby projects</comment>
+  </data>
+  <data name="ProjectNumber" xml:space="preserve">
+    <value>Project #</value>
+    <comment>Label for project number in the project list</comment>
+  </data>
+  <data name="AccountNameLabel" xml:space="preserve">
+    <value>Account</value>
+    <comment>Label for account name in the project list</comment>
+  </data>
 </root>
