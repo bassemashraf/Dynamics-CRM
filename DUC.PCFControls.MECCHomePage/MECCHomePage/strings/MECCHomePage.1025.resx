@@ -158,6 +158,10 @@
     <value>رقم الرخصة التجارية:</value>
     <comment>Label for CP Number field</comment>
   </data>
+  <data name="industrialRegistration" xml:space="preserve">
+    <value>رقم التسجيل الصناعي:</value>
+    <comment>Label for industrial Registration Number field</comment>
+  </data>
   <data name="ID" xml:space="preserve">
     <value>الرقم:</value>
     <comment>Label for ID field</comment>

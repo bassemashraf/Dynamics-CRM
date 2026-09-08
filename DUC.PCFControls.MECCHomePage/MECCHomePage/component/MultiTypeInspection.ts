@@ -34,16 +34,19 @@ interface IMultiTypeInspectionState {
         label: string;
         accountTypeId: string;
         orgUnitAccountTypeId?: string;
+        identifiers?: string | number;
     }>;
     selectedInspectionType: number | null;
     qataryId: string;
     name: string;
     crNumber: string;
     cpNumber: string;
-    crCpToggle: 'cr' | 'cp';
+    industrialRegistration: string;
+    crCpToggle: 'cr' | 'cp' | 'industrialReg';
     registrationNumber: string;
     id: string;
     carColor: string;
+    identifierError: string | null;
     vehicleBrand: number | null;
     vehicleBrands: Array<{ value: number; label: string }>;
     boatNumber: string;
@@ -83,6 +86,7 @@ interface LocalizedStrings {
     Name: string;
     CRNumber: string;
     CPNumber: string;
+    industrialRegistration: string;
     MonourNumber: string;
     ID: string;
     CarColor: string;
@@ -189,6 +193,7 @@ export class MultiTypeInspection extends React.Component<
             Name: props.context.resources.getString("Name"),
             CRNumber: props.context.resources.getString("CRNumber"),
             CPNumber: props.context.resources.getString("CPNumber") || "CP Number:",
+            industrialRegistration: props.context.resources.getString("industrialRegistration") || "industrial Registration Number",
             MonourNumber:
                 props.context.resources.getString("MonourNumber") || "Monour Number",
             ID: props.context.resources.getString("ID"),
@@ -273,6 +278,7 @@ export class MultiTypeInspection extends React.Component<
             name: "",
             crNumber: "",
             cpNumber: "",
+            industrialRegistration: "",
             crCpToggle: 'cr',
             id: "",
             carColor: "",
@@ -284,6 +290,7 @@ export class MultiTypeInspection extends React.Component<
             locationDetails: "",
             loading: false,
             error: null,
+            identifierError: null,
             accountTypeRecord: null,
             showCampaignIncidentPopup: false,
             selectedCampaignId: props.activePatrolId,
@@ -334,6 +341,7 @@ export class MultiTypeInspection extends React.Component<
                         duc_accounttypeid: inspectionType.accountTypeId,
                         duc_accounttype: this.props.defaultInspectionType,
                         duc_name: inspectionType.label,
+                        duc_Identifiers: inspectionType.identifiers,
                     };
                     this.setState({ accountTypeRecord });
                 }
@@ -405,7 +413,7 @@ export class MultiTypeInspection extends React.Component<
             // Fetch from junction entity — include duc_name & duc_namear for labels
             const query =
                 `?$filter=_duc_organizationunit_value eq '${this.props.organizationUnitId}'` +
-                `&$select=duc_organizationunitaccounttypesid,duc_name,duc_namear` +
+                `&$select=duc_organizationunitaccounttypesid,duc_name,duc_namear,duc_identifiers` +
                 `&$expand=duc_AccountType($select=duc_accounttypeid,duc_name,duc_accounttype)`;
 
             const results = await this.xrm.WebApi.retrieveMultipleRecords(
@@ -425,6 +433,7 @@ export class MultiTypeInspection extends React.Component<
                 label: string;
                 accountTypeId: string;
                 orgUnitAccountTypeId?: string;
+                identifiers?: number;
             }> = [];
 
             for (const entity of results.entities) {
@@ -440,6 +449,7 @@ export class MultiTypeInspection extends React.Component<
                         label: label,
                         accountTypeId: entity.duc_AccountType.duc_accounttypeid,
                         orgUnitAccountTypeId: entity.duc_organizationunitaccounttypesid,
+                        identifiers: entity.duc_identifiers,
                     });
                 }
             }
@@ -693,6 +703,7 @@ export class MultiTypeInspection extends React.Component<
                         duc_accounttype: optionValue,
                         duc_name: inspectionType.label,
                         duc_organizationunitaccounttypesid: inspectionType.orgUnitAccountTypeId,
+                        duc_Identifiers: inspectionType.identifiers,
                     };
                 }
             }
@@ -704,6 +715,7 @@ export class MultiTypeInspection extends React.Component<
             name: "",
             crNumber: "",
             cpNumber: "",
+            industrialRegistration: "",
             crCpToggle: 'cr',
             id: "",
             carColor: "",
@@ -713,6 +725,7 @@ export class MultiTypeInspection extends React.Component<
             requestPermitNumber: "",
             locationDetails: "",
             error: null,
+            identifierError: null,
             accountTypeRecord: accountTypeRecord,
             isAnonymous: false,
         });
@@ -745,8 +758,14 @@ export class MultiTypeInspection extends React.Component<
                 if (!before) return after; // strip leading slash
                 return before + '/' + after; // allow trailing slash while user is still typing
             })()
+            : field === 'industrialRegistration'
+            ? value.replace(/[^0-9\-/]/g, '')
             : value.replace(/[^0-9]/g, '');
-        this.setState({ [field]: numericValue } as any);
+        const stateUpdate: any = { [field]: numericValue };
+        if (field === "industrialRegistration") {
+            stateUpdate.identifierError = null;
+        }
+        this.setState(stateUpdate as any);
     };
 
     // =====================================================================
@@ -844,7 +863,7 @@ export class MultiTypeInspection extends React.Component<
         } else if ([2, 3, 6, 15].includes(selectedInspectionType)) {
             requiredFields.push("qataryId", "name");
         } else if ([5, 7].includes(selectedInspectionType)) {
-            requiredFields.push(this.state.crCpToggle === 'cr' ? "crNumber" : "cpNumber");
+            requiredFields.push(this.state.crCpToggle === 'cr' ? "crNumber" : this.state.crCpToggle === 'cp' ? "cpNumber" : "industrialRegistration");
         } else if (selectedInspectionType === 14) {
             requiredFields.push("boatNumber");
         }
@@ -887,7 +906,7 @@ export class MultiTypeInspection extends React.Component<
         }
 
         // Validate CR/CP number: slash must be in the middle (not trailing)
-        const crCpField = this.state.crCpToggle === 'cr' ? 'crNumber' : 'cpNumber';
+        const crCpField = this.state.crCpToggle === 'cr' ? 'crNumber' : this.state.crCpToggle === 'cp' ? 'cpNumber' : "industrialRegistration";
         if (requiredFields.includes(crCpField)) {
             const crCpVal: string = this.state[crCpField] as string;
             if (crCpVal.endsWith('/')) {
@@ -899,6 +918,27 @@ export class MultiTypeInspection extends React.Component<
         return true;
     };
 
+    private getSelectedInspectionTypeRecord = () => {
+        const { selectedInspectionType, inspectionTypes } = this.state;
+        return inspectionTypes.find((t) => t.value === selectedInspectionType);
+    };
+
+    private isIndustrialRegistrationSupported = (): boolean => {
+        const selectedInspectionType = this.state.selectedInspectionType ?? -1;
+        const identifiersValue =
+            this.state.accountTypeRecord?.duc_Identifiers ??
+            this.getSelectedInspectionTypeRecord()?.identifiers;
+
+        if (!identifiersValue) return false;
+
+        const identifiers = String(identifiersValue)
+            .split(",")
+            .map((identifier) => identifier.trim());
+
+        return [5, 7].includes(selectedInspectionType) &&
+            identifiers.includes("100000002");
+    };
+
     // =====================================================================
     // ACCOUNT SEARCH/CREATE
     // =====================================================================
@@ -908,7 +948,7 @@ export class MultiTypeInspection extends React.Component<
 
         if (selectedInspectionType === 1) return id;
         if ([2, 3, 6, 15].includes(selectedInspectionType!)) return qataryId;
-        if ([5, 7].includes(selectedInspectionType!)) return this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber;
+        if ([5, 7].includes(selectedInspectionType!)) return this.state.crCpToggle === 'cr' ? crNumber : this.state.crCpToggle === 'cp' ? this.state.cpNumber : this.state.industrialRegistration;
         if ([10, 11].includes(selectedInspectionType!)) return registrationNumber;
         if (selectedInspectionType === 14) return boatNumber;
 
@@ -966,7 +1006,7 @@ export class MultiTypeInspection extends React.Component<
 
             case 5: // Company
             case 7: // Manor
-                return (this.state.crCpToggle === 'cr' ? crNumber : this.state.cpNumber) || "Account";
+                return (this.state.crCpToggle === 'cr' ? crNumber : this.state.crCpToggle === 'cp' ? this.state.cpNumber : this.state.industrialRegistration) || "Account";
 
             case 10: // Establishment
             case 11: // Hospital
@@ -1044,7 +1084,9 @@ export class MultiTypeInspection extends React.Component<
                 carColor,
                 vehicleBrand,
                 isAnonymous,
+                crCpToggle,
             } = this.state;
+            const isIndustrialReg = crCpToggle === 'industrialReg';
             const identifierValue = this.getIdentifierValue();
 
             // Anonymous type (4) uses unknown account
@@ -1106,8 +1148,10 @@ export class MultiTypeInspection extends React.Component<
             var filterQuery;
             if ([10, 11].includes(selectedInspectionType!)) {
                 filterQuery = `duc_moinumber eq '${identifierValue}'`;
-            } else if ([5, 7].includes(selectedInspectionType!) && this.state.crCpToggle === 'cp') {
+            } else if ([5, 7].includes(selectedInspectionType!) && crCpToggle === 'cp') {
                 filterQuery = `duc_cpnumber eq '${identifierValue}'`;
+            } else if ([5, 7].includes(selectedInspectionType!) && isIndustrialReg) {
+                filterQuery = `duc_operatinglicensenumber eq '${identifierValue}'`;
             } else {
                 filterQuery = `duc_accountidentifier eq '${identifierValue}'`;
             }
@@ -1145,6 +1189,14 @@ export class MultiTypeInspection extends React.Component<
                 return accountId;
             }
 
+            if (isIndustrialReg) {
+                this.setState({
+                    identifierError:
+                        "No account was found with the specified Industrial Registration Number.",
+                });
+                return null;
+            }
+
             // Create new account
             const accountName = await this.getAccountName();
             const newAccount: any = {
@@ -1153,7 +1205,7 @@ export class MultiTypeInspection extends React.Component<
             };
 
             // Set identifier field based on type and CR/CP toggle
-            if ([5, 7].includes(selectedInspectionType!) && this.state.crCpToggle === 'cp') {
+            if ([5, 7].includes(selectedInspectionType!) && crCpToggle === 'cp') {
                 newAccount.duc_cpnumber = identifierValue;
             } else {
                 newAccount.duc_accountidentifier = identifierValue;
@@ -1726,6 +1778,7 @@ export class MultiTypeInspection extends React.Component<
             | "name"
             | "crNumber"
             | "cpNumber"
+            | "industrialRegistration"
             | "registrationNumber"
             | "id"
             | "carColor"
@@ -1759,6 +1812,11 @@ export class MultiTypeInspection extends React.Component<
 
         if (field === "cpNumber") {
             return [5, 7].includes(selectedInspectionType) && this.state.crCpToggle === 'cp';
+        }
+
+        if (field === "industrialRegistration") {
+            return this.isIndustrialRegistrationSupported() &&
+                this.state.crCpToggle === 'industrialReg';
         }
 
         if (field === "registrationNumber") {
@@ -2605,7 +2663,7 @@ export class MultiTypeInspection extends React.Component<
                             {
                                 type: "button",
                                 disabled: loading,
-                                onClick: () => this.setState({ crCpToggle: 'cr', cpNumber: "" }),
+                                onClick: () => this.setState({ crCpToggle: 'cr', cpNumber: "", industrialRegistration: "" }),
                                 style: {
                                     padding: "6px 20px",
                                     border: "none",
@@ -2625,7 +2683,7 @@ export class MultiTypeInspection extends React.Component<
                             {
                                 type: "button",
                                 disabled: loading,
-                                onClick: () => this.setState({ crCpToggle: 'cp', crNumber: "" }),
+                                onClick: () => this.setState({ crCpToggle: 'cp', crNumber: "", industrialRegistration: "" }),
                                 style: {
                                     padding: "6px 20px",
                                     border: "none",
@@ -2640,6 +2698,28 @@ export class MultiTypeInspection extends React.Component<
                                 },
                             },
                             "CP",
+                        ),
+                        this.isIndustrialRegistrationSupported() &&
+                        React.createElement(
+                            "button",
+                            {
+                                type: "button",
+                                disabled: loading,
+                                onClick: () => this.setState({ crCpToggle: 'industrialReg', crNumber: "", cpNumber: "" }),
+                                style: {
+                                    padding: "6px 20px",
+                                    border: "none",
+                                    borderLeft: `1px solid ${FLUENT.colorNeutralSecondary}`,
+                                    cursor: loading ? "not-allowed" : "pointer",
+                                    fontFamily: FLUENT.fontFamily,
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    backgroundColor: this.state.crCpToggle === 'industrialReg' ? FLUENT.colorPrimary : FLUENT.colorWhite,
+                                    color: this.state.crCpToggle === 'industrialReg' ? FLUENT.colorWhite : FLUENT.colorNeutralPrimary,
+                                    transition: `background-color ${FLUENT.transitionFast}`,
+                                },
+                            },
+                            "Industrial Registration",
                         ),
                     ),
                 ),
@@ -2751,6 +2831,45 @@ export class MultiTypeInspection extends React.Component<
                                 React.createElement("path", { d: "M21 5v14" }),
                             ),
                         ),
+                    ),
+                ),
+                
+                // industrial Registration Number (shown when toggle = industrialReg)
+                this.shouldShowField("industrialRegistration") &&
+                React.createElement(
+                    "div",
+                    { style: styles.fieldStyle },
+                    React.createElement(
+                        "label",
+                        { style: styles.labelStyle },
+                        this.strings.industrialRegistration + " *",
+                    ),
+                    React.createElement(
+                        "div",
+                        { style: { display: "flex", alignItems: "center", gap: 6 } },
+                        React.createElement("input", {
+                            type: "text",
+                            value: this.state.industrialRegistration,
+                            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                                this.handleNumericInputChange("industrialRegistration", e.target.value),
+                            disabled: loading,
+                            style: { ...styles.inputStyle, flex: 1 },
+                            placeholder: "0123456789",
+                            inputMode: "url" as any,
+                        }),
+                    ),
+                    this.state.identifierError &&
+                    React.createElement(
+                        "div",
+                        {
+                            style: {
+                                color: FLUENT.colorErrorPrimary,
+                                fontSize: 12,
+                                marginTop: 6,
+                                fontFamily: FLUENT.fontFamily,
+                            },
+                        },
+                        this.state.identifierError,
                     ),
                 ),
 

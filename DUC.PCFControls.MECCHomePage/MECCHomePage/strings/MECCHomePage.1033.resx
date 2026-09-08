@@ -158,6 +158,10 @@
     <value>CP Number:</value>
     <comment>Label for CP Number field</comment>
   </data>
+  <data name="industrialRegistration" xml:space="preserve">
+    <value>Industrial Registration Number:</value>
+    <comment>Label for industrial Registration Number field</comment>
+  </data>
   <data name="ID" xml:space="preserve">
     <value>ID:</value>
     <comment>Label for ID field</comment>
