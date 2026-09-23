@@ -6,8 +6,10 @@ import {
     IncidentTypeHelpers,
     InitCache,
     ProjectHelpers,
+    AccountProfileHelpers,
 } from "../helpers";
 import { IProjectDetail } from "../helpers/ProjectHelpers";
+import { IAccountProfile } from "../helpers/AccountProfileHelpers";
 
 interface IMultiTypeInspectionProps {
     context: ComponentFramework.Context<any>;
@@ -46,7 +48,6 @@ interface IMultiTypeInspectionState {
     registrationNumber: string;
     id: string;
     carColor: string;
-    identifierError: string | null;
     vehicleBrand: number | null;
     vehicleBrands: Array<{ value: number; label: string }>;
     boatNumber: string;
@@ -77,6 +78,17 @@ interface IMultiTypeInspectionState {
     nearbyProjects: IProjectDetail[];
     selectedProjectId: string | null;
     projectSearchLoading: boolean;
+    // CR/CP/Industrial Registration account confirmation flow
+    showAccountConfirmPopup: boolean;
+    confirmPopupAccountName: string;
+    confirmPopupIdentifierValue: string;
+    confirmedAccountName: string | null;
+    showAccountNotFoundPopup: boolean;
+    accountNotFoundMessage: string;
+    // Extra read-only rows on the confirmation popup (cross-environment match)
+    confirmPopupDetails: Array<{ label: string; value: string }>;
+    // Raw action response, shown only when its payload could not be unwrapped
+    actionResponseText: string;
 }
 
 interface LocalizedStrings {
@@ -124,6 +136,19 @@ interface LocalizedStrings {
     SearchingProjects: string;
     ProjectNumber: string;
     AccountNameLabel: string;
+    Yes: string;
+    No: string;
+    ConfirmAccountTitle: string;
+    AccountNotFoundTitle: string;
+    AccountNotFoundMessage: string;
+    TryAgain: string;
+    AccountFoundInAnotherEnv: string;
+    ActionResponseLabel: string;
+    ImportAccountQuestion: string;
+    IndustrialRegNotFound: string;
+    UpdatingAccount: string;
+    Email: string;
+    Phone: string;
 }
 
 // Cache constants
@@ -171,6 +196,12 @@ export class MultiTypeInspection extends React.Component<
     private xrm: Xrm.XrmStatic;
     // OPTIMIZATION: Cache account ID to avoid re-searching in handleContinueWithSelections
     private pendingAccountId: string | null = null;
+    // True only when this flow created pendingAccountId itself — guards deletion
+    private pendingAccountWasCreated = false;
+    // Address record created alongside pendingAccountId, removed with it
+    private pendingAddressId: string | null = null;
+    // Profiles from another environment awaiting the user's import decision
+    private pendingImportProfiles: IAccountProfile[] | null = null;
 
     constructor(props: IMultiTypeInspectionProps) {
         super(props);
@@ -268,6 +299,32 @@ export class MultiTypeInspection extends React.Component<
                 props.context.resources.getString("ProjectNumber") || "Project #",
             AccountNameLabel:
                 props.context.resources.getString("AccountNameLabel") || "Account",
+            Yes: props.context.resources.getString("Yes") || "Yes",
+            No: props.context.resources.getString("No") || "No",
+            ConfirmAccountTitle:
+                props.context.resources.getString("ConfirmAccountTitle") || "Confirm Account",
+            AccountNotFoundTitle:
+                props.context.resources.getString("AccountNotFoundTitle") || "Account Not Found",
+            AccountNotFoundMessage:
+                props.context.resources.getString("AccountNotFoundMessage") ||
+                "No account was found for this identifier. Please try again with another CR or CP number.",
+            TryAgain: props.context.resources.getString("TryAgain") || "Try Again",
+            AccountFoundInAnotherEnv:
+                props.context.resources.getString("AccountFoundInAnotherEnv") ||
+                "Account Found In Another Environment",
+            ActionResponseLabel:
+                props.context.resources.getString("ActionResponseLabel") ||
+                "Custom action response (debug)",
+            ImportAccountQuestion:
+                props.context.resources.getString("ImportAccountQuestion") ||
+                "Do you want to import this account?",
+            IndustrialRegNotFound:
+                props.context.resources.getString("IndustrialRegNotFound") ||
+                "No account was found with the specified Industrial Registration Number.",
+            UpdatingAccount:
+                props.context.resources.getString("UpdatingAccount") || "Updating account...",
+            Email: props.context.resources.getString("Email") || "Email",
+            Phone: props.context.resources.getString("Phone") || "Phone",
         };
 
         this.state = {
@@ -290,7 +347,6 @@ export class MultiTypeInspection extends React.Component<
             locationDetails: "",
             loading: false,
             error: null,
-            identifierError: null,
             accountTypeRecord: null,
             showCampaignIncidentPopup: false,
             selectedCampaignId: props.activePatrolId,
@@ -311,6 +367,15 @@ export class MultiTypeInspection extends React.Component<
             nearbyProjects: [],
             selectedProjectId: null,
             projectSearchLoading: false,
+            // CR/CP/Industrial Registration account confirmation flow
+            showAccountConfirmPopup: false,
+            confirmPopupAccountName: "",
+            confirmPopupIdentifierValue: "",
+            confirmedAccountName: null,
+            showAccountNotFoundPopup: false,
+            accountNotFoundMessage: "",
+            confirmPopupDetails: [],
+            actionResponseText: "",
         };
     }
 
@@ -686,6 +751,10 @@ export class MultiTypeInspection extends React.Component<
     private handleInspectionTypeChange = (
         e: React.ChangeEvent<HTMLSelectElement>,
     ): void => {
+        this.pendingAccountId = null;
+        this.pendingAddressId = null;
+        this.pendingAccountWasCreated = false;
+        this.pendingImportProfiles = null;
         const selectedGuid = e.target.value || null;
 
         let accountTypeRecord: any = null;
@@ -725,9 +794,16 @@ export class MultiTypeInspection extends React.Component<
             requestPermitNumber: "",
             locationDetails: "",
             error: null,
-            identifierError: null,
             accountTypeRecord: accountTypeRecord,
             isAnonymous: false,
+            showAccountConfirmPopup: false,
+            confirmPopupAccountName: "",
+            confirmPopupIdentifierValue: "",
+            confirmedAccountName: null,
+            showAccountNotFoundPopup: false,
+            accountNotFoundMessage: "",
+            confirmPopupDetails: [],
+            actionResponseText: "",
         });
     };
 
@@ -761,11 +837,7 @@ export class MultiTypeInspection extends React.Component<
             : field === 'industrialRegistration'
             ? value.replace(/[^0-9\-/]/g, '')
             : value.replace(/[^0-9]/g, '');
-        const stateUpdate: any = { [field]: numericValue };
-        if (field === "industrialRegistration") {
-            stateUpdate.identifierError = null;
-        }
-        this.setState(stateUpdate as any);
+        this.setState({ [field]: numericValue } as any);
     };
 
     // =====================================================================
@@ -939,6 +1011,14 @@ export class MultiTypeInspection extends React.Component<
             identifiers.includes("100000002");
     };
 
+    /**
+     * True for Company/Manor (5, 7) — the types identified by CR number,
+     * CP number, or Industrial Registration number.
+     */
+    private isCompanyManorFlow = (): boolean => {
+        return [5, 7].includes(this.state.selectedInspectionType ?? -1);
+    };
+
     // =====================================================================
     // ACCOUNT SEARCH/CREATE
     // =====================================================================
@@ -1048,10 +1128,10 @@ export class MultiTypeInspection extends React.Component<
     private createAddressInformation = async (
         accountId: string,
         accountName: string,
-    ): Promise<void> => {
+    ): Promise<string | null> => {
         try {
             const location = await this.getCurrentLocation();
-            if (!location) return;
+            if (!location) return null;
 
             const today = new Date().toISOString().split("T")[0];
             const addressName = `${accountName} ${today}`;
@@ -1071,8 +1151,10 @@ export class MultiTypeInspection extends React.Component<
                     'duc_Address@odata.bind': `/duc_addressinformations(${results.id})`
                 });
 
+            return results.id;
         } catch (error: any) {
             console.error("Error creating address information:", error);
+            return null;
         }
     };
 
@@ -1190,10 +1272,7 @@ export class MultiTypeInspection extends React.Component<
             }
 
             if (isIndustrialReg) {
-                this.setState({
-                    identifierError:
-                        "No account was found with the specified Industrial Registration Number.",
-                });
+                console.warn("No account found for the specified Industrial Registration Number");
                 return null;
             }
 
@@ -1253,6 +1332,354 @@ export class MultiTypeInspection extends React.Component<
             console.error("Error searching/creating account:", error);
             throw new Error(this.strings.ContactAdministrator);
         }
+    };
+
+    // =====================================================================
+    // COMPANY / MANOR ACCOUNT FLOW (types 5, 7)
+    // =====================================================================
+    // All three identifier kinds start by searching this environment, and a
+    // match is always confirmed by the user before continuing. They differ
+    // only in what happens when nothing is found here:
+    //   CR / CP                 → create the account, log in to MOCI and store
+    //                             the token on it, then ask the catalogue
+    //                             (MOCI_GET_BY_CR / MOCI_GET_BY_CP) whether the
+    //                             identifier exists there; import it if the user
+    //                             confirms (otherwise delete what we created)
+    //   Industrial Registration → never create, show the not-found popup
+
+    private buildIdentifierFilter = (identifierValue: string): string => {
+        const { crCpToggle } = this.state;
+
+        if (crCpToggle === "cp") return `duc_cpnumber eq '${identifierValue}'`;
+        if (crCpToggle === "industrialReg") {
+            return `duc_operatinglicensenumber eq '${identifierValue}'`;
+        }
+        return `duc_accountidentifier eq '${identifierValue}'`;
+    };
+
+    private findAccountByIdentifier = async (
+        identifierValue: string,
+    ): Promise<{ id: string; name: string } | null> => {
+        let filterQuery = this.buildIdentifierFilter(identifierValue);
+
+        if (this.state.accountTypeRecord?.duc_accounttypeid) {
+            filterQuery += ` and _duc_newaccounttype_value eq ${this.state.accountTypeRecord.duc_accounttypeid}`;
+        }
+
+        const searchResults = await this.xrm.WebApi.retrieveMultipleRecords(
+            "account",
+            `?$select=accountid,name&$filter=${filterQuery}`,
+        );
+
+        if (searchResults?.entities?.length > 0) {
+            return {
+                id: searchResults.entities[0].accountid,
+                name: searchResults.entities[0].name,
+            };
+        }
+        return null;
+    };
+
+    private createCrCpAccount = async (
+        identifierValue: string,
+    ): Promise<{ id: string; name: string } | null> => {
+        const { accountTypeRecord, selectedInspectionType, crCpToggle } = this.state;
+
+        const accountName = await this.getAccountName();
+        const newAccount: any = {
+            name: accountName,
+            duc_accountinspectiontype: selectedInspectionType,
+        };
+
+        if (crCpToggle === "cp") {
+            newAccount.duc_cpnumber = identifierValue;
+        } else {
+            newAccount.duc_accountidentifier = identifierValue;
+        }
+
+        if (accountTypeRecord?.duc_accounttypeid) {
+            newAccount["duc_NewAccountType@odata.bind"] =
+                `/duc_accounttypes(${accountTypeRecord.duc_accounttypeid})`;
+        }
+
+        const createdAccount = await this.xrm.WebApi.createRecord("account", newAccount);
+        const newAccountId = createdAccount?.id;
+        if (!newAccountId) return null;
+
+        this.pendingAddressId = await this.createAddressInformation(newAccountId, accountName);
+
+        return { id: newAccountId, name: accountName };
+    };
+
+    /**
+     * Delete the placeholder account created earlier in this flow, along with
+     * the address record created with it. Only ever deletes an account this
+     * flow created itself — never one that already existed in CRM.
+     */
+    private deletePendingAccount = async (): Promise<void> => {
+        if (!this.pendingAccountWasCreated || !this.pendingAccountId) return;
+
+        try {
+            // Address first — it holds the account lookup
+            if (this.pendingAddressId) {
+                await this.xrm.WebApi.deleteRecord(
+                    "duc_addressinformation",
+                    this.pendingAddressId,
+                );
+            }
+            await this.xrm.WebApi.deleteRecord("account", this.pendingAccountId);
+        } catch (error: any) {
+            console.error("Error deleting the placeholder account:", error);
+        }
+
+        this.pendingAccountId = null;
+        this.pendingAddressId = null;
+        this.pendingAccountWasCreated = false;
+    };
+
+    private getProfileDisplayName = (profile: IAccountProfile): string => {
+        const preferred = this.state.isRTL ? profile.namear : profile.nameen;
+        return preferred || profile.nameen || profile.namear || profile.shortname || "";
+    };
+
+    /** Extra rows shown on the confirmation popup for a cross-environment match */
+    private buildProfileDetails = (
+        profile: IAccountProfile,
+    ): Array<{ label: string; value: string }> => {
+        const details: Array<{ label: string; value: string }> = [];
+
+        if (profile.email) details.push({ label: this.strings.Email, value: profile.email });
+        if (profile.phone) details.push({ label: this.strings.Phone, value: profile.phone });
+
+        return details;
+    };
+
+    private showAccountConfirmation = (
+        accountId: string,
+        accountName: string,
+        identifierValue: string,
+    ): void => {
+        this.pendingAccountId = accountId;
+        this.setState({
+            showAccountConfirmPopup: true,
+            confirmPopupAccountName: accountName,
+            confirmPopupIdentifierValue: identifierValue,
+            loading: false,
+            error: null,
+        });
+    };
+
+    private showAccountNotFound = (message: string): void => {
+        this.setState({
+            showAccountNotFoundPopup: true,
+            accountNotFoundMessage: message,
+            showAccountConfirmPopup: false,
+            loading: false,
+            error: null,
+        });
+    };
+
+    private startCompanyManorResolution = async (): Promise<void> => {
+        try {
+            const identifierValue = this.getIdentifierValue();
+            if (!identifierValue) {
+                throw new Error(this.strings.PleaseEnterRequiredFields);
+            }
+
+            this.pendingImportProfiles = null;
+
+            // Every identifier kind starts by searching this environment
+            this.xrm.Utility.showProgressIndicator(this.strings.Loading);
+            const existing = await this.findAccountByIdentifier(identifierValue);
+            this.xrm.Utility.closeProgressIndicator();
+
+            if (existing) {
+                this.pendingAccountWasCreated = false;
+                this.pendingAddressId = null;
+                this.showAccountConfirmation(existing.id, existing.name, identifierValue);
+                return;
+            }
+
+            // Industrial Registration never creates an account
+            if (this.state.crCpToggle === "industrialReg") {
+                this.showAccountNotFound(this.strings.IndustrialRegNotFound);
+                return;
+            }
+
+            // CR and CP both create the account with the entered identifier
+            this.xrm.Utility.showProgressIndicator(this.strings.CreatingAccount);
+            const created = await this.createCrCpAccount(identifierValue);
+            this.xrm.Utility.closeProgressIndicator();
+
+            if (!created) {
+                throw new Error(this.strings.ContactAdministrator);
+            }
+
+            this.pendingAccountId = created.id;
+            this.pendingAccountWasCreated = true;
+
+            // CR and CP both check MOCI: log in, store the token on the new
+            // account, then look the identifier up with the matching key
+            this.xrm.Utility.showProgressIndicator(this.strings.Loading);
+            const catalogResult = await AccountProfileHelpers.lookupAccount(
+                created.id,
+                this.state.crCpToggle === "cp" ? "cp" : "cr",
+            );
+            this.xrm.Utility.closeProgressIndicator();
+
+            if (catalogResult.message) {
+                console.log("[MultiTypeInspection] API catalogue message:", catalogResult.message);
+            }
+
+            if (!catalogResult.found) {
+                // Nothing on the MOCI side — drop the placeholder account. The
+                // raw result is surfaced only when the payload made no sense.
+                await this.deletePendingAccount();
+                this.setState({
+                    actionResponseText: catalogResult.parsed
+                        ? ""
+                        : JSON.stringify(catalogResult, null, 2),
+                });
+                this.showAccountNotFound(this.strings.AccountNotFoundMessage);
+                return;
+            }
+
+            // Found on the MOCI side — confirm before importing
+            const profile = catalogResult.profiles[0] || null;
+            this.pendingImportProfiles = catalogResult.profiles.length > 0
+                ? catalogResult.profiles
+                : null;
+            this.setState({
+                confirmPopupDetails: profile ? this.buildProfileDetails(profile) : [],
+                actionResponseText: "",
+            });
+            this.showAccountConfirmation(
+                created.id,
+                (profile ? this.getProfileDisplayName(profile) : "") || created.name,
+                identifierValue,
+            );
+        } catch (error: any) {
+            this.xrm.Utility.closeProgressIndicator();
+            console.error("Error resolving Company/Manor account:", error);
+            this.setState({
+                error: this.strings.ContactAdministrator,
+                loading: false,
+            });
+        }
+    };
+
+    private handleAccountConfirmYes = async (): Promise<void> => {
+        if (!this.pendingAccountId) {
+            this.setState({
+                showAccountConfirmPopup: false,
+                error: this.strings.ContactAdministrator,
+            });
+            return;
+        }
+
+        // A cross-environment match — import its values before continuing
+        if (this.pendingImportProfiles) {
+            try {
+                this.setState({ loading: true, error: null });
+                this.xrm.Utility.showProgressIndicator(this.strings.UpdatingAccount);
+
+                await AccountProfileHelpers.postAccountUpdate(this.pendingImportProfiles);
+
+                this.xrm.Utility.closeProgressIndicator();
+                this.pendingImportProfiles = null;
+            } catch (error: any) {
+                this.xrm.Utility.closeProgressIndicator();
+                console.error("Error importing account from the other environment:", error);
+                this.setState({
+                    error: this.strings.ContactAdministrator,
+                    loading: false,
+                });
+                return;
+            }
+        }
+
+        this.goToCampaignIncidentPopup(this.state.confirmPopupAccountName);
+    };
+
+    /**
+     * Move on to the Campaign/Incident popup with the confirmed account shown
+     * read-only, pre-filling campaign and incident type like the generic flow.
+     */
+    private goToCampaignIncidentPopup = (accountName: string): void => {
+        let resolvedIncidentTypeId =
+            this.state.selectedIncidentTypeId || this.props.incidentTypeId;
+        let resolvedIncidentTypeName =
+            this.state.selectedIncidentTypeName || this.props.incidentTypeName;
+
+        const campaignId = this.state.selectedCampaignId || this.props.activePatrolId;
+        let incidentTypeDerivedFromCampaign = false;
+
+        if (!resolvedIncidentTypeId && campaignId) {
+            const mapped = this.state.campaignIncidentTypeMap[campaignId];
+            if (mapped) {
+                resolvedIncidentTypeId = mapped.id;
+                resolvedIncidentTypeName = mapped.name;
+                incidentTypeDerivedFromCampaign = true;
+            }
+        }
+
+        this.setState({
+            showAccountConfirmPopup: false,
+            confirmPopupDetails: [],
+            confirmedAccountName: accountName,
+            showCampaignIncidentPopup: true,
+            popupShowCampaign: this.state.shouldShowCampaignField,
+            popupShowIncidentType: true,
+            loading: false,
+            error: null,
+            selectedCampaignId: campaignId,
+            selectedIncidentTypeId: resolvedIncidentTypeId,
+            selectedIncidentTypeName: resolvedIncidentTypeName,
+            incidentTypeReadOnly: incidentTypeDerivedFromCampaign,
+        });
+    };
+
+    /**
+     * User rejected the account. Rejecting a MOCI match means the identifier
+     * does not belong here after all, so the placeholder account this flow
+     * created is removed; accounts that already existed in CRM are kept.
+     */
+    private handleAccountConfirmNo = async (): Promise<void> => {
+        const wasImportCandidate = this.pendingAccountWasCreated;
+
+        if (wasImportCandidate) {
+            this.setState({ loading: true });
+            await this.deletePendingAccount();
+            this.pendingImportProfiles = null;
+        }
+
+        this.pendingAccountId = null;
+        this.pendingAddressId = null;
+        this.pendingAccountWasCreated = false;
+        this.setState({
+            showAccountConfirmPopup: false,
+            confirmPopupAccountName: "",
+            confirmPopupIdentifierValue: "",
+            confirmPopupDetails: [],
+            loading: false,
+            error: null,
+        });
+
+        if (wasImportCandidate) {
+            this.showAccountNotFound(this.strings.AccountNotFoundMessage);
+        }
+    };
+
+    private handleAccountNotFoundAcknowledge = (): void => {
+        this.setState({
+            showAccountNotFoundPopup: false,
+            accountNotFoundMessage: "",
+            actionResponseText: "",
+            error: null,
+            crNumber: "",
+            cpNumber: "",
+            industrialRegistration: "",
+        });
     };
 
     // =====================================================================
@@ -1571,6 +1998,12 @@ export class MultiTypeInspection extends React.Component<
                     error: null,
                 });
                 return; // Stop here — user will pick a project, then handleProjectConfirm continues
+            }
+
+            // COMPANY/MANOR (types 5, 7): CR / CP / Industrial Registration resolution
+            if (this.isCompanyManorFlow()) {
+                await this.startCompanyManorResolution();
+                return; // Stop here — user will confirm the account, then handleAccountConfirmYes continues
             }
 
             // Get or create account — with progress indicator
@@ -2316,6 +2749,200 @@ export class MultiTypeInspection extends React.Component<
         }
 
         // ------
+        // Account Confirmation Popup (CR / CP / Industrial Registration,
+        // including a CR matched in another environment)
+        // ------
+        if (this.state.showAccountConfirmPopup) {
+            const identifierLabel =
+                this.state.crCpToggle === "cp"
+                    ? this.strings.CPNumber
+                    : this.state.crCpToggle === "industrialReg"
+                        ? this.strings.industrialRegistration
+                        : this.strings.CRNumber;
+
+            const isImportCandidate = this.pendingImportProfiles !== null;
+
+            return React.createElement(
+                "div",
+                { style: styles.containerStyle },
+                React.createElement(
+                    "div",
+                    { style: styles.modalStyle },
+                    React.createElement(
+                        "h2",
+                        { style: styles.titleStyle },
+                        isImportCandidate
+                            ? this.strings.AccountFoundInAnotherEnv
+                            : this.strings.ConfirmAccountTitle,
+                    ),
+
+                    error &&
+                    React.createElement("div", { style: styles.errorStyle }, error),
+
+                    React.createElement(
+                        "div",
+                        { style: styles.fieldStyle },
+                        React.createElement(
+                            "label",
+                            { style: styles.labelStyle },
+                            this.strings.AccountNameLabel,
+                        ),
+                        React.createElement(
+                            "div",
+                            { style: styles.readOnlyDisplayStyle },
+                            this.state.confirmPopupAccountName,
+                        ),
+                    ),
+
+                    React.createElement(
+                        "div",
+                        { style: styles.fieldStyle },
+                        React.createElement("label", { style: styles.labelStyle }, identifierLabel),
+                        React.createElement(
+                            "div",
+                            { style: styles.readOnlyDisplayStyle },
+                            this.state.confirmPopupIdentifierValue,
+                        ),
+                    ),
+
+                    // Extra details from the matched profile (email, phone)
+                    this.state.confirmPopupDetails.map((detail) =>
+                        React.createElement(
+                            "div",
+                            { key: detail.label, style: styles.fieldStyle },
+                            React.createElement(
+                                "label",
+                                { style: styles.labelStyle },
+                                detail.label,
+                            ),
+                            React.createElement(
+                                "div",
+                                { style: styles.readOnlyDisplayStyle },
+                                detail.value,
+                            ),
+                        ),
+                    ),
+
+                    isImportCandidate &&
+                    React.createElement(
+                        "div",
+                        {
+                            style: {
+                                marginBottom: 16,
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: FLUENT.colorNeutralDark,
+                                fontFamily: FLUENT.fontFamily,
+                            },
+                        },
+                        this.strings.ImportAccountQuestion,
+                    ),
+
+                    React.createElement(
+                        "div",
+                        { style: styles.buttonContainerStyle },
+                        React.createElement(
+                            "button",
+                            {
+                                onClick: this.handleAccountConfirmYes,
+                                disabled: loading,
+                                style: styles.startButtonStyle,
+                            },
+                            loading ? this.strings.Loading : this.strings.Yes,
+                        ),
+                        React.createElement(
+                            "button",
+                            {
+                                onClick: this.handleAccountConfirmNo,
+                                disabled: loading,
+                                style: styles.closeButtonStyle,
+                            },
+                            this.strings.No,
+                        ),
+                    ),
+                ),
+            );
+        }
+
+        // ------
+        // Account Not Found Popup (shared by all identifier kinds)
+        // ------
+        if (this.state.showAccountNotFoundPopup) {
+            return React.createElement(
+                "div",
+                { style: styles.containerStyle },
+                React.createElement(
+                    "div",
+                    { style: styles.modalStyle },
+                    React.createElement(
+                        "h2",
+                        { style: styles.titleStyle },
+                        this.strings.AccountNotFoundTitle,
+                    ),
+                    React.createElement(
+                        "div",
+                        {
+                            style: {
+                                marginBottom: 16,
+                                fontSize: 14,
+                                color: FLUENT.colorNeutralPrimary,
+                                fontFamily: FLUENT.fontFamily,
+                            },
+                        },
+                        this.state.accountNotFoundMessage || this.strings.AccountNotFoundMessage,
+                    ),
+
+                    // Raw action response — only when its payload could not be read
+                    this.state.actionResponseText &&
+                    React.createElement(
+                        "div",
+                        { style: styles.fieldStyle },
+                        React.createElement(
+                            "label",
+                            { style: styles.labelStyle },
+                            this.strings.ActionResponseLabel,
+                        ),
+                        React.createElement(
+                            "pre",
+                            {
+                                style: {
+                                    margin: 0,
+                                    padding: 8,
+                                    maxHeight: "35vh",
+                                    overflow: "auto",
+                                    backgroundColor: FLUENT.colorNeutralLighter,
+                                    border: `1px solid ${FLUENT.colorNeutralLight}`,
+                                    borderRadius: FLUENT.borderRadius,
+                                    fontSize: 12,
+                                    fontFamily: "Consolas, 'Courier New', monospace",
+                                    color: FLUENT.colorNeutralPrimary,
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-word",
+                                    direction: "ltr",
+                                    textAlign: "left",
+                                } as React.CSSProperties,
+                            },
+                            this.state.actionResponseText,
+                        ),
+                    ),
+
+                    React.createElement(
+                        "div",
+                        { style: styles.buttonContainerStyle },
+                        React.createElement(
+                            "button",
+                            {
+                                onClick: this.handleAccountNotFoundAcknowledge,
+                                style: styles.startButtonStyle,
+                            },
+                            this.strings.TryAgain,
+                        ),
+                    ),
+                ),
+            );
+        }
+
+        // ------
         // Campaign/Incident Popup
         // ------
         if (showCampaignIncidentPopup) {
@@ -2342,6 +2969,23 @@ export class MultiTypeInspection extends React.Component<
 
                     error &&
                     React.createElement("div", { style: styles.errorStyle }, error),
+
+                    // Confirmed Account (read-only, CR/CP flow only)
+                    this.state.confirmedAccountName &&
+                    React.createElement(
+                        "div",
+                        { style: styles.fieldStyle },
+                        React.createElement(
+                            "label",
+                            { style: styles.labelStyle },
+                            this.strings.AccountNameLabel,
+                        ),
+                        React.createElement(
+                            "div",
+                            { style: styles.readOnlyDisplayStyle },
+                            this.state.confirmedAccountName,
+                        ),
+                    ),
 
                     // Campaign Selection
                     showCampaignField &&
@@ -2406,7 +3050,8 @@ export class MultiTypeInspection extends React.Component<
                         React.createElement(
                             "button",
                             {
-                                onClick: () =>
+                                onClick: () => {
+                                    this.pendingAccountId = null;
                                     this.setState({
                                         showCampaignIncidentPopup: false,
                                         incidentTypeReadOnly: false,
@@ -2415,7 +3060,9 @@ export class MultiTypeInspection extends React.Component<
                                         selectedCampaignName: undefined,
                                         selectedIncidentTypeId: undefined,
                                         selectedIncidentTypeName: undefined,
-                                    }),
+                                        confirmedAccountName: null,
+                                    });
+                                },
                                 disabled: loading,
                                 style: styles.closeButtonStyle,
                             },
@@ -2857,19 +3504,6 @@ export class MultiTypeInspection extends React.Component<
                             placeholder: "0123456789",
                             inputMode: "url" as any,
                         }),
-                    ),
-                    this.state.identifierError &&
-                    React.createElement(
-                        "div",
-                        {
-                            style: {
-                                color: FLUENT.colorErrorPrimary,
-                                fontSize: 12,
-                                marginTop: 6,
-                                fontFamily: FLUENT.fontFamily,
-                            },
-                        },
-                        this.state.identifierError,
                     ),
                 ),
 

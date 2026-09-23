@@ -292,4 +292,48 @@
     <value>Account</value>
     <comment>Label for account name in the project list</comment>
   </data>
+  <data name="Yes" xml:space="preserve">
+    <value>Yes</value>
+    <comment>Confirmation button - affirmative</comment>
+  </data>
+  <data name="No" xml:space="preserve">
+    <value>No</value>
+    <comment>Confirmation button - negative</comment>
+  </data>
+  <data name="ConfirmAccountTitle" xml:space="preserve">
+    <value>Confirm Account</value>
+    <comment>Title for the CR/CP account confirmation popup</comment>
+  </data>
+  <data name="AccountNotFoundTitle" xml:space="preserve">
+    <value>Account Not Found</value>
+    <comment>Title for the account-not-found popup (CR/CP flow)</comment>
+  </data>
+  <data name="AccountNotFoundMessage" xml:space="preserve">
+    <value>No account was found for this identifier. Please try again with another CR or CP number.</value>
+    <comment>Message for the account-not-found popup (CR/CP flow)</comment>
+  </data>
+  <data name="TryAgain" xml:space="preserve">
+    <value>Try Again</value>
+    <comment>Button to dismiss the account-not-found popup and retry</comment>
+  </data>
+  <data name="AccountFoundInAnotherEnv" xml:space="preserve">
+    <value>Account Found In Another Environment</value>
+    <comment>Title for the CR cross-environment import popup</comment>
+  </data>
+  <data name="ActionResponseLabel" xml:space="preserve">
+    <value>Custom action response (debug)</value>
+    <comment>Label above the raw duc_CustomAction_APICatalogCA response</comment>
+  </data>
+  <data name="ImportAccountQuestion" xml:space="preserve">
+    <value>Do you want to import this account?</value>
+    <comment>Question on the CR cross-environment import popup</comment>
+  </data>
+  <data name="IndustrialRegNotFound" xml:space="preserve">
+    <value>No account was found with the specified Industrial Registration Number.</value>
+    <comment>Not-found message for the Industrial Registration identifier</comment>
+  </data>
+  <data name="UpdatingAccount" xml:space="preserve">
+    <value>Updating account...</value>
+    <comment>Progress message while the UpdateAccount API is running</comment>
+  </data>
 </root>

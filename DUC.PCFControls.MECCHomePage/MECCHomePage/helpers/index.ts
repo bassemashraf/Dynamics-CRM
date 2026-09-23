@@ -7,3 +7,7 @@ export { WorkOrderHelpers } from './WorkOrderHelpers';
 export { CampaignHelpers } from './CampaignHelpers';
 export { IncidentTypeHelpers } from './IncidentTypeHelpers';
 export { InitCache } from './InitCache';
+export { ProjectHelpers } from './ProjectHelpers';
+export type { INearbyProjectRequest, INearbyProjectResponse, IProjectDetail } from './ProjectHelpers';
+export { AccountProfileHelpers } from './AccountProfileHelpers';
+export type { IAccountProfile, IApiCatalogResult, IdentifierKind } from './AccountProfileHelpers';
